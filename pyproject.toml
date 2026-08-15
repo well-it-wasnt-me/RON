@@ -1,6 +1,6 @@
 [project]
 name = "deskbot"
-version = "1.0.0b0"
+version = "1.0.0"
 description = "A modular desktop companion robot powered by a Raspberry Pi 5"
 readme = "README.md"
 license = { text = "MIT" }
@@ -18,7 +18,7 @@ keywords = [
     "neural network"
 ]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",

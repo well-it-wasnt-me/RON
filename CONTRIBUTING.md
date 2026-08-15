@@ -1,4 +1,4 @@
-# Contributing to SDSavior
+# Contributing to RON
 
 So you want to contribute.
 Bold. Reckless. Admirable.
