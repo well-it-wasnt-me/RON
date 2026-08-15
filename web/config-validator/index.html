@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeskBot Config Validator</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; background: #1a1a2e; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; }
+header { background: #16213e; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #0f3460; }
+header h1 { font-size: 20px; font-weight: 600; color: #e94560; }
+header .subtitle { font-size: 13px; color: #888; margin-left: 12px; }
+.btn-group { display: flex; gap: 8px; }
+button { padding: 8px 18px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: background 0.2s; }
+.btn-load { background: #0f3460; color: #e0e0e0; }
+.btn-load:hover { background: #1a4a8a; }
+.btn-validate { background: #e94560; color: #fff; }
+.btn-validate:hover { background: #c73650; }
+.btn-export { background: #0f3460; color: #e0e0e0; }
+.btn-export:hover { background: #1a4a8a; }
+.main { display: flex; flex: 1; overflow: hidden; }
+.panel { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.panel-left { border-right: 1px solid #0f3460; }
+.panel-header { padding: 10px 16px; background: #16213e; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #888; border-bottom: 1px solid #0f3460; }
+.editor-wrap { flex: 1; overflow: auto; }
+.CodeMirror { height: 100% !important; font-size: 13px; line-height: 1.5; }
+.results { flex: 1; overflow: auto; padding: 16px; }
+.result-card { background: #16213e; border-radius: 8px; padding: 16px; margin-bottom: 12px; border-left: 4px solid #333; }
+.result-card.valid { border-left-color: #4caf50; }
+.result-card.invalid { border-left-color: #e94560; }
+.result-card h3 { font-size: 15px; margin-bottom: 8px; }
+.result-card.valid h3 { color: #4caf50; }
+.result-card.invalid h3 { color: #e94560; }
+.error-list { list-style: none; }
+.error-item { padding: 8px 12px; background: #1a1a2e; border-radius: 4px; margin-bottom: 6px; font-size: 13px; }
+.error-field { color: #e94560; font-weight: 600; font-family: monospace; }
+.error-msg { color: #ccc; margin-top: 2px; }
+.error-type { color: #888; font-size: 11px; }
+.schema-section { margin-bottom: 20px; }
+.schema-section h4 { font-size: 14px; color: #e94560; margin-bottom: 8px; cursor: pointer; }
+.schema-section h4:hover { color: #ff6b81; }
+.schema-fields { display: none; }
+.schema-fields.open { display: block; }
+.schema-field { padding: 6px 12px; background: #1a1a2e; border-radius: 4px; margin-bottom: 4px; font-size: 13px; }
+.schema-field .field-name { color: #4fc3f7; font-family: monospace; }
+.schema-field .field-type { color: #888; font-size: 11px; }
+.schema-field .field-default { color: #81c784; font-size: 11px; }
+.schema-field .field-desc { color: #aaa; font-size: 12px; margin-top: 2px; }
+.schema-field .field-enum { color: #ffb74d; font-size: 11px; }
+.tabs { display: flex; border-bottom: 1px solid #0f3460; }
+.tab { padding: 8px 16px; cursor: pointer; font-size: 13px; color: #888; border-bottom: 2px solid transparent; }
+.tab.active { color: #e94560; border-bottom-color: #e94560; }
+.tab:hover { color: #e0e0e0; }
+.tab-content { display: none; flex: 1; overflow: auto; padding: 16px; }
+.tab-content.active { display: flex; flex-direction: column; }
+.loading { color: #888; font-style: italic; }
+.toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 20px; border-radius: 8px; font-size: 13px; z-index: 1000; animation: fadeIn 0.3s, fadeOut 0.3s 2s forwards; }
+.toast.success { background: #4caf50; color: #fff; }
+.toast.error { background: #e94560; color: #fff; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+</style>
+</head>
+<body>
+<header>
+  <div style="display:flex;align-items:baseline;">
+    <h1>DeskBot Config Validator</h1>
+    <span class="subtitle">Inspect, validate, and export configuration</span>
+  </div>
+  <div class="btn-group">
+    <button class="btn-load" onclick="loadCurrentConfig()">Load Current Config</button>
+    <button class="btn-validate" onclick="validateConfig()">Validate</button>
+    <button class="btn-export" onclick="exportEnv()">Export .env</button>
+    <button class="btn-export" onclick="exportYaml()">Export YAML</button>
+  </div>
+</header>
+<div class="main">
+  <div class="panel panel-left">
+    <div class="panel-header">JSON Editor</div>
+    <div class="editor-wrap">
+      <textarea id="editor">{}</textarea>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="tabs">
+      <div class="tab active" data-tab="results" onclick="switchTab('results')">Validation Results</div>
+      <div class="tab" data-tab="schema" onclick="switchTab('schema')">Schema Reference</div>
+    </div>
+    <div class="tab-content active" id="tab-results">
+      <div class="results" id="results">
+        <div class="loading">Click "Load Current Config" to fetch the running configuration, or paste JSON and click "Validate".</div>
+      </div>
+    </div>
+    <div class="tab-content" id="tab-schema">
+      <div class="results" id="schemaView">
+        <div class="loading">Loading schema reference...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let editor;
+let currentSchema = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+  editor = CodeMirror.fromTextArea(document.getElementById('editor'), {
+    mode: 'application/json',
+    theme: 'material-darker',
+    lineNumbers: true,
+    matchBrackets: true,
+    autoCloseBrackets: true,
+    indentUnit: 2,
+    tabSize: 2,
+    lineWrapping: true,
+  });
+  editor.setValue('{\n  \n}');
+  loadSchema();
+});
+
+var API_BASE = window.location.origin + '/api/v1';
+
+function loadCurrentConfig() {
+  fetch(API_BASE + '/config')
+    .then(function(resp) {
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      return resp.json();
+    })
+    .then(function(config) {
+      editor.setValue(JSON.stringify(config, null, 2));
+      showToast('Config loaded', 'success');
+    })
+    .catch(function(err) {
+      showToast('Failed to load config: ' + err.message, 'error');
+    });
+}
+
+function validateConfig() {
+  var resultsEl = document.getElementById('results');
+  resultsEl.innerHTML = '<div class="loading">Validating...</div>';
+
+  var data;
+  try {
+    data = JSON.parse(editor.getValue());
+  } catch (e) {
+    resultsEl.innerHTML = '<div class="result-card invalid">' +
+      '<h3>&#10007; Invalid JSON</h3>' +
+      '<div class="error-item"><div class="error-msg">' + escapeHtml(e.message) + '</div></div>' +
+      '</div>';
+    return;
+  }
+
+  fetch(API_BASE + '/config/validate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+    .then(function(resp) { return resp.json(); })
+    .then(function(result) {
+      if (result.valid) {
+        resultsEl.innerHTML = '<div class="result-card valid">' +
+          '<h3>&#10003; Configuration is valid</h3>' +
+          '<p style="color:#aaa;font-size:13px;">All fields passed validation. This config can be used with DeskBot.</p>' +
+          '</div>';
+        showToast('Config is valid!', 'success');
+      } else {
+        var errors = result.errors || [];
+        var errorItems = errors.map(function(e) {
+          return '<li class="error-item">' +
+            '<div class="error-field">' + escapeHtml(e.field) + '</div>' +
+            '<div class="error-msg">' + escapeHtml(e.message) + '</div>' +
+            '<div class="error-type">Type: ' + escapeHtml(e.type) + ' | Input: ' + escapeHtml(String(e.input != null ? e.input : '')) + '</div>' +
+            '</li>';
+        }).join('');
+        resultsEl.innerHTML = '<div class="result-card invalid">' +
+          '<h3>&#10007; Validation failed (' + errors.length + ' error' + (errors.length !== 1 ? 's' : '') + ')</h3>' +
+          '<ul class="error-list">' + errorItems + '</ul>' +
+          '</div>';
+        showToast(errors.length + ' validation error(s)', 'error');
+      }
+    })
+    .catch(function(err) {
+      resultsEl.innerHTML = '<div class="result-card invalid">' +
+        '<h3>&#10007; Request failed</h3>' +
+        '<div class="error-item"><div class="error-msg">' + escapeHtml(err.message) + '</div></div>' +
+        '</div>';
+      showToast('Validation request failed', 'error');
+    });
+}
+
+function loadSchema() {
+  var schemaView = document.getElementById('schemaView');
+  fetch(API_BASE + '/config/schema')
+    .then(function(resp) {
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      return resp.json();
+    })
+    .then(function(schema) {
+      currentSchema = schema;
+      renderSchema(schema, schemaView);
+    })
+    .catch(function(err) {
+      schemaView.innerHTML = '<div class="result-card invalid">' +
+        '<h3>Failed to load schema</h3>' +
+        '<div class="error-msg">' + escapeHtml(err.message) + '</div>' +
+        '</div>';
+    });
+}
+
+function renderSchema(schema, container) {
+  if (!schema || !schema.properties) {
+    container.innerHTML = '<div class="loading">No schema available</div>';
+    return;
+  }
+
+  var defs = schema['$defs'] || schema['definitions'] || {};
+  var html = '';
+  var props = schema.properties;
+
+  for (var sectionName in props) {
+    if (!props.hasOwnProperty(sectionName)) continue;
+    var sectionSchema = props[sectionName];
+    var sectionRef = sectionSchema['$ref'] || (sectionSchema.allOf && sectionSchema.allOf[0] ? sectionSchema.allOf[0]['$ref'] : '');
+    var sectionDef = resolveRef(sectionRef, defs) || sectionSchema;
+    var fields = sectionDef.properties || {};
+    var required = sectionDef.required || [];
+    var defaultVal = sectionSchema['default'];
+
+    if (Object.keys(fields).length === 0 && !sectionRef) continue;
+
+    html += '<div class="schema-section">' +
+      '<h4 onclick="this.nextElementSibling.classList.toggle(\'open\')">&#9654; ' + escapeHtml(sectionName) + '</h4>' +
+      '<div class="schema-fields">';
+
+    for (var fieldName in fields) {
+      if (!fields.hasOwnProperty(fieldName)) continue;
+      var fieldSchema = fields[fieldName];
+      var envKey = 'DESKBOT_' + sectionName.toUpperCase() + '__' + fieldName.toUpperCase();
+      var fieldType = fieldSchema.type || (fieldSchema.enum ? 'enum' : 'object');
+      var description = fieldSchema.description || '';
+      var fieldDefault = fieldSchema['default'];
+      var enumVals = fieldSchema.enum || [];
+      var isRequired = required.indexOf(fieldName) >= 0;
+
+      html += '<div class="schema-field">' +
+        '<span class="field-name">' + escapeHtml(fieldName) + '</span>' +
+        (isRequired ? '<span style="color:#e94560;font-size:11px;"> required</span>' : '') +
+        ' <span class="field-type">' + escapeHtml(fieldType) + '</span>' +
+        (fieldDefault !== undefined ? ' <span class="field-default">default: ' + escapeHtml(JSON.stringify(fieldDefault)) + '</span>' : '') +
+        (enumVals.length ? ' <span class="field-enum">enum: ' + escapeHtml(enumVals.join(', ')) + '</span>' : '') +
+        '<div class="field-desc">' + escapeHtml(description) + '</div>' +
+        '<div style="color:#555;font-size:11px;font-family:monospace;">' + escapeHtml(envKey) + '</div>' +
+        '</div>';
+    }
+
+    html += '</div></div>';
+  }
+
+  container.innerHTML = html || '<div class="loading">No schema properties found</div>';
+}
+
+function resolveRef(ref, defs) {
+  if (!ref || ref.indexOf('#/$defs/') !== 0) return null;
+  var key = ref.replace('#/$defs/', '');
+  return defs[key] || null;
+}
+
+function switchTab(tabName) {
+  var tabs = document.querySelectorAll('.tab');
+  for (var i = 0; i < tabs.length; i++) {
+    tabs[i].classList.toggle('active', tabs[i].getAttribute('data-tab') === tabName);
+  }
+  var contents = document.querySelectorAll('.tab-content');
+  for (var j = 0; j < contents.length; j++) {
+    contents[j].classList.toggle('active', contents[j].id === 'tab-' + tabName);
+  }
+}
+
+function exportEnv() {
+  var data;
+  try {
+    data = JSON.parse(editor.getValue());
+  } catch (e) {
+    showToast('Cannot export: invalid JSON', 'error');
+    return;
+  }
+  var lines = flattenToEnv(data, 'DESKBOT');
+  var blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+  downloadBlob(blob, 'deskbot.env');
+  showToast('Exported .env file', 'success');
+}
+
+function exportYaml() {
+  var data;
+  try {
+    data = JSON.parse(editor.getValue());
+  } catch (e) {
+    showToast('Cannot export: invalid JSON', 'error');
+    return;
+  }
+  var yaml = jsonToYaml(data, 0);
+  var blob = new Blob([yaml], { type: 'text/plain' });
+  downloadBlob(blob, 'deskbot-config.yaml');
+  showToast('Exported YAML file', 'success');
+}
+
+function flattenToEnv(obj, prefix) {
+  var lines = [];
+  for (var key in obj) {
+    if (!obj.hasOwnProperty(key)) continue;
+    var envKey = prefix + '__' + key.toUpperCase();
+    var value = obj[key];
+    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+      lines = lines.concat(flattenToEnv(value, envKey));
+    } else {
+      lines.push(envKey + '=' + JSON.stringify(value));
+    }
+  }
+  return lines;
+}
+
+function jsonToYaml(obj, indent) {
+  var lvl = indent || 0;
+  var pad = '  '.repeat(lvl);
+  var out = '';
+  for (var key in obj) {
+    if (!obj.hasOwnProperty(key)) continue;
+    var value = obj[key];
+    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+      out += pad + key + ':\n' + jsonToYaml(value, lvl + 1);
+    } else if (Array.isArray(value)) {
+      out += pad + key + ': ' + JSON.stringify(value) + '\n';
+    } else if (typeof value === 'string') {
+      out += pad + key + ': "' + value.replace(/"/g, '\\"') + '"\n';
+    } else {
+      out += pad + key + ': ' + value + '\n';
+    }
+  }
+  return out;
+}
+
+function downloadBlob(blob, filename) {
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function escapeHtml(str) {
+  var div = document.createElement('div');
+  div.appendChild(document.createTextNode(str));
+  return div.innerHTML;
+}
+
+function showToast(message, type) {
+  var toast = document.createElement('div');
+  toast.className = 'toast ' + type;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3000);
+}
+</script>
+</body>
+</html>

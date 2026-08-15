@@ -1,0 +1,25 @@
+[Unit]
+Description=DeskBot desktop companion robot
+After=network-online.target sound.target bluetooth.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=deskbot
+Group=deskbot
+WorkingDirectory=/opt/deskbot
+EnvironmentFile=-/etc/deskbot/deskbot.env
+Environment=DESKBOT_CONVERSATION__STORE=sqlite
+Environment=DESKBOT_CONVERSATION__DB_PATH=/var/lib/deskbot/conversations.db
+# PulseAudio access (headless): the service user needs to find the
+# PulseAudio daemon socket.  XDG_RUNTIME_DIR must point to the user's
+# runtime directory so pactl/paplay can connect.
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+ExecStart=/opt/deskbot/.venv/bin/deskbot
+Restart=on-failure
+RestartSec=5
+StateDirectory=deskbot
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeskBot</title>
+<style>
+:root{--bg:#0f1117;--bg2:#161821;--card:#1a1d27;--border:#2a2d3a;--border2:#353846;--text:#e4e6ed;--muted:#8b8fa3;--muted2:#6b6f82;--accent:#6c63ff;--accent2:#00d4aa;--red:#ff5757;--orange:#ff9f43;--blue:#4fc3f7;--yellow:#ffd93d;--green:#6bcf7f;--sidebar-w:220px}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);display:flex;overflow:hidden}
+a{color:var(--accent);text-decoration:none}
+
+/* Sidebar */
+#sidebar{width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;position:fixed;top:0;left:0;bottom:0;z-index:100;transition:transform .25s ease}
+#sidebar .logo{padding:1.2rem 1rem;font-size:1.1rem;font-weight:700;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.5rem}
+#sidebar .logo .icon{font-size:1.3rem}
+#sidebar nav{flex:1;padding:.75rem 0;overflow-y:auto}
+#sidebar nav a{display:flex;align-items:center;gap:.6rem;padding:.55rem 1rem;color:var(--muted);font-size:.9rem;border-left:3px solid transparent;transition:all .15s}
+#sidebar nav a:hover{color:var(--text);background:rgba(255,255,255,.03)}
+#sidebar nav a.active{color:var(--accent);border-left-color:var(--accent);background:rgba(108,99,255,.08)}
+#sidebar nav a .nav-icon{font-size:1.1rem;width:1.5rem;text-align:center}
+#sidebar nav .nav-sep{border-top:1px solid var(--border);margin:.5rem 1rem}
+#sidebar .sidebar-footer{padding:.75rem 1rem;border-top:1px solid var(--border);font-size:.75rem;color:var(--muted2)}
+
+/* Main */
+#main{flex:1;margin-left:var(--sidebar-w);display:flex;flex-direction:column;height:100vh;overflow:hidden}
+#topbar{padding:.75rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--bg2);flex-shrink:0}
+#topbar .page-title{font-size:1rem;font-weight:600}
+#conn-status{display:flex;align-items:center;gap:.4rem;font-size:.8rem;color:var(--muted)}
+#conn-status .dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+#conn-status.online .dot{background:var(--green);box-shadow:0 0 6px var(--green)}
+#conn-status.offline .dot{background:var(--red)}
+#conn-status.reconnecting .dot{background:var(--yellow);animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.4}}
+#content{flex:1;overflow-y:auto;padding:1.5rem;max-width:1200px;width:100%}
+
+/* Mobile toggle */
+#menu-toggle{display:none;background:var(--border);border:none;color:var(--text);padding:.4rem .6rem;border-radius:.4rem;font-size:1.2rem;cursor:pointer}
+#menu-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99}
+@media(max-width:768px){
+#sidebar{transform:translateX(-100%)}
+#sidebar.open{transform:translateX(0)}
+#main{margin-left:0}
+#menu-toggle{display:block}
+#menu-overlay.show{display:block}
+}
+
+/* Cards */
+.card{background:var(--card);border:1px solid var(--border);border-radius:.5rem;padding:1rem;margin-bottom:1rem}
+.card-title{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.75rem;font-weight:600}
+.card-row{display:flex;justify-content:space-between;align-items:center;padding:.3rem 0;font-size:.85rem}
+.card-row .label{color:var(--muted)}
+.card-row .value{font-weight:600}
+.grid{display:grid;gap:1rem;grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+.mono{font-family:'SF Mono',Consolas,monospace;font-size:.82rem}
+.badge{display:inline-flex;align-items:center;gap:.3rem;padding:.15rem .6rem;border-radius:9999px;font-size:.72rem;font-weight:600}
+.badge.ok{background:rgba(0,212,170,.12);color:var(--accent2)}
+.badge.err{background:rgba(255,87,87,.12);color:var(--red)}
+.badge.warn{background:rgba(255,217,61,.12);color:var(--yellow)}
+.badge.mock{background:rgba(255,149,71,.12);color:var(--orange)}
+.badge.neutral{background:rgba(139,143,163,.12);color:var(--muted)}
+
+/* Logs */
+#log-controls{display:flex;gap:.5rem;margin-bottom:.75rem;flex-wrap:wrap;align-items:center}
+#log-controls select,#log-controls input{background:var(--bg);border:1px solid var(--border);border-radius:.4rem;padding:.4rem .6rem;color:var(--text);font-size:.82rem}
+#log-controls input{flex:1;min-width:150px}
+#log-controls button{background:var(--border);border:none;color:var(--text);padding:.4rem .8rem;border-radius:.4rem;font-size:.82rem;cursor:pointer}
+#log-controls button:hover{background:var(--border2)}
+#log-list{max-height:calc(100vh - 250px);overflow-y:auto;font-family:'SF Mono',Consolas,monospace;font-size:.78rem;line-height:1.6}
+.log-entry{display:grid;grid-template-columns:90px 60px 120px 1fr;gap:.5rem;padding:.15rem .5rem;border-bottom:1px solid rgba(42,45,58,.3);white-space:nowrap}
+.log-entry .l-time{color:var(--muted2)}
+.log-entry .l-level{font-weight:600}
+.log-entry .l-level.DEBUG{color:var(--muted)}
+.log-entry .l-level.INFO{color:var(--blue)}
+.log-entry .l-level.WARNING{color:var(--yellow)}
+.log-entry .l-level.ERROR{color:var(--red)}
+.log-entry .l-logger{color:var(--muted);overflow:hidden;text-overflow:ellipsis}
+.log-entry .l-event{color:var(--text);overflow:hidden;text-overflow:ellipsis}
+.log-entry .l-event .l-data{color:var(--muted)}
+.log-entry.raw{white-space:pre-wrap;word-break:break-all}
+.loading{color:var(--muted);text-align:center;padding:2rem}
+
+/* Config */
+.config-group{margin-bottom:1.5rem}
+.config-group h3{font-size:.85rem;color:var(--accent);margin-bottom:.5rem;padding-bottom:.3rem;border-bottom:1px solid var(--border)}
+.config-field{display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;font-size:.85rem}
+.config-field .cf-label{color:var(--text)}
+.config-field .cf-desc{color:var(--muted);font-size:.75rem;margin-top:.1rem}
+.config-field .cf-value{color:var(--accent2);font-family:monospace;font-size:.82rem;text-align:right}
+.config-field .cf-value.masked{color:var(--muted2)}
+
+/* Controls */
+button.action{background:var(--accent);color:#fff;border:none;border-radius:.4rem;padding:.5rem 1rem;font-size:.85rem;cursor:pointer;transition:opacity .2s}
+button.action:hover{opacity:.85}
+button.action:disabled{opacity:.4;cursor:not-allowed}
+button.action.danger{background:var(--red)}
+button.action.success{background:var(--accent2);color:#000}
+.row{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:.5rem}
+input[type="text"],input[type="number"],select,textarea{background:var(--bg);border:1px solid var(--border);border-radius:.4rem;padding:.4rem .6rem;color:var(--text);font-size:.85rem;font-family:inherit}
+textarea{min-height:40px;resize:vertical;width:100%}
+
+/* Event log (dashboard) */
+#event-feed{max-height:200px;overflow-y:auto}
+.ev-entry{display:flex;gap:.5rem;padding:.2rem 0;font-size:.78rem;border-bottom:1px solid rgba(42,45,58,.3)}
+.ev-entry .ev-time{color:var(--muted2);min-width:65px}
+.ev-entry .ev-type{color:var(--accent);font-weight:600;min-width:100px}
+.ev-entry .ev-data{color:var(--muted)}
+
+.state-display{font-size:1.5rem;font-weight:700;color:var(--accent)}
+.state-display .emotion{font-size:1rem;color:var(--muted);font-weight:400}
+</style>
+</head>
+<body>
+<div id="menu-overlay"></div>
+<aside id="sidebar">
+  <div class="logo"><span class="icon">&#129302;</span> DeskBot</div>
+  <nav id="nav">
+    <a href="#/"><span class="nav-icon">&#9632;</span> Dashboard</a>
+    <a href="#/logs"><span class="nav-icon">&#9776;</span> Logs</a>
+    <a href="#/audio"><span class="nav-icon">&#9835;</span> Audio</a>
+    <a href="#/bluetooth"><span class="nav-icon">&#128225;</span> Bluetooth</a>
+    <a href="#/config"><span class="nav-icon">&#9881;</span> Config</a>
+    <a href="#/system"><span class="nav-icon">&#128187;</span> System</a>
+    <div class="nav-sep"></div>
+    <a href="#/controls"><span class="nav-icon">&#127919;</span> Controls</a>
+    <a href="/learning" target="_blank"><span class="nav-icon">&#129504;</span> Local Brain</a>
+    <a href="/settings" target="_blank"><span class="nav-icon">&#128295;</span> Hardware Test</a>
+  </nav>
+  <div class="sidebar-footer">DeskBot v0.1.0</div>
+</aside>
+<div id="main">
+  <header id="topbar">
+    <div style="display:flex;align-items:center;gap:.5rem">
+      <button id="menu-toggle">&#9776;</button>
+      <span class="page-title" id="page-title">Dashboard</span>
+    </div>
+    <div id="conn-status" class="online"><span class="dot"></span><span id="conn-text">Connected</span></div>
+  </header>
+  <div id="content"></div>
+</div>
+
+<script>
+const API = '/api/v1';
+const $content = document.getElementById('content');
+const $pageTitle = document.getElementById('page-title');
+const $conn = document.getElementById('conn-status');
+const $connText = document.getElementById('conn-text');
+let ws = null, wsReconnect = null;
+
+const PAGES = {
+  '/': { title: 'Dashboard', render: renderDashboard },
+  '/logs': { title: 'Logs', render: renderLogs },
+  '/audio': { title: 'Audio', render: renderAudio },
+  '/bluetooth': { title: 'Bluetooth', render: renderBluetooth },
+  '/config': { title: 'Configuration', render: renderConfig },
+  '/system': { title: 'System', render: renderSystem },
+  '/controls': { title: 'Robot Controls', render: renderControls },
+};
+
+// ---- Utils ----
+async function api(path) {
+  try { const r = await fetch(API + path); if (!r.ok) return null; return await r.json(); }
+  catch(e) { return null; }
+}
+async function apiPost(path, body) {
+  try { const r = await fetch(API + path, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body||{})}); return await r.json(); }
+  catch(e) { return null; }
+}
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function badge(text, cls) { return `<span class="badge ${cls||'neutral'}">${esc(text)}</span>`; }
+function fmtUptime(s) { if(!s) return '-'; if(s<60) return Math.round(s)+'s'; const m=Math.floor(s/60); if(m<60) return m+'m'; const h=Math.floor(s/3600); if(h<24) return h+'h '+Math.floor((s%3600)/60)+'m'; return Math.floor(h/24)+'d '+(h%24)+'h'; }
+function card(title, inner) { return `<div class="card"><div class="card-title">${title}</div>${inner}</div>`; }
+function infoRow(label, value) { return `<div class="card-row"><span class="label">${esc(label)}</span><span class="value">${value}</span></div>`; }
+
+// ---- Routing ----
+function route() {
+  const hash = location.hash.slice(1) || '/';
+  const page = PAGES[hash];
+  if (page) {
+    $pageTitle.textContent = page.title;
+    $content.innerHTML = '<div class="loading">Loading...</div>';
+    page.render();
+    document.querySelectorAll('#nav a').forEach(a => {
+      a.classList.toggle('active', a.getAttribute('href') === '#' + hash || (hash === '/' && a.getAttribute('href') === '#/'));
+    });
+  } else {
+    $pageTitle.textContent = 'Not Found';
+    $content.innerHTML = '<div class="card"><p>Page not found.</p></div>';
+  }
+}
+window.addEventListener('hashchange', route);
+
+// ---- WebSocket ----
+function connectWS() {
+  if (ws && ws.readyState === WebSocket.OPEN) return;
+  const url = (location.protocol==='https:'?'wss:':'ws:') + '//' + location.host + API + '/ws/events';
+  ws = new WebSocket(url);
+  ws.onopen = () => { $conn.className = 'online'; $connText.textContent = 'Connected'; if (wsReconnect) { clearTimeout(wsReconnect); wsReconnect = null; } };
+  ws.onclose = () => { $conn.className = 'offline'; $connText.textContent = 'Disconnected'; wsReconnect = setTimeout(connectWS, 3000); };
+  ws.onerror = () => { ws.close(); };
+  ws.onmessage = (ev) => { try { handleEvent(JSON.parse(ev.data)); } catch(e){} };
+}
+let _eventFeed = [];
+function handleEvent(msg) {
+  _eventFeed.unshift({type: msg.type, data: msg.data, time: new Date().toLocaleTimeString()});
+  if (_eventFeed.length > 50) _eventFeed.pop();
+  // Update state display if on dashboard
+  const $state = document.getElementById('robot-state');
+  const $emotion = document.getElementById('robot-emotion');
+  if ($state && msg.type === 'StateChanged') $state.textContent = (msg.data.current||'-').toUpperCase();
+  if ($emotion && msg.type === 'EmotionChanged') $emotion.textContent = msg.data.current || '-';
+  const $feed = document.getElementById('event-feed');
+  if ($feed) {
+    $feed.innerHTML = _eventFeed.slice(0, 20).map(e =>
+      `<div class="ev-entry"><span class="ev-time">${e.time}</span><span class="ev-type">${e.type}</span><span class="ev-data">${esc(JSON.stringify(e.data)).slice(0,80)}</span></div>`
+    ).join('') || '<div class="loading">No events yet</div>';
+  }
+}
+
+// ---- Pages ----
+async function renderDashboard() {
+  const [sys, settings, state, health] = await Promise.all([
+    api('/system/info'), api('/settings/info'), api('/state'), api('/health')
+  ]);
+  let html = '<div class="grid">';
+  // System
+  if (sys) {
+    const statusBadge = (health && health.status === 'degraded') ? badge('Degraded','warn') : badge('Online','ok');
+    html += card('System', `
+      ${infoRow('Status', statusBadge)}
+      ${infoRow('Uptime', fmtUptime(sys.uptime_s))}
+      ${infoRow('Hostname', esc(sys.hostname))}
+      ${infoRow('Version', esc(sys.app_version))}
+      ${infoRow('Environment', esc(sys.env))}
+    `);
+  }
+  // Robot state
+  if (state) {
+    html += card('Robot', `
+      <div class="state-display" id="robot-state">${esc((state.state||'-').toUpperCase())}</div>
+      <div class="state-display emotion" id="robot-emotion">-</div>
+    `);
+  }
+  // Audio
+  if (settings && settings.audio) {
+    const a = settings.audio;
+    html += card('Audio', `
+      ${infoRow('TTS Engine', esc(settings.tts || '-'))}
+      ${infoRow('Output', esc(a.type) + (a.is_mock ? ' ' + badge('mock','mock') : ''))}
+      ${infoRow('Sample Rate', a.sample_rate ? a.sample_rate + ' Hz' : '-')}
+      ${infoRow('Channels', a.channels || '-')}
+    `);
+  }
+  // Camera
+  if (settings && settings.camera) {
+    const c = settings.camera;
+    html += card('Camera', `
+      ${infoRow('Type', esc(c.type) + (c.is_mock ? ' ' + badge('mock','mock') : ''))}
+      ${infoRow('Resolution', c.width ? `${c.width}×${c.height}` : '-')}
+    `);
+  }
+  // Microphone
+  if (settings && settings.microphone) {
+    const m = settings.microphone;
+    html += card('Microphone', `
+      ${infoRow('Type', esc(m.type) + (m.is_mock ? ' ' + badge('mock','mock') : ''))}
+      ${infoRow('Sample Rate', m.sample_rate ? m.sample_rate + ' Hz' : '-')}
+    `);
+  }
+  // Degradation
+  if (health && health.status === 'degraded') {
+    const comps = health.components || {};
+    const compHtml = Object.entries(comps).map(([k,v]) => infoRow(k, badge(v.status, v.status==='ok'?'ok':v.status==='degraded'?'warn':'err'))).join('');
+    html += card('Component Health', compHtml || '<div class="loading">No details</div>');
+  }
+  html += '</div>';
+  // Recent events
+  html += card('Recent Events', '<div id="event-feed">' + (_eventFeed.length ? _eventFeed.slice(0,20).map(e => `<div class="ev-entry"><span class="ev-time">${e.time}</span><span class="ev-type">${e.type}</span><span class="ev-data">${esc(JSON.stringify(e.data)).slice(0,80)}</span></div>`).join('') : '<div class="loading">No events yet</div>') + '</div>');
+  $content.innerHTML = html;
+}
+
+async function renderLogs() {
+  $content.innerHTML = `
+    <div class="card">
+      <div id="log-controls">
+        <select id="log-level"><option value="">All Levels</option><option value="DEBUG">DEBUG</option><option value="INFO">INFO</option><option value="WARNING">WARNING</option><option value="ERROR">ERROR</option></select>
+        <input type="text" id="log-search" placeholder="Search logs...">
+        <button id="log-refresh">Refresh</button>
+        <button id="log-clear">Clear</button>
+        <label style="display:flex;align-items:center;gap:.3rem;font-size:.8rem;color:var(--muted)"><input type="checkbox" id="log-raw"> Raw JSON</label>
+      </div>
+      <div id="log-list"><div class="loading">Loading logs...</div></div>
+    </div>`;
+  async function loadLogs() {
+    const level = document.getElementById('log-level').value;
+    const search = document.getElementById('log-search').value;
+    const raw = document.getElementById('log-raw').checked;
+    const params = new URLSearchParams();
+    if (level) params.set('level', level);
+    if (search) params.set('search', search);
+    params.set('limit', '200');
+    const data = await api('/system/logs?' + params.toString());
+    const $list = document.getElementById('log-list');
+    if (!data || !data.entries) { $list.innerHTML = '<div class="loading">No logs available</div>'; return; }
+    if (data.entries.length === 0) { $list.innerHTML = '<div class="loading">No matching entries</div>'; return; }
+    if (raw) {
+      $list.innerHTML = data.entries.map(e => `<div class="log-entry raw">${esc(JSON.stringify(e))}</div>`).join('');
+    } else {
+      $list.innerHTML = data.entries.map(e => {
+        const dataStr = e.data && Object.keys(e.data).length ? ' <span class="l-data">' + esc(JSON.stringify(e.data)) + '</span>' : '';
+        return `<div class="log-entry"><span class="l-time">${esc(e.timestamp)}</span><span class="l-level ${e.level}">${e.level}</span><span class="l-logger">${esc(e.logger)}</span><span class="l-event">${esc(e.event)}${dataStr}</span></div>`;
+      }).join('');
+    }
+  }
+  document.getElementById('log-refresh').addEventListener('click', loadLogs);
+  document.getElementById('log-level').addEventListener('change', loadLogs);
+  document.getElementById('log-search').addEventListener('input', loadLogs);
+  document.getElementById('log-raw').addEventListener('change', loadLogs);
+  document.getElementById('log-clear').addEventListener('click', async () => {
+    await fetch(API + '/system/logs', {method:'DELETE'});
+    loadLogs();
+  });
+  loadLogs();
+}
+
+async function renderAudio() {
+  const [info, audioInfo, conv] = await Promise.all([
+    api('/settings/info'), api('/settings/audio/info'), api('/conversation')
+  ]);
+  let html = '<div class="grid">';
+  if (conv) {
+    html += card('Audio Pipeline', `
+      ${infoRow('TTS Engine', esc(conv.tts || '-'))}
+      ${infoRow('STT Engine', esc(conv.stt || '-'))}
+      ${infoRow('LLM Engine', esc(conv.llm || '-'))}
+      ${infoRow('State', esc(conv.state || '-'))}
+    `);
+  }
+  if (audioInfo) {
+    html += card('Output Device', `
+      ${infoRow('Type', esc(audioInfo.type) + (audioInfo.is_mock ? ' ' + badge('mock','mock') : ''))}
+      ${infoRow('Sample Rate', audioInfo.sample_rate ? audioInfo.sample_rate + ' Hz' : '-')}
+      ${infoRow('Channels', audioInfo.channels || '-')}
+      ${infoRow('Device', esc(audioInfo.output_device || '-'))}
+    `);
+  }
+  html += '</div>';
+
+  // Test controls
+  html += card('Audio Test', `
+    <div class="row">
+      <label>Frequency: <input type="number" id="aud-freq" value="440" min="20" max="20000" style="width:80px"> Hz</label>
+      <label>Duration: <input type="number" id="aud-dur" value="1" min="0.1" max="10" step="0.1" style="width:60px"> s</label>
+      <label>Volume: <input type="range" id="aud-vol" min="0" max="100" value="50" style="width:100px"></label>
+      <button class="action success" id="aud-tone-btn">Play Tone</button>
+      <button class="action danger" id="aud-stop-btn">Stop</button>
+    </div>
+    <div class="row">
+      <input type="text" id="aud-tts-text" value="Hello! Audio test." style="flex:1">
+      <button class="action" id="aud-tts-btn">Speak (TTS)</button>
+    </div>
+  `);
+  $content.innerHTML = html;
+
+  document.getElementById('aud-tone-btn').addEventListener('click', async () => {
+    const freq = parseFloat(document.getElementById('aud-freq').value) || 440;
+    const dur = parseFloat(document.getElementById('aud-dur').value) || 1;
+    const vol = parseInt(document.getElementById('aud-vol').value) / 100;
+    await apiPost('/settings/audio/tone', {frequency_hz: freq, duration_s: dur, volume: vol});
+  });
+  document.getElementById('aud-stop-btn').addEventListener('click', async () => {
+    await apiPost('/settings/audio/stop');
+  });
+  document.getElementById('aud-tts-btn').addEventListener('click', async () => {
+    const text = document.getElementById('aud-tts-text').value.trim();
+    if (text) await apiPost('/settings/tts/test', {text, direct: true});
+  });
+}
+
+async function renderBluetooth() {
+  const bt = await api('/system/bluetooth');
+  if (!bt) { $content.innerHTML = card('Bluetooth', '<div class="loading">No data available</div>'); return; }
+  let html = '<div class="grid">';
+  if (!bt.available) {
+    html += card('Bluetooth', '<p>No audio output configured.</p>');
+  } else if (!bt.is_bluetooth) {
+    html += card('Audio Output', `
+      ${infoRow('Type', esc(bt.type))}
+      <p style="color:var(--muted);font-size:.85rem;margin-top:.5rem">Current audio output is not a Bluetooth device.</p>
+    `);
+  } else {
+    const connBadge = bt.connected ? badge('Connected','ok') : badge('Disconnected','err');
+    html += card('Bluetooth Speaker', `
+      ${infoRow('Status', connBadge)}
+      ${infoRow('Type', esc(bt.type))}
+      ${infoRow('Sink', esc(bt.sink_name || '-'))}
+      ${infoRow('Device MAC', esc(bt.device_mac || '-'))}
+      ${infoRow('Device Name', esc(bt.device_name || '-'))}
+      ${infoRow('Auto-Connect', bt.auto_connect ? 'Yes' : 'No')}
+      ${infoRow('Playing', bt.playing ? 'Yes' : 'No')}
+      ${infoRow('Sample Rate', bt.sample_rate ? bt.sample_rate + ' Hz' : '-')}
+      ${infoRow('Channels', bt.channels || '-')}
+    `);
+    html += card('Actions', `
+      <button class="action" id="bt-test-btn">Play Test Tone</button>
+    `);
+  }
+  html += '</div>';
+  $content.innerHTML = html;
+  const btBtn = document.getElementById('bt-test-btn');
+  if (btBtn) btBtn.addEventListener('click', async () => {
+    await apiPost('/settings/audio/tone', {frequency_hz: 440, duration_s: 1, volume: 0.5});
+  });
+}
+
+async function renderConfig() {
+  const cfg = await api('/config');
+  if (!cfg) { $content.innerHTML = card('Configuration', '<div class="loading">No data available</div>'); return; }
+  const groups = {};
+  for (const [key, value] of Object.entries(cfg)) {
+    const groupName = _configGroup(key);
+    if (!groups[groupName]) groups[groupName] = [];
+    groups[groupName].push({key, value});
+  }
+  let html = card('Configuration', '<p style="color:var(--muted);font-size:.85rem">Read-only view of the current configuration. Changes require editing the environment or .env file and restarting.</p>');
+  for (const [groupName, fields] of Object.entries(groups)) {
+    html += `<div class="config-group"><h3>${esc(groupName)}</h3>`;
+    for (const f of fields) {
+      const val = _formatConfigVal(f.key, f.value);
+      html += `<div class="config-field"><div><div class="cf-label">${esc(f.key)}</div></div><div class="cf-value ${val.masked?'masked':''}">${esc(val.display)}</div></div>`;
+    }
+    html += '</div>';
+  }
+  $content.innerHTML = html;
+}
+function _configGroup(key) {
+  if (['env','log_level','hardware'].includes(key)) return 'General';
+  if (key.startsWith('llm') || key.startsWith('tts') || key.startsWith('stt') || key.startsWith('wakeword')) return 'Speech / AI';
+  if (key.startsWith('audio') || key.startsWith('microphone') || key.startsWith('camera') || key.startsWith('sounds')) return 'Audio / Hardware';
+  if (key.startsWith('display') || key.startsWith('servos') || key.startsWith('face')) return 'Robot / Display';
+  if (key.startsWith('api') || key.startsWith('mqtt') || key.startsWith('home_assistant')) return 'Network / Integration';
+  if (key.startsWith('perception') || key.startsWith('memory') || key.startsWith('preferences') || key.startsWith('conversation') || key.startsWith('tools') || key.startsWith('plugins') || key.startsWith('performance') || key.startsWith('learning')) return 'AI / Behavior';
+  return 'Other';
+}
+function _formatConfigVal(key, value) {
+  if (value === null) return {display: 'null'};
+  if (typeof value === 'dict' || (typeof value === 'object' && !Array.isArray(value))) {
+    const str = JSON.stringify(value);
+    if (key.includes('api_key') || key.includes('key')) return {display: '****', masked: true};
+    return {display: str.length > 100 ? str.slice(0,100)+'...' : str};
+  }
+  if (typeof value === 'string' && (key.includes('api_key') || key.includes('key')) && value) return {display: value.slice(0,4)+'****', masked: true};
+  return {display: String(value)};
+}
+
+async function renderSystem() {
+  const sys = await api('/system/info');
+  if (!sys) { $content.innerHTML = card('System', '<div class="loading">No data available</div>'); return; }
+  let html = '<div class="grid">';
+  html += card('System', `
+    ${infoRow('Hostname', esc(sys.hostname))}
+    ${infoRow('Uptime', fmtUptime(sys.uptime_s))}
+    ${infoRow('PID', sys.pid)}
+    ${infoRow('Environment', esc(sys.env))}
+    ${infoRow('App Version', esc(sys.app_version))}
+  `);
+  html += card('Platform', `
+    ${infoRow('OS', esc(sys.platform))}
+    ${infoRow('Architecture', esc(sys.machine))}
+    ${infoRow('Processor', esc(sys.processor))}
+    ${infoRow('Python', esc(sys.python_version))}
+    ${infoRow('CPU Cores', sys.cpu_count)}
+  `);
+  if (sys.health) {
+    const h = sys.health;
+    const statusBadge = h.status === 'degraded' ? badge('Degraded','warn') : badge('OK','ok');
+    html += card('Health', `
+      ${infoRow('Status', statusBadge)}
+      ${Object.entries(h.components||{}).map(([k,v]) => infoRow(k, badge(v.status, v.status==='ok'?'ok':v.status==='degraded'?'warn':'err'))).join('')}
+    `);
+  }
+  html += '</div>';
+  $content.innerHTML = html;
+}
+
+async function renderControls() {
+  const state = await api('/state');
+  let stateHtml = state ? `<div class="state-display">${esc((state.state||'-').toUpperCase())}</div>` : '<div class="loading">-</div>';
+  let html = '<div class="grid">';
+  html += card('Robot State', stateHtml + `
+    <div class="row" style="margin-top:.75rem">
+      <button class="action" data-state="idle">Idle</button>
+      <button class="action" data-state="curious">Curious</button>
+      <button class="action" data-state="listening">Listening</button>
+      <button class="action" data-state="thinking">Thinking</button>
+      <button class="action" data-state="speaking">Speaking</button>
+      <button class="action" data-state="sleeping">Sleeping</button>
+    </div>
+  `);
+  html += card('Emotion', `
+    <div class="row">
+      <select id="emo-select">
+        <option value="neutral">Neutral</option><option value="happy">Happy</option>
+        <option value="curious">Curious</option><option value="thinking">Thinking</option>
+        <option value="excited">Excited</option><option value="sad">Sad</option>
+        <option value="angry">Angry</option><option value="surprised">Surprised</option>
+        <option value="sleepy">Sleepy</option><option value="embarrassed">Embarrassed</option>
+      </select>
+      <button class="action" id="emo-btn">Set Emotion</button>
+    </div>
+  `);
+  html += card('Speak', `
+    <textarea id="speak-text" placeholder="Type something for the robot to say..."></textarea>
+    <div class="row" style="margin-top:.5rem">
+      <button class="action success" id="speak-btn">Speak (via LLM)</button>
+      <button class="action danger" id="speak-direct-btn">Speak Direct (TTS only)</button>
+    </div>
+  `);
+  html += '</div>';
+  $content.innerHTML = html;
+  document.querySelectorAll('[data-state]').forEach(b => b.addEventListener('click', () => apiPost('/state', {state: b.dataset.state})));
+  document.getElementById('emo-btn').addEventListener('click', () => apiPost('/emotion', {emotion: document.getElementById('emo-select').value, intensity: 1.0}));
+  document.getElementById('speak-btn').addEventListener('click', () => { const t = document.getElementById('speak-text').value.trim(); if(t) apiPost('/speak', {text: t}); });
+  document.getElementById('speak-direct-btn').addEventListener('click', () => { const t = document.getElementById('speak-text').value.trim(); if(t) apiPost('/speak-direct', {text: t}); });
+}
+
+// ---- Mobile sidebar ----
+document.getElementById('menu-toggle').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('menu-overlay').classList.toggle('show');
+});
+document.getElementById('menu-overlay').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('menu-overlay').classList.remove('show');
+});
+
+// ---- Init ----
+route();
+connectWS();
+// Auto-refresh dashboard
+setInterval(() => { if (location.hash === '' || location.hash === '#/') renderDashboard(); }, 5000);
+</script>
+</body>
+</html>

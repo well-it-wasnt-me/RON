@@ -1,0 +1,94 @@
+site_name: DeskBot
+site_description: A modular desktop companion robot powered by Raspberry Pi
+repo_url: https://github.com/well-it-wasnt-me/deskbot
+theme:
+  name: readthedocs
+  palette:
+  - scheme: default
+    primary: indigo
+    accent: indigo
+    toggle:
+      icon: material/brightness-7
+      name: Switch to dark mode
+  - scheme: slate
+    primary: indigo
+    accent: indigo
+    toggle:
+      icon: material/brightness-4
+      name: Switch to light mode
+  features:
+  - navigation.tabs
+  - navigation.sections
+  - navigation.top
+  - search.suggest
+  - search.highlight
+nav:
+- Home: index.md
+- Getting Started:
+  - Developer Setup: developer-setup.md
+  - Wiring Guide: wiring.md
+  - Deployment: deployment.md
+  - Contributing: contributing.md
+- Architecture:
+  - Overview: architecture/overview.md
+  - Learning Architecture: architecture-learning.md
+  - Audio Architecture: audio-architecture.md
+- Modules:
+  - Face Engine: modules/face.md
+  - Eye Engine (Legacy): modules/eye_engine.md
+  - Body Language: modules/body_language.md
+  - Behavior: modules/behavior.md
+  - Animation: modules/animation.md
+  - Events: modules/events.md
+  - Servos: modules/servos.md
+  - Perception: modules/perception.md
+  - Conversation & AI: modules/ai.md
+  - Speech: modules/speech.md
+  - Plugins: modules/plugins.md
+  - Tools: modules/tools.md
+  - Preferences: modules/preferences.md
+  - Vector Memory: modules/vector_memory.md
+  - Local Brain (Learning): modules/learning.md
+  - MQTT Bridge: modules/mqtt.md
+  - Home Assistant: modules/home_assistant.md
+  - Face Animations: modules/animations.md
+  - Interactive CLI: modules/interactive-cli.md
+- Reference:
+  - Config: reference/config.md
+  - Errors: reference/errors.md
+  - Face: reference/face.md
+  - Body Language: reference/body_language.md
+  - Servos: reference/servos.md
+  - Hardware: reference/hardware.md
+  - Simulation: reference/simulation.md
+  - Behavior Library: reference/behavior_library.md
+  - Events: reference/events.md
+  - REST API: reference/api.md
+  - Performance: reference/performance.md
+plugins:
+- search
+- mkdocstrings:
+    handlers:
+      python:
+        paths:
+        - src
+        options:
+          show_source: true
+          show_root_heading: true
+markdown_extensions:
+- pymdownx.highlight:
+    anchor_linenums: true
+- pymdownx.superfences:
+    custom_fences:
+    - name: mermaid
+      class: mermaid
+      format: !!python/name:pymdownx.superfences.fence_div_format
+- pymdownx.tabbed:
+    alternate_style: true
+- admonition
+- attr_list
+- md_in_html
+
+extra_javascript:
+- https://unpkg.com/mermaid@11/dist/mermaid.min.js
+- assets/js/mermaid-init.js

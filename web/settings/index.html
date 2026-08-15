@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeskBot Settings</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0f1117;--card:#1a1d27;--border:#2a2d3a;--text:#e4e6ed;--muted:#8b8fa3;--accent:#6c63ff;--accent2:#00d4aa;--red:#ff5757;--orange:#ff9f43;--blue:#4fc3f7;--yellow:#ffd93d;--green:#6bcf7f}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+header{padding:1rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--bg);z-index:10}
+header h1{font-size:1.25rem;font-weight:700}
+header nav a{color:var(--muted);text-decoration:none;font-size:.85rem;margin-left:1rem}
+header nav a:hover{color:var(--accent)}
+main{max-width:1100px;margin:0 auto;padding:1.5rem;display:flex;flex-direction:column;gap:1.25rem}
+.card{background:var(--card);border:1px solid var(--border);border-radius:.75rem;padding:1.25rem}
+.card h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.75rem;display:flex;align-items:center;gap:.5rem}
+.card h2 .badge{font-size:.65rem;padding:.15rem .5rem;border-radius:9999px;background:var(--border);color:var(--muted);text-transform:none;letter-spacing:0}
+.card h2 .badge.ok{background:rgba(0,212,170,.15);color:var(--accent2)}
+.card h2 .badge.mock{background:rgba(255,149,67,.15);color:var(--orange)}
+.card h2 .badge.err{background:rgba(255,87,87,.15);color:var(--red)}
+.row{display:flex;gap:1rem;flex-wrap:wrap}
+.col{flex:1;min-width:200px}
+label{font-size:.8rem;color:var(--muted);display:block;margin-bottom:.3rem}
+input[type="text"],input[type="number"],select,textarea{background:var(--bg);border:1px solid var(--border);border-radius:.5rem;padding:.5rem .75rem;color:var(--text);font-size:.9rem;width:100%;font-family:inherit}
+textarea{min-height:50px;resize:vertical}
+input[type="range"]{width:100%;accent-color:var(--accent)}
+button{background:var(--accent);color:#fff;border:none;border-radius:.5rem;padding:.55rem 1.1rem;font-size:.85rem;font-weight:600;cursor:pointer;transition:opacity .2s,transform .05s;white-space:nowrap}
+button:hover{opacity:.85}
+button:active{transform:scale(.97)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button.danger{background:var(--red)}
+button.success{background:var(--accent2);color:#000}
+button.warn{background:var(--orange)}
+button.secondary{background:var(--border);color:var(--text)}
+.btn-row{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem}
+.btn-row>*{flex:0 0 auto}
+.info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:.75rem}
+info-item{display:block}
+.info-item label{margin-bottom:.1rem}
+.info-item .val{font-size:.95rem;font-weight:600;color:var(--accent)}
+/* Camera */
+#cam-preview{width:100%;max-width:480px;border-radius:.5rem;border:1px solid var(--border);background:#000;display:block;margin:0 auto}
+#cam-snapshot{max-width:100%;border-radius:.5rem;border:1px solid var(--border);display:none;margin-top:.5rem}
+/* Mic meter */
+.meter-wrap{margin:.5rem 0}
+.meter-bar{height:24px;background:var(--bg);border:1px solid var(--border);border-radius:.5rem;overflow:hidden;position:relative}
+.meter-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--green) 0%,var(--green) 50%,var(--yellow) 75%,var(--red) 100%);transition:width .05s linear;border-radius:.4rem}
+.meter-scale{display:flex;justify-content:space-between;font-size:.65rem;color:var(--muted);margin-top:.2rem}
+.meter-num{font-size:1.1rem;font-weight:700;color:var(--accent2);font-variant-numeric:tabular-nums}
+/* Audio devices */
+.device-list{display:flex;flex-direction:column;gap:.4rem;margin-top:.5rem;max-height:200px;overflow-y:auto}
+.device-item{display:flex;align-items:center;justify-content:space-between;padding:.5rem .75rem;border:1px solid var(--border);border-radius:.5rem;font-size:.85rem;cursor:pointer;transition:border-color .2s}
+.device-item:hover{border-color:var(--accent)}
+.device-item.active{border-color:var(--accent2);background:rgba(0,212,170,.08)}
+.device-item .dev-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.device-item .dev-meta{font-size:.75rem;color:var(--muted);margin-left:.5rem}
+/* LLM response */
+.llm-response{background:var(--bg);border:1px solid var(--border);border-radius:.5rem;padding:.75rem;margin-top:.5rem;font-size:.9rem;line-height:1.5;min-height:40px;white-space:pre-wrap;word-break:break-word}
+.llm-response.error{color:var(--red);border-color:var(--red)}
+/* Sound effects */
+.sfx-grid{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem}
+.sfx-btn{background:var(--border);color:var(--text);padding:.35rem .8rem;font-size:.8rem;border-radius:9999px}
+.sfx-btn:hover{background:var(--accent);color:#fff}
+/* Status toast */
+#toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--card);border:1px solid var(--border);border-radius:.5rem;padding:.75rem 1rem;font-size:.85rem;z-index:100;opacity:0;transition:opacity .3s;pointer-events:none;max-width:350px}
+#toast.show{opacity:1}
+#toast.ok{border-color:var(--accent2)}
+#toast.err{border-color:var(--red)}
+.section-divider{border:none;border-top:1px solid var(--border);margin:1rem 0}
+.hint{font-size:.75rem;color:var(--muted);margin-top:.3rem}
+.toggle-row{display:flex;align-items:center;gap:.5rem}
+.toggle-row input[type="checkbox"]{accent-color:var(--accent);width:18px;height:18px}
+</style>
+</head>
+<body>
+<header>
+  <h1>&#9881; DeskBot Settings</h1>
+  <nav>
+    <a href="/">Dashboard</a>
+    <a href="/calibration">Calibration</a>
+    <a href="/config">Config</a>
+    <a href="/learning">Local Brain</a>
+  </nav>
+</header>
+<main>
+
+  <!-- System Info -->
+  <div class="card">
+    <h2>&#128204; System Overview <span class="badge" id="sys-badge">loading…</span></h2>
+    <div class="info-grid" id="sys-info"></div>
+  </div>
+
+  <!-- Camera -->
+  <div class="card" id="cam-card">
+    <h2>&#128247; Camera Preview <span class="badge" id="cam-badge">-</span></h2>
+    <div class="row">
+      <div class="col" style="min-width:320px">
+        <img id="cam-preview" alt="Camera preview" style="display:none">
+        <div id="cam-placeholder" style="width:100%;max-width:480px;aspect-ratio:4/3;margin:0 auto;background:var(--bg);border:1px solid var(--border);border-radius:.5rem;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.85rem">Camera not started</div>
+        <img id="cam-snapshot" alt="Snapshot">
+        <div class="btn-row" style="justify-content:center">
+          <button id="btn-cam-start" class="success">Start Preview</button>
+          <button id="btn-cam-stop" class="danger" disabled>Stop Preview</button>
+          <button id="btn-cam-snapshot" class="secondary" disabled>Snapshot</button>
+        </div>
+      </div>
+      <div class="col">
+        <label>Preview Mode</label>
+        <select id="cam-mode">
+          <option value="stream">Live Stream (MJPEG)</option>
+          <option value="poll">Poll (JPEG every 200ms)</option>
+        </select>
+        <div class="hint" id="cam-hint"></div>
+        <hr class="section-divider">
+        <div class="info-grid" id="cam-info"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Microphone -->
+  <div class="card" id="mic-card">
+    <h2>&#127908; Microphone <span class="badge" id="mic-badge">-</span></h2>
+    <div class="row">
+      <div class="col" style="min-width:300px">
+        <label>Input Level (real-time)</label>
+        <div class="meter-wrap">
+          <div class="meter-bar"><div class="meter-fill" id="mic-meter"></div></div>
+          <div class="meter-scale"><span>0%</span><span>50%</span><span>100%</span></div>
+        </div>
+        <div class="toggle-row" style="margin-top:.5rem">
+          <input type="checkbox" id="mic-monitor-toggle">
+          <label for="mic-monitor-toggle" style="margin:0">Enable level monitoring</label>
+        </div>
+        <div style="margin-top:.25rem"><span class="meter-num" id="mic-level-num">0%</span></div>
+      </div>
+      <div class="col">
+        <label>Record Test</label>
+        <div class="row" style="align-items:flex-end">
+          <div style="flex:0 0 80px">
+            <label>Duration (s)</label>
+            <input type="number" id="mic-duration" value="3" min="1" max="10" step="1">
+          </div>
+          <div class="toggle-row" style="margin-bottom:.5rem">
+            <input type="checkbox" id="mic-playback" checked>
+            <label for="mic-playback" style="margin:0">Play back through robot</label>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button id="btn-mic-test" class="success">Record & Play</button>
+          <button id="btn-mic-stop" class="danger" disabled>Stop Playback</button>
+        </div>
+        <audio id="mic-playback-audio" controls style="width:100%;margin-top:.5rem;display:none"></audio>
+        <div class="hint" id="mic-hint"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Audio Output -->
+  <div class="card" id="audio-card">
+    <h2>&#128266; Audio Output <span class="badge" id="audio-badge">-</span></h2>
+    <div class="row">
+      <div class="col" style="min-width:280px">
+        <label>Test Tone</label>
+        <div class="row" style="margin-bottom:.5rem">
+          <div style="flex:1">
+            <label>Frequency (Hz)</label>
+            <input type="number" id="tone-freq" value="440" min="20" max="20000" step="1">
+          </div>
+          <div style="flex:0 0 80px">
+            <label>Duration (s)</label>
+            <input type="number" id="tone-dur" value="1" min="0.1" max="10" step="0.1">
+          </div>
+        </div>
+        <label>Volume: <span id="tone-vol-val">50%</span></label>
+        <input type="range" id="tone-vol" min="0" max="100" value="50">
+        <div class="btn-row">
+          <button id="btn-tone" class="success">&#9835; Play Tone</button>
+          <button id="btn-audio-stop" class="danger">Stop</button>
+        </div>
+        <div class="hint" id="audio-hint"></div>
+      </div>
+      <div class="col">
+        <label>Output Devices <span class="hint" style="display:inline">(click to test & select)</span></label>
+        <div class="device-list" id="audio-devices"><div class="hint">Loading devices…</div></div>
+        <div class="btn-row">
+          <button id="btn-refresh-devices" class="secondary">Refresh Devices</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TTS -->
+  <div class="card" id="tts-card">
+    <h2>&#128172; Text-to-Speech Test <span class="badge" id="tts-badge">-</span></h2>
+    <label>Test phrase</label>
+    <textarea id="tts-text">Hello! This is a test of the text to speech system.</textarea>
+    <div class="btn-row">
+      <button id="btn-tts-direct" class="success">Speak (TTS only)</button>
+      <button id="btn-tts-llm" class="accent">Speak via LLM</button>
+    </div>
+    <div class="hint" id="tts-hint"></div>
+  </div>
+
+  <!-- LLM -->
+  <div class="card" id="llm-card">
+    <h2>&#129504; LLM Test <span class="badge" id="llm-badge">-</span></h2>
+    <label>Test prompt</label>
+    <textarea id="llm-prompt">Hello! Who are you and what can you do?</textarea>
+    <div class="btn-row">
+      <button id="btn-llm-test" class="success">Send to LLM</button>
+    </div>
+    <label style="margin-top:.75rem">Response</label>
+    <div class="llm-response" id="llm-response">-</div>
+  </div>
+
+  <!-- Sound Effects -->
+  <div class="card" id="sfx-card">
+    <h2>&#127881; Sound Effects <span class="badge" id="sfx-badge">-</span></h2>
+    <div class="sfx-grid" id="sfx-grid"><div class="hint">Loading…</div></div>
+  </div>
+
+</main>
+<div id="toast"></div>
+
+<script>
+const API = window.location.origin + '/api/v1/settings';
+const $ = (id) => document.getElementById(id);
+const toastEl = $('toast');
+let toastTimer = null;
+
+function toast(msg, ok=true) {
+  toastEl.textContent = msg;
+  toastEl.className = 'show ' + (ok ? 'ok' : 'err');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.className = '', 3000);
+}
+
+async function apiGet(path) {
+  try { const r = await fetch(API + path); return await r.json(); }
+  catch(e) { toast('Request failed: ' + e.message, false); return null; }
+}
+async function apiPost(path, body) {
+  try {
+    const r = await fetch(API + path, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const ct = r.headers.get('content-type') || '';
+    if (ct.includes('application/json')) return await r.json();
+    return {status: r.ok ? 'ok' : 'error', _response: r};
+  } catch(e) { toast('Request failed: ' + e.message, false); return {status:'error', error:e.message}; }
+}
+
+function badge(el, text, cls) {
+  el.textContent = text;
+  el.className = 'badge ' + (cls || '');
+}
+
+// ---------------------------------------------------------------------------
+// System Info
+// ---------------------------------------------------------------------------
+async function loadSystemInfo() {
+  const d = await apiGet('/info');
+  if (!d) { badge($('sys-badge'), 'error', 'err'); return; }
+  badge($('sys-badge'), d.ready ? 'ready' : 'not ready', d.ready ? 'ok' : 'err');
+  const items = [];
+  const add = (label, val) => items.push({label, val});
+
+  if (d.camera) { add('Camera', d.camera.type + (d.camera.is_mock ? ' (mock)' : '')); add('Camera Res', d.camera.width + '×' + d.camera.height); }
+  else add('Camera', '-');
+  if (d.microphone) { add('Microphone', d.microphone.type + (d.microphone.is_mock ? ' (mock)' : '')); add('Mic SR', d.microphone.sample_rate + ' Hz'); }
+  else add('Microphone', '-');
+  if (d.audio) { add('Audio Output', d.audio.type + (d.audio.is_mock ? ' (mock)' : '')); add('Audio SR', d.audio.sample_rate + ' Hz'); add('Audio Device', d.audio.output_device || '-'); }
+  else add('Audio Output', '-');
+  add('TTS Engine', d.tts || '-');
+  add('STT Engine', d.stt || '-');
+  add('LLM Engine', d.llm || '-');
+  if (d.display) { add('Display', d.display.backend); add('Display Res', d.display.width + '×' + d.display.height + ' @' + d.display.fps + 'fps'); }
+  if (d.servos) { add('Servos', d.servos.count + ' connected'); }
+  if (d.sound_effects) { add('Sound FX', d.sound_effects.enabled ? 'enabled' : 'disabled'); }
+  if (d.degradation) { add('Degradation', JSON.stringify(d.degradation)); }
+
+  $('sys-info').innerHTML = items.map(i => `<div class="info-item"><label>${i.label}</label><span class="val">${i.val}</span></div>`).join('');
+
+  // Update section badges
+  if (d.camera) badge($('cam-badge'), d.camera.is_mock ? 'mock' : 'live', d.camera.is_mock ? 'mock' : 'ok');
+  if (d.microphone) badge($('mic-badge'), d.microphone.is_mock ? 'mock' : 'live', d.microphone.is_mock ? 'mock' : 'ok');
+  if (d.audio) badge($('audio-badge'), d.audio.is_mock ? 'mock' : 'live', d.audio.is_mock ? 'mock' : 'ok');
+  badge($('tts-badge'), d.tts || '-', d.tts ? 'ok' : '');
+  badge($('llm-badge'), d.llm || '-', d.llm ? 'ok' : '');
+  if (d.sound_effects) badge($('sfx-badge'), d.sound_effects.enabled ? 'enabled' : 'disabled', d.sound_effects.enabled ? 'ok' : 'mock');
+
+  // Populate camera info
+  if (d.camera) {
+    $('cam-info').innerHTML = `
+      <div class="info-item"><label>Type</label><span class="val">${d.camera.type}</span></div>
+      <div class="info-item"><label>Resolution</label><span class="val">${d.camera.width}×${d.camera.height}</span></div>
+      <div class="info-item"><label>Frames captured</label><span class="val">${d.camera.captured ?? '-'}</span></div>`;
+  }
+
+  // Populate sound effects
+  if (d.sound_effects && d.sound_effects.available.length) {
+    $('sfx-grid').innerHTML = d.sound_effects.available.map(n => `<button class="sfx-btn" data-sfx="${n}">${n}</button>`).join('');
+    document.querySelectorAll('.sfx-btn').forEach(b => b.addEventListener('click', () => playSfx(b.dataset.sfx)));
+  } else {
+    $('sfx-grid').innerHTML = '<div class="hint">No sound effects available</div>';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Camera
+// ---------------------------------------------------------------------------
+let camPollTimer = null;
+let camStreamOn = false;
+
+function startCamera() {
+  camStreamOn = true;
+  $('cam-placeholder').style.display = 'none';
+  $('cam-preview').style.display = 'block';
+  $('btn-cam-start').disabled = true;
+  $('btn-cam-stop').disabled = false;
+  $('btn-cam-snapshot').disabled = false;
+
+  const mode = $('cam-mode').value;
+  if (mode === 'stream') {
+    // MJPEG stream via <img> tag (with cache-busting).
+    $('cam-preview').src = API + '/camera/stream?' + Date.now();
+    $('cam-hint').textContent = 'Live MJPEG stream. If no image appears, try Poll mode.';
+    if (camPollTimer) { clearInterval(camPollTimer); camPollTimer = null; }
+  } else {
+    pollCamera();
+  }
+}
+
+function pollCamera() {
+  if (camPollTimer) clearInterval(camPollTimer);
+  camPollTimer = setInterval(() => {
+    if (!camStreamOn) return;
+    $('cam-preview').src = API + '/camera/frame?' + Date.now();
+  }, 200);
+  $('cam-hint').textContent = 'Polling frame every 200ms.';
+}
+
+function stopCamera() {
+  camStreamOn = false;
+  if (camPollTimer) { clearInterval(camPollTimer); camPollTimer = null; }
+  $('cam-preview').src = '';
+  $('cam-preview').style.display = 'none';
+  $('cam-placeholder').style.display = 'flex';
+  $('cam-placeholder').textContent = 'Preview stopped';
+  $('btn-cam-start').disabled = false;
+  $('btn-cam-stop').disabled = true;
+  $('btn-cam-snapshot').disabled = true;
+}
+
+async function snapshotCamera() {
+  // Fetch a single frame and display it below.
+  try {
+    const r = await fetch(API + '/camera/frame?' + Date.now());
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    $('cam-snapshot').src = url;
+    $('cam-snapshot').style.display = 'block';
+    toast('Snapshot captured');
+  } catch(e) { toast('Snapshot failed: ' + e.message, false); }
+}
+
+$('btn-cam-start').addEventListener('click', startCamera);
+$('btn-cam-stop').addEventListener('click', stopCamera);
+$('btn-cam-snapshot').addEventListener('click', snapshotCamera);
+$('cam-mode').addEventListener('change', () => { if (camStreamOn) startCamera(); });
+
+// ---------------------------------------------------------------------------
+// Microphone level
+// ---------------------------------------------------------------------------
+let micMonitorTimer = null;
+let micMonitoring = false;
+
+function startMicMonitor() {
+  micMonitoring = true;
+  if (micMonitorTimer) clearInterval(micMonitorTimer);
+  micMonitorTimer = setInterval(pollMicLevel, 80);
+  $('mic-hint').textContent = 'Monitoring input level…';
+}
+
+function stopMicMonitor() {
+  micMonitoring = false;
+  if (micMonitorTimer) { clearInterval(micMonitorTimer); micMonitorTimer = null; }
+  $('mic-meter').style.width = '0%';
+  $('mic-level-num').textContent = '0%';
+  $('mic-hint').textContent = '';
+}
+
+async function pollMicLevel() {
+  const d = await apiGet('/mic/level');
+  if (!d || d.level === undefined) return;
+  const pct = Math.min(100, Math.round(d.level * 100));
+  $('mic-meter').style.width = pct + '%';
+  $('mic-level-num').textContent = pct + '%';
+}
+
+$('mic-monitor-toggle').addEventListener('change', (e) => {
+  if (e.target.checked) startMicMonitor(); else stopMicMonitor();
+});
+
+// Mic test
+$('btn-mic-test').addEventListener('click', async () => {
+  const dur = parseFloat($('mic-duration').value) || 3;
+  const playBack = $('mic-playback').checked;
+  $('btn-mic-test').disabled = true;
+  $('btn-mic-test').textContent = 'Recording…';
+  $('mic-hint').textContent = `Recording ${dur}s…`;
+  toast(`Recording ${dur}s…`);
+
+  try {
+    const r = await fetch(API + '/mic/test', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({duration_s: dur, play_back: playBack})
+    });
+    if (r.ok) {
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      $('mic-playback-audio').src = url;
+      $('mic-playback-audio').style.display = 'block';
+      $('mic-playback-audio').play().catch(()=>{});
+      $('mic-hint').textContent = `Recorded ${dur}s - playback below.` + (playBack ? ' Also sent to robot speaker.' : '');
+      toast('Recording complete');
+      $('btn-mic-stop').disabled = false;
+    } else {
+      const text = await r.text();
+      $('mic-hint').textContent = 'Record failed: ' + text;
+      toast('Recording failed', false);
+    }
+  } catch(e) {
+    $('mic-hint').textContent = 'Error: ' + e.message;
+    toast('Recording failed: ' + e.message, false);
+  } finally {
+    $('btn-mic-test').disabled = false;
+    $('btn-mic-test').textContent = 'Record & Play';
+  }
+});
+
+$('btn-mic-stop').addEventListener('click', async () => {
+  await apiPost('/audio/stop');
+  $('btn-mic-stop').disabled = true;
+  toast('Playback stopped');
+});
+
+// ---------------------------------------------------------------------------
+// Audio output
+// ---------------------------------------------------------------------------
+$('tone-vol').addEventListener('input', (e) => {
+  $('tone-vol-val').textContent = e.target.value + '%';
+});
+
+$('btn-tone').addEventListener('click', async () => {
+  const freq = parseFloat($('tone-freq').value) || 440;
+  const dur = parseFloat($('tone-dur').value) || 1;
+  const vol = parseInt($('tone-vol').value) / 100;
+  $('btn-tone').disabled = true;
+  $('btn-tone').textContent = 'Playing…';
+  $('audio-hint').textContent = `Playing ${freq} Hz for ${dur}s…`;
+  const r = await apiPost('/audio/tone', {frequency_hz: freq, duration_s: dur, volume: vol});
+  if (r.status === 'ok') {
+    toast(`Tone: ${freq} Hz played`);
+    $('btn-audio-stop').disabled = false;
+  } else {
+    toast('Tone failed: ' + (r.detail || r.error || ''), false);
+    $('audio-hint').textContent = 'Failed: ' + (r.detail || r.error || '');
+  }
+  setTimeout(() => { $('btn-tone').disabled = false; $('btn-tone').textContent = '♪ Play Tone'; }, dur * 1000);
+});
+
+$('btn-audio-stop').addEventListener('click', async () => {
+  await apiPost('/audio/stop');
+  $('btn-audio-stop').disabled = true;
+  toast('Audio stopped');
+});
+
+async function loadAudioDevices() {
+  $('audio-devices').innerHTML = '<div class="hint">Loading devices…</div>';
+  const d = await apiGet('/audio/devices');
+  if (!d || !d.devices) {
+    $('audio-devices').innerHTML = '<div class="hint">sounddevice not available</div>';
+    return;
+  }
+  if (d.devices.length === 0) {
+    $('audio-devices').innerHTML = '<div class="hint">No output devices found</div>';
+    return;
+  }
+  $('audio-devices').innerHTML = d.devices.map(dev => `
+    <div class="device-item ${dev.index === d.default_index ? 'active' : ''}" data-dev-idx="${dev.index}" data-dev-name="${dev.name}">
+      <span class="dev-name">${dev.name}</span>
+      <span class="dev-meta">${dev.channels}ch / ${Math.round(dev.default_sample_rate)}Hz ${dev.index === d.default_index ? '★' : ''}</span>
+    </div>`).join('');
+
+  document.querySelectorAll('.device-item').forEach(item => {
+    item.addEventListener('click', () => testAudioDevice(item.dataset.devIdx, item.dataset.devName));
+  });
+}
+
+async function testAudioDevice(idx, name) {
+  toast(`Testing device: ${name}…`);
+  document.querySelectorAll('.device-item').forEach(e => e.classList.remove('active'));
+  const r = await apiPost('/audio/test-device', {device: parseInt(idx), frequency_hz: 440, duration_s: 1, volume: 0.5});
+  if (r.status === 'ok') {
+    toast(`Played tone on: ${name}`);
+    // Highlight the tested device briefly.
+    const el = document.querySelector(`[data-dev-idx="${idx}"]`);
+    if (el) el.classList.add('active');
+  } else {
+    toast('Device test failed: ' + (r.detail || r.error || ''), false);
+  }
+}
+
+$('btn-refresh-devices').addEventListener('click', loadAudioDevices);
+
+// ---------------------------------------------------------------------------
+// TTS
+// ---------------------------------------------------------------------------
+$('btn-tts-direct').addEventListener('click', async () => {
+  const text = $('tts-text').value.trim();
+  if (!text) return;
+  $('btn-tts-direct').disabled = true;
+  $('tts-hint').textContent = 'Speaking via TTS…';
+  const r = await apiPost('/tts/test', {text, direct: true});
+  if (r.status === 'ok') toast('TTS: ' + (r.engine || 'ok'));
+  else { toast('TTS failed: ' + (r.detail || ''), false); $('tts-hint').textContent = 'Failed: ' + (r.detail || ''); }
+  $('btn-tts-direct').disabled = false;
+  $('tts-hint').textContent = r.status === 'ok' ? `Spoke via ${r.engine}` : $('tts-hint').textContent;
+});
+
+$('btn-tts-llm').addEventListener('click', async () => {
+  const text = $('tts-text').value.trim();
+  if (!text) return;
+  $('btn-tts-llm').disabled = true;
+  $('tts-hint').textContent = 'Sending through LLM pipeline…';
+  const r = await apiPost('/tts/test', {text, direct: false});
+  if (r.status === 'ok') toast('Sent to LLM pipeline');
+  else { toast('Failed: ' + (r.detail || ''), false); $('tts-hint').textContent = 'Failed: ' + (r.detail || ''); }
+  $('btn-tts-llm').disabled = false;
+});
+
+// ---------------------------------------------------------------------------
+// LLM
+// ---------------------------------------------------------------------------
+$('btn-llm-test').addEventListener('click', async () => {
+  const prompt = $('llm-prompt').value.trim();
+  if (!prompt) return;
+  $('btn-llm-test').disabled = true;
+  $('llm-response').textContent = 'Thinking…';
+  $('llm-response').className = 'llm-response';
+  const r = await apiPost('/llm/test', {prompt});
+  $('btn-llm-test').disabled = false;
+  if (r.status === 'ok') {
+    $('llm-response').textContent = r.response;
+    toast('LLM responded');
+  } else {
+    $('llm-response').textContent = r.error || 'Request failed';
+    $('llm-response').className = 'llm-response error';
+    toast('LLM test failed', false);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Sound effects
+// ---------------------------------------------------------------------------
+async function playSfx(name) {
+  const r = await apiPost('/sound-effect/' + name);
+  if (r.status === 'ok') toast('▶ ' + name);
+  else toast('Failed: ' + (r.error || ''), false);
+}
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+loadSystemInfo();
+loadAudioDevices();
+</script>
+</body>
+</html>

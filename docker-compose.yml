@@ -1,0 +1,24 @@
+services:
+  deskbot:
+    build: .
+    image: deskbot:local
+    restart: unless-stopped
+    ports:
+      - "${DESKBOT_API_PORT:-8000}:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DESKBOT_API__HOST: 0.0.0.0
+      DESKBOT_CONVERSATION__STORE: sqlite
+      DESKBOT_CONVERSATION__DB_PATH: /data/conversations.db
+    volumes:
+      - deskbot-data:/data
+    # Enable only on a Raspberry Pi with the required devices attached.
+    # devices:
+    #   - /dev/spidev0.0:/dev/spidev0.0
+    #   - /dev/i2c-1:/dev/i2c-1
+    #   - /dev/video0:/dev/video0
+
+volumes:
+  deskbot-data:

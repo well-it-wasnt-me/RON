@@ -1,0 +1,327 @@
+# ============================================================================
+# Example DeskBot configuration.
+#
+# Copy this file to config.yaml and adjust to your hardware. The path
+# can be anywhere; just set DESKBOT_CONFIG_FILE=/path/to/your.yaml
+# before running `uv run deskbot`.
+#
+# Environment variables (DESKBOT_DISPLAYS__BACKEND=gc9a01, etc.) always
+# take precedence over this file's values - use it for defaults.
+# ============================================================================
+
+# -- Application -----------------------------------------------------------
+env: development             # development | testing | production
+log_level: INFO              # DEBUG | INFO | WARNING | ERROR
+timezone: Europe/Dublin
+hardware: real               # mock | real - switches in the real USB drivers
+# Optional explicit assets directory (defaults to ./assets):
+assets_dir: assets
+# Fall back to mock backends when a real driver is unavailable:
+use_mocks: true
+
+# -- Personality traits (0.0 - 1.0) ----------------------------------------
+personality:
+  curiosity: 0.7
+  energy: 0.6
+  shyness: 0.3
+  friendliness: 0.8
+  playfulness: 0.7
+
+# -- Face rendering --------------------------------------------------------
+face:
+  # vector | minimal | cute | pixel | retro_lcd | wireframe
+  theme: vector
+
+# -- Display (single circular TFT) -----------------------------------------
+displays:
+  # mock | gc9a01 | circuitpython (aliases: cp, displayio)
+  backend: circuitpython
+  bus: 0
+  device: 0
+  width: 240
+  height: 240
+  fps: 30
+  rotation: 0
+  # BCM GPIO pins:
+  dc_pin: 25
+  reset_pin: 24
+  # backlight_pin: 18        # leave unset if hard-wired to 3V3
+  spi_hz: 32000000
+  spi_mode: 0                # 0-3; GC9A01 typically wants 0
+  invert: true
+  chunk_bytes: 4096
+
+# -- Servos ----------------------------------------------------------------
+servos:
+  # mock | gpio | pca9685
+  backend: gpio
+  frequency: 50
+  gpio:
+    frequency: 50
+    pins:
+      pan: 12
+      tilt: 13
+      left_arm: 18
+      right_arm: 19
+    # Per-channel tuning (optional). Repeat for tilt / left_arm / right_arm.
+    # channels:
+    #   pan:
+    #     min_pulse_us: 500
+    #     max_pulse_us: 2500
+    #     min_angle_deg: 30
+    #     max_angle_deg: 150
+    #     inverted: false
+  pca9685:
+    address: 0x40
+    bus: 1
+    frequency: 50
+    # channels:
+    #   pan:
+    #     chip: 0
+    #     channel: 0
+    #     min_pulse_us: 500
+    #     max_pulse_us: 2500
+    #     min_angle_deg: 0
+    #     max_angle_deg: 180
+    #     inverted: false
+  # Legacy single-board channels (backward compat):
+  head_pan:
+    gpio_pin: 12
+    min_pulse_us: 500
+    max_pulse_us: 2500
+    min_angle_deg: 30
+    max_angle_deg: 150
+  head_tilt:
+    gpio_pin: 13
+    min_pulse_us: 500
+    max_pulse_us: 2500
+    min_angle_deg: 45
+    max_angle_deg: 135
+  left_arm:
+    gpio_pin: 18
+    min_pulse_us: 500
+    max_pulse_us: 2500
+    min_angle_deg: 20
+    max_angle_deg: 160
+  right_arm:
+    gpio_pin: 19
+    min_pulse_us: 500
+    max_pulse_us: 2500
+    min_angle_deg: 20
+    max_angle_deg: 160
+
+# -- Audio output (speaker) -----------------------------------------------
+audio:
+  # mock | usb | bluetooth
+  backend: mock
+  output_device: default
+  sample_rate: 48000
+  channels: 1
+  dtype: int16
+  # Bluetooth-specific (backend=bluetooth):
+  bluetooth_mac: ""
+  bluetooth_name: ""
+  bluetooth_auto_connect: true
+
+# -- Microphone ------------------------------------------------------------
+microphone:
+  input_device: default
+  sample_rate: 16000
+  channels: 1
+  frame_ms: 30
+  dtype: int16
+
+# -- Camera ----------------------------------------------------------------
+camera:
+  device: 0
+  width: 640
+  height: 480
+  fps: 30
+
+# -- Perception (face detection) -------------------------------------------
+perception:
+  enabled: true
+  scan_interval_s: 0.5
+  idle_scan_interval_s: 2.0
+  curious_scan_interval_s: 0.3
+  max_faces: 3
+  score_threshold: 0.5
+  scale_factor: 1.3
+  min_neighbors: 4
+
+# -- LLM -------------------------------------------------------------------
+llm:
+  # mock | openai | ollama | custom
+  provider: mock
+  model: gpt-4o-mini
+  api_key: ""
+  base_url: ""
+  temperature: 0.7
+  max_tokens: 256
+  timeout_s: 15.0
+
+# -- Text-to-Speech --------------------------------------------------------
+tts:
+  # mock | piper | elevenlabs | openai | espeak
+  provider: mock
+  voice: default
+  rate: 1.0
+  piper:
+    model: en_US-lessac-medium
+    download_dir: ""          # empty = ~/.local/share/piper/
+    use_cuda: false
+    # speaker_id: 0           # for multi-speaker models
+    # noise_scale: 0.667
+    # length_scale: 1.0
+    # noise_w_scale: 0.8
+  elevenlabs:
+    api_key: ""
+    voice_id: "21m00Tcm4TlvDq8ikWAM"   # "Rachel"
+    model_id: eleven_multilingual_v2
+    stability: 0.5
+    similarity_boost: 0.75
+
+# -- Speech-to-Text --------------------------------------------------------
+stt:
+  # mock | whisper | vosk | google
+  provider: mock
+  model: base
+  language: en
+
+# -- Wake-word detection ---------------------------------------------------
+wakeword:
+  # mock | energy | openwakeword | porcupine | snowboy
+  provider: mock
+  phrase: hey deskbot
+  threshold: 0.5
+  # Energy-based (provider=energy):
+  energy_threshold: 0.05
+  energy_cooldown_s: 1.5
+  energy_warmup_chunks: 5
+  # openWakeWord custom model path (provider=openwakeword):
+  model_path: ""
+  # Porcupine (provider=porcupine):
+  porcupine_access_key: ""
+  porcupine_keyword: picovoice
+  porcupine_model_path: ""
+  # Snowboy (provider=snowboy):
+  snowboy_model_path: ""
+  wake_animation: true
+
+# -- Sound effects ---------------------------------------------------------
+sounds:
+  enabled: true
+  volume: 0.8
+
+# -- Short-term conversational memory -------------------------------------
+memory:
+  enabled: true
+  capacity: 1024
+  recall_limit: 5
+
+# -- Semantic (vector) memory ---------------------------------------------
+vector_memory:
+  enabled: false
+  # none (NoOp) | sentence_transformers
+  backend: none
+  model_name: all-MiniLM-L6-v2
+  capacity: 2048
+  similarity_threshold: 0.3
+  recall_limit: 5
+
+# -- On-device learning ----------------------------------------------------
+learning:
+  enabled: false
+  # memory (lost on restart) | sqlite (survives restarts)
+  store: memory
+  db_path: ~/.deskbot/experiences.db
+  # Memory sizes:
+  working_memory_capacity: 256
+  replay_buffer_capacity: 10000
+  episodic_capacity: 10000
+  replay_seed: 42
+  # Training schedule:
+  min_new_experiences: 32
+  train_interval_s: 30.0
+  min_experiences_for_training: 64
+  # Resource limits:
+  batch_size: 32
+  training_epochs_per_cycle: 5
+  eval_sample_size: 128
+  max_cpu_fraction: 0.3
+  max_model_params: 500000
+  # Checkpointing:
+  checkpoint_dir: ~/.deskbot/checkpoints
+  keep_last_n_checkpoints: 5
+  # Promote candidate if loss <= current_loss * threshold.
+  # 1.0 = equal or better; 0.95 = require 5% improvement.
+  promote_threshold: 1.0
+
+# -- User preference learning ---------------------------------------------
+preferences:
+  enabled: true
+  # memory | sqlite
+  store: memory
+  db_path: ~/.deskbot/preferences.db
+
+# -- Conversation persistence ---------------------------------------------
+conversation:
+  # memory | sqlite
+  store: memory
+  db_path: ~/.deskbot/conversations.db
+  conversation_id: default
+
+# -- LLM tool / function calling ------------------------------------------
+tools:
+  enabled: true
+
+# -- Plugin system --------------------------------------------------------
+plugins:
+  enabled: true
+  discover_entry_points: true
+  # plugin_packages:
+  #   - my_plugin
+  #   - other_plugin
+
+# -- MQTT bridge ----------------------------------------------------------
+mqtt:
+  enabled: false
+  host: localhost
+  port: 1883
+  username: ""
+  password: ""
+  topic_prefix: deskbot
+  keepalive: 60
+  qos: 1
+  publish_events: true
+  subscribe_commands: true
+  heartbeat_interval: 30
+
+# -- Home Assistant MQTT discovery ---------------------------------------
+homeassistant:
+  enabled: false
+  host: homeassistant.local
+  port: 1883
+  username: ""
+  password: ""
+  discovery_prefix: homeassistant
+  device_id: deskbot
+  device_name: DeskBot
+  device_manufacturer: DeskBot Contributors
+  device_model: Desktop Companion Robot
+  qos: 1
+
+# -- REST API + WebSocket server ------------------------------------------
+api:
+  enabled: true
+  host: 0.0.0.0
+  port: 8000
+
+# -- Performance profiling ------------------------------------------------
+performance:
+  enabled: true
+  frame_profiling: true
+  servo_profiling: true
+  bus_profiling: true
+  bus_sample_rate: 0.1
+  report_interval_frames: 100

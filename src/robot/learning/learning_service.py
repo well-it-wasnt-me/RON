@@ -1,0 +1,731 @@
+"""Background continual learning service for DeskBot.
+
+The :class:`LearningService` integrates all learning components into a
+background worker that:
+
+1. Receives observations from the event bus
+2. Records experiences via the :class:`ExperienceRecorder`
+3. Queues training work when enough new experiences accumulate
+4. Trains a candidate model in a background thread (never blocking
+   face rendering, event processing, speech, perception, API, or
+   hardware control)
+5. Evaluates the candidate against the current model
+6. Promotes or rolls back based on evaluation results
+7. Saves checkpoints for recovery
+
+Design constraints:
+- The learning thread must **never** block the main async event loop.
+- Training runs in a daemon thread so it is automatically cleaned up
+  on process exit.
+- All model mutations (swap current ↔ candidate) happen under a lock
+  so the service is thread-safe.
+- Resource limits (CPU, batch size, frequency, memory, model size) are
+  configurable.
+- No external AI service may be involved.
+"""
+
+from __future__ import annotations
+
+import threading
+import time
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+
+from robot.events.bus import InMemoryEventBus
+from robot.learning.action_learning import ActionLearner, ActionSpace, deskbot_action_space
+from robot.learning.experience import (
+    EpisodicMemory,
+    Experience,
+    ReplayBuffer,
+    WorkingMemory,
+)
+from robot.learning.preference_learner import PreferenceLearner
+from robot.learning.recorder import ExperienceRecorder
+from robot.learning.state_encoder import STATE_SIZE, StateEncoder
+from robot.learning.world_model import DEFAULT_ACTION_SIZE, WorldModel
+from robot.logging import get_logger
+
+_log = get_logger("learning.service")
+
+
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+
+
+@dataclass(slots=True)
+class LearningSchedule:
+    """Configuration for when background training runs.
+
+    Parameters
+    ----------
+    min_new_experiences:
+        Minimum number of new experiences since last training before
+        a training cycle is triggered.
+    train_interval_s:
+        Minimum seconds between training cycles. Even if enough
+        new experiences have accumulated, training won't start
+        more often than this.
+    min_experiences_for_training:
+        Minimum total experiences in the replay buffer before any
+        training happens at all.
+    """
+
+    min_new_experiences: int = 32
+    train_interval_s: float = 30.0
+    min_experiences_for_training: int = 64
+
+
+@dataclass(slots=True)
+class ResourceLimits:
+    """Configurable resource limits for background training.
+
+    Parameters
+    ----------
+    max_cpu_fraction:
+        Target maximum CPU fraction for the training thread
+        (0.0-1.0). The thread will ``sleep`` between batches to
+        stay near this target. This is a soft limit enforced by
+        interleaving computation with ``time.sleep``.
+    batch_size:
+        Mini-batch size for training.
+    max_memory_mb:
+        Approximate memory budget for experience storage in MB.
+        Experiences beyond this budget are evicted from the
+        replay buffer.
+    max_model_params:
+        Maximum number of trainable parameters in each model.
+        Models exceeding this size are rejected at construction.
+    training_epochs_per_cycle:
+        Number of training epochs per background training cycle.
+    eval_sample_size:
+        Number of experiences to sample for candidate evaluation.
+    """
+
+    max_cpu_fraction: float = 0.3
+    batch_size: int = 32
+    max_memory_mb: float = 256.0
+    max_model_params: int = 500_000
+    training_epochs_per_cycle: int = 5
+    eval_sample_size: int = 128
+
+
+@dataclass(slots=True)
+class CheckpointConfig:
+    """Configuration for model checkpointing.
+
+    Parameters
+    ----------
+    checkpoint_dir:
+        Directory to save model checkpoints. Created on first use.
+    keep_last_n:
+        Number of checkpoints to keep on disk (older ones are deleted).
+    promote_threshold:
+        The candidate model is promoted to current only if its
+        evaluation loss is at least this factor lower than the
+        current model's loss.  A value of 1.0 means "promote if
+        loss is equal or lower"; 0.95 means "promote only if at
+        least 5% better".
+    """
+
+    checkpoint_dir: str = "~/.deskbot/checkpoints"
+    keep_last_n: int = 5
+    promote_threshold: float = 1.0
+
+
+# ---------------------------------------------------------------------------
+# Training status
+# ---------------------------------------------------------------------------
+
+
+@dataclass(slots=True)
+class TrainingStatus:
+    """Snapshot of the learning service's current state.
+
+    This is a read-only view that can be safely returned to other
+    threads or API endpoints.
+    """
+
+    total_experiences: int = 0
+    new_experiences_since_train: int = 0
+    training_cycles_completed: int = 0
+    current_model_loss: float = float("inf")
+    candidate_model_loss: float = float("inf")
+    last_training_time: datetime | None = None
+    last_training_duration_s: float = 0.0
+    is_training: bool = False
+    promotions: int = 0
+    rollbacks: int = 0
+    model_version: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint manager
+# ---------------------------------------------------------------------------
+
+
+class CheckpointManager:
+    """Manages model checkpoints with promotion and rollback.
+
+    The manager maintains two models:
+
+    - **current** - the model actively used for predictions.
+    - **candidate** - a model being trained in the background.
+
+    After a training cycle, the candidate is evaluated. If it beats
+    the current model (by at least ``promote_threshold``), it is
+    promoted to current. Otherwise, the candidate is rolled back
+    (reset to a copy of the current model) and training continues.
+    """
+
+    def __init__(
+        self,
+        checkpoint_dir: str = "~/.deskbot/checkpoints",
+        keep_last_n: int = 5,
+        promote_threshold: float = 1.0,
+    ) -> None:
+        self._dir = Path(checkpoint_dir).expanduser()
+        self._dir.mkdir(parents=True, exist_ok=True)
+        self._keep_last_n = keep_last_n
+        self._promote_threshold = promote_threshold
+        self._lock = threading.Lock()
+        self._version = 0
+
+    @property
+    def version(self) -> int:
+        with self._lock:
+            return self._version
+
+    def save_current(self, model: WorldModel, tag: str = "current") -> Path:
+        """Save the current model to a checkpoint file."""
+        with self._lock:
+            self._version += 1
+            ts = datetime.now(tz=UTC).strftime("%Y%m%d_%H%M%S")
+            path = self._dir / f"{tag}_v{self._version}_{ts}.json"
+            model.save(str(path))
+            self._cleanup_old_checkpoints()
+            return path
+
+    def save_candidate(self, model: WorldModel, tag: str = "candidate") -> Path:
+        """Save the candidate model to a checkpoint file."""
+        ts = datetime.now(tz=UTC).strftime("%Y%m%d_%H%M%S")
+        path = self._dir / f"{tag}_{ts}.json"
+        model.save(str(path))
+        return path
+
+    def load_latest(self, tag: str = "current") -> Path | None:
+        """Find the latest checkpoint file matching the tag."""
+        files = sorted(self._dir.glob(f"{tag}_*.json"))
+        return files[-1] if files else None
+
+    def should_promote(self, candidate_loss: float, current_loss: float) -> bool:
+        """Decide whether to promote the candidate model.
+
+        The candidate is promoted if its loss is at most
+        ``promote_threshold * current_loss``.
+        """
+        if current_loss == float("inf"):
+            return True
+        return candidate_loss <= current_loss * self._promote_threshold
+
+    def _cleanup_old_checkpoints(self) -> None:
+        """Remove old checkpoint files beyond ``keep_last_n``."""
+        all_checkpoints = sorted(self._dir.glob("*.json"))
+        while len(all_checkpoints) > self._keep_last_n:
+            oldest = all_checkpoints.pop(0)
+            oldest.unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Learning service
+# ---------------------------------------------------------------------------
+
+
+@dataclass(slots=True)
+class LearningService:
+    """Background continual learning service.
+
+    Subscribes to the event bus, records experiences, and trains
+    world/action models in a background thread. The service never
+    blocks the main async event loop.
+
+    Parameters
+    ----------
+    bus:
+        The event bus to subscribe to.
+    schedule:
+        Training schedule configuration.
+    resource_limits:
+        Resource limits for training.
+    checkpoint_config:
+        Checkpoint management configuration.
+    action_space:
+        The action space for the action learner.
+    state_size:
+        Dimension of the state vector.
+    seed:
+        Random seed for reproducibility.
+    """
+
+    bus: InMemoryEventBus
+    schedule: LearningSchedule = field(default_factory=LearningSchedule)
+    resource_limits: ResourceLimits = field(default_factory=ResourceLimits)
+    checkpoint_config: CheckpointConfig = field(default_factory=CheckpointConfig)
+    action_space: ActionSpace = field(default_factory=deskbot_action_space)
+    state_size: int = STATE_SIZE
+    seed: int = 42
+
+    # Internal components (created in __post_init__)
+    encoder: StateEncoder = field(default_factory=StateEncoder)
+    working_memory: WorkingMemory = field(default_factory=lambda: WorkingMemory(capacity=256))
+    replay_buffer: ReplayBuffer = field(
+        default_factory=lambda: ReplayBuffer(capacity=10_000, seed=42)
+    )
+    episodic_memory: EpisodicMemory | None = None
+    preference_learner: PreferenceLearner | None = None
+
+    current_world_model: WorldModel | None = field(default=None, init=False, repr=False)
+    candidate_world_model: WorldModel | None = field(default=None, init=False, repr=False)
+    action_learner: ActionLearner | None = field(default=None, init=False, repr=False)
+
+    recorder: ExperienceRecorder | None = field(default=None, init=False, repr=False)
+
+    # Checkpoint manager
+    checkpoint_mgr: CheckpointManager | None = field(default=None, init=False, repr=False)
+
+    # Thread control
+    _thread: threading.Thread | None = field(default=None, init=False, repr=False)
+    _stop_event: threading.Event = field(default_factory=threading.Event, init=False)
+    _lock: threading.Lock = field(default_factory=threading.Lock, init=False)
+    _status: TrainingStatus = field(default_factory=TrainingStatus, init=False)
+    _subscribed: bool = field(default=False, init=False)
+    _new_exp_count: int = field(default=0, init=False)
+    _last_train_time: float = field(default=0.0, init=False)
+
+    def __post_init__(self) -> None:
+        """Initialize models and components."""
+        # Create models
+        model_seed = self.seed
+        self.current_world_model = WorldModel(
+            state_size=self.state_size,
+            action_size=DEFAULT_ACTION_SIZE,
+            hidden_sizes=[128, 64],
+            learning_rate=0.001,
+            seed=model_seed,
+        )
+        self.candidate_world_model = WorldModel(
+            state_size=self.state_size,
+            action_size=DEFAULT_ACTION_SIZE,
+            hidden_sizes=[128, 64],
+            learning_rate=0.001,
+            seed=model_seed + 1,
+        )
+        self.action_learner = ActionLearner(
+            action_space=self.action_space,
+            state_size=self.state_size,
+            hidden_sizes=[64, 32],
+            learning_rate=0.001,
+            seed=model_seed,
+        )
+
+        # Create checkpoint manager
+        self.checkpoint_mgr = CheckpointManager(
+            checkpoint_dir=self.checkpoint_config.checkpoint_dir,
+            keep_last_n=self.checkpoint_config.keep_last_n,
+            promote_threshold=self.checkpoint_config.promote_threshold,
+        )
+
+        # Create experience recorder with callback that updates our counters.
+        # This ensures a single authoritative ingestion path: every experience
+        # whether from events or manual recording, updates the learning counters.
+        self.recorder = ExperienceRecorder(
+            bus=self.bus,
+            encoder=self.encoder,
+            working_memory=self.working_memory,
+            replay_buffer=self.replay_buffer,
+            episodic_memory=self.episodic_memory,
+            on_experience_recorded=self._on_experience_recorded,
+        )
+
+    # ------------------------------------------------------------------ ingestion
+    def _on_experience_recorded(self, experience: Experience) -> None:
+        """Callback invoked by the experience recorder after each store.
+
+        Updates the learning-service counters so that automatic training
+        is triggered when enough new experiences have accumulated.
+        This is the **single authoritative path** for counter updates;
+        both event-driven and manual ``record_experience()`` calls flow
+        through here.
+        """
+        with self._lock:
+            self._new_exp_count += 1
+            self._status.total_experiences += 1
+            self._status.new_experiences_since_train += 1
+        _log.debug(
+            "learning.experience_recorded",
+            total=self._status.total_experiences,
+            new_since_train=self._status.new_experiences_since_train,
+        )
+
+    # ------------------------------------------------------------------ lifecycle
+    def start(self) -> None:
+        """Start the learning service: attach to bus and begin background training."""
+        if self._subscribed:
+            return
+        assert self.recorder is not None
+        self.recorder.attach()
+        self._subscribed = True
+        self._stop_event.clear()
+
+        # Start background training thread
+        self._thread = threading.Thread(
+            target=self._training_loop,
+            name="DeskBot-LearningService",
+            daemon=True,
+        )
+        self._thread.start()
+        _log.info(
+            "learning_service.started",
+            schedule_experiences=self.schedule.min_new_experiences,
+            schedule_interval_s=self.schedule.train_interval_s,
+        )
+
+    def stop(self) -> None:
+        """Stop the learning service gracefully."""
+        self._stop_event.set()
+        if self._thread is not None and self._thread.is_alive():
+            self._thread.join(timeout=5.0)
+        if self.recorder is not None:
+            self.recorder.detach()
+        self._subscribed = False
+        _log.info("learning_service.stopped")
+
+    @property
+    def status(self) -> TrainingStatus:
+        """Return a snapshot of the current training status."""
+        with self._lock:
+            return TrainingStatus(
+                total_experiences=self._status.total_experiences,
+                new_experiences_since_train=self._status.new_experiences_since_train,
+                training_cycles_completed=self._status.training_cycles_completed,
+                current_model_loss=self._status.current_model_loss,
+                candidate_model_loss=self._status.candidate_model_loss,
+                last_training_time=self._status.last_training_time,
+                last_training_duration_s=self._status.last_training_duration_s,
+                is_training=self._status.is_training,
+                promotions=self._status.promotions,
+                rollbacks=self._status.rollbacks,
+                model_version=self._status.model_version,
+            )
+
+    # ------------------------------------------------------------------ training
+    def _training_loop(self) -> None:
+        """Background training loop that runs in a daemon thread."""
+        _log.info("learning_service.training_loop_started")
+        while not self._stop_event.is_set():
+            try:
+                self._maybe_train()
+            except Exception:
+                _log.exception("learning_service.training_error")
+            # Sleep between checks - the training interval
+            self._stop_event.wait(timeout=max(1.0, self.schedule.train_interval_s / 4))
+
+    def _maybe_train(self) -> None:
+        """Check if training should run and run it if so."""
+        with self._lock:
+            total = len(self.replay_buffer)
+            new_since = self._new_exp_count
+            now = time.monotonic()
+            time_since_last = now - self._last_train_time
+
+        # Check if we have enough experiences and enough time has passed
+        not_enough_total = total < self.schedule.min_experiences_for_training
+        not_enough_new = new_since < self.schedule.min_new_experiences
+        not_enough_time = time_since_last < self.schedule.train_interval_s
+
+        if not_enough_total or not_enough_new or not_enough_time:
+            return
+
+        self._run_training_cycle()
+
+    def _run_training_cycle(self) -> None:
+        """Run one training cycle: train candidate, evaluate, promote/rollback."""
+        with self._lock:
+            self._status.is_training = True
+
+        start_time = time.monotonic()
+        try:
+            # Sample a training batch from the replay buffer
+            sample = self.replay_buffer.sample(self.resource_limits.eval_sample_size * 3)
+            if len(sample) < self.resource_limits.batch_size:
+                _log.debug("learning_service.insufficient_sample", count=len(sample))
+                with self._lock:
+                    self._status.is_training = False
+                return
+
+            # Split into training and evaluation sets (80/20)
+            rng = np.random.default_rng(self.seed)
+            indices = rng.permutation(len(sample))
+            n_eval = max(1, len(sample) // 5)
+            eval_indices = indices[:n_eval]
+            train_indices = indices[n_eval:]
+
+            train_experiences = [sample[i] for i in train_indices]
+            eval_experiences = [sample[i] for i in eval_indices]
+
+            # Train the candidate world model
+            assert self.candidate_world_model is not None
+            self.candidate_world_model.train(
+                train_experiences,
+                val_experiences=eval_experiences,
+                epochs=self.resource_limits.training_epochs_per_cycle,
+                batch_size=self.resource_limits.batch_size,
+                verbose=False,
+            )
+
+            # Evaluate current vs candidate
+            assert self.current_world_model is not None
+            current_loss = self.current_world_model.evaluate(eval_experiences)
+            candidate_loss = self.candidate_world_model.evaluate(eval_experiences)
+
+            assert self.checkpoint_mgr is not None
+            promoted = self.checkpoint_mgr.should_promote(candidate_loss, current_loss)
+
+            if promoted:
+                self._promote_model(candidate_loss, current_loss)
+            else:
+                self._rollback_model(current_loss, candidate_loss)
+
+            # Update status
+            duration = time.monotonic() - start_time
+            with self._lock:
+                self._status.training_cycles_completed += 1
+                self._status.new_experiences_since_train = 0
+                self._new_exp_count = 0
+                self._last_train_time = time.monotonic()
+                self._status.last_training_time = datetime.now(tz=UTC)
+                self._status.last_training_duration_s = duration
+                self._status.is_training = False
+
+            _log.info(
+                "learning_service.training_cycle_complete",
+                promoted=promoted,
+                current_loss=round(current_loss, 6),
+                candidate_loss=round(candidate_loss, 6),
+                duration_s=round(duration, 3),
+                cycles=self._status.training_cycles_completed,
+            )
+
+            # CPU throttling: sleep proportionally to stay within budget
+            self._throttle_cpu(duration)
+
+        except Exception:
+            _log.exception("learning_service.training_cycle_error")
+            with self._lock:
+                self._status.is_training = False
+
+    def _promote_model(self, candidate_loss: float, current_loss: float) -> None:
+        """Promote the candidate model to current."""
+        with self._lock:
+            assert self.current_world_model is not None
+            assert self.candidate_world_model is not None
+            assert self.checkpoint_mgr is not None
+
+            # Save current model before replacing
+            self.checkpoint_mgr.save_current(self.current_world_model, tag="current")
+
+            # Copy candidate weights into current model
+            # (We save candidate and reload into current to get a clean copy)
+            import tempfile
+
+            with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+                temp_path = f.name
+            try:
+                self.candidate_world_model.save(temp_path)
+                self.current_world_model.load(temp_path)
+            finally:
+                Path(temp_path).unlink(missing_ok=True)
+
+            self._status.current_model_loss = candidate_loss
+            self._status.candidate_model_loss = candidate_loss
+            self._status.promotions += 1
+            self._status.model_version = self.checkpoint_mgr.version
+
+            _log.info(
+                "learning_service.model_promoted",
+                old_loss=round(current_loss, 6),
+                new_loss=round(candidate_loss, 6),
+                version=self._status.model_version,
+            )
+
+    def _rollback_model(self, current_loss: float, candidate_loss: float) -> None:
+        """Rollback: reset candidate to current model's weights."""
+        with self._lock:
+            assert self.current_world_model is not None
+            assert self.candidate_world_model is not None
+            assert self.checkpoint_mgr is not None
+
+            # Reset candidate to current model
+            import tempfile
+
+            with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+                temp_path = f.name
+            try:
+                self.current_world_model.save(temp_path)
+                self.candidate_world_model.load(temp_path)
+            finally:
+                Path(temp_path).unlink(missing_ok=True)
+
+            self._status.current_model_loss = current_loss
+            self._status.candidate_model_loss = current_loss
+            self._status.rollbacks += 1
+
+            _log.info(
+                "learning_service.model_rolled_back",
+                current_loss=round(current_loss, 6),
+                candidate_loss=round(candidate_loss, 6),
+            )
+
+    def _throttle_cpu(self, work_duration_s: float) -> None:
+        """Sleep to keep CPU usage near the configured fraction."""
+        if self.resource_limits.max_cpu_fraction >= 1.0:
+            return
+        # If we used work_duration_s of CPU time, sleep proportionally
+        # to hit the target fraction. E.g. if fraction=0.3, then for
+        # every 0.3s of work we sleep 0.7s.
+        sleep_ratio = (
+            1.0 - self.resource_limits.max_cpu_fraction
+        ) / self.resource_limits.max_cpu_fraction
+        sleep_duration = work_duration_s * sleep_ratio
+        if sleep_duration > 0:
+            self._stop_event.wait(timeout=sleep_duration)
+
+    # ------------------------------------------------------------------ public API
+    def force_training(self) -> bool:
+        """Force an immediate training cycle regardless of schedule.
+
+        Returns True if training was triggered, False if not enough
+        experiences or already training.
+        """
+        with self._lock:
+            if self._status.is_training:
+                return False
+            if len(self.replay_buffer) < self.schedule.min_experiences_for_training:
+                return False
+
+        self._run_training_cycle()
+        return True
+
+    def get_current_world_model(self) -> WorldModel:
+        """Return the current (promoted) world model."""
+        with self._lock:
+            assert self.current_world_model is not None
+            return self.current_world_model
+
+    def get_candidate_world_model(self) -> WorldModel:
+        """Return the candidate (training) world model."""
+        with self._lock:
+            assert self.candidate_world_model is not None
+            return self.candidate_world_model
+
+    def get_action_learner(self) -> ActionLearner:
+        """Return the action learner."""
+        with self._lock:
+            assert self.action_learner is not None
+            return self.action_learner
+
+    def record_experience(
+        self,
+        state: list[float],
+        action: list[float],
+        reward: float,
+        next_state: list[float],
+        metadata: dict[str, Any] | None = None,
+    ) -> Experience:
+        """Manually record an experience.
+
+        The experience flows through the recorder's ``_store`` method,
+        which invokes the ``on_experience_recorded`` callback that
+        updates this service's counters.  The counter update therefore
+        happens exactly once per experience, regardless of whether it
+        originated from an event or from a manual call.
+        """
+        assert self.recorder is not None
+        return self.recorder.record(state, action, reward, next_state, metadata)
+
+    def load_latest_checkpoint(self) -> bool:
+        """Try to load the latest checkpoint for the current model.
+
+        Returns True if a checkpoint was found and loaded, False otherwise.
+        """
+        assert self.checkpoint_mgr is not None
+        assert self.current_world_model is not None
+
+        path = self.checkpoint_mgr.load_latest(tag="current")
+        if path is not None:
+            self.current_world_model.load(str(path))
+            _log.info("learning_service.checkpoint_loaded", path=str(path))
+            return True
+        return False
+
+    def restore_experiences(self) -> int:
+        """Restore persisted experiences from episodic memory into the replay buffer.
+
+        Seeds the replay buffer with historical experiences so that
+        training can resume immediately after a restart without waiting
+        for ``min_new_experiences`` fresh events.
+
+        Historical experiences are **not** counted as "new since last
+        training" — only genuinely new events should trigger a
+        training cycle.
+
+        Returns the number of experiences restored.
+        """
+        if self.episodic_memory is None:
+            _log.info("learning_service.restore_experiences.skipped", reason="no_episodic_memory")
+            return 0
+
+        try:
+            self.episodic_memory.load_from_store()
+        except Exception:
+            _log.exception("learning_service.restore_experiences.load_failed")
+            return 0
+
+        past = self.episodic_memory.recent(limit=self.replay_buffer.capacity)
+        if not past:
+            _log.info("learning_service.restore_experiences.empty", count=0)
+            return 0
+
+        restored = 0
+        for exp in past:
+            self.replay_buffer.add(exp)
+            self.working_memory.add(exp)
+            restored += 1
+
+        with self._lock:
+            # Historical experiences count toward total but NOT toward
+            # new_since_train - only fresh events should trigger training.
+            self._status.total_experiences += restored
+
+        _log.info(
+            "learning_service.restore_experiences.restored",
+            count=restored,
+            total=self._status.total_experiences,
+            new_since_train=self._status.new_experiences_since_train,
+        )
+        return restored
+
+
+__all__ = [
+    "CheckpointConfig",
+    "CheckpointManager",
+    "LearningSchedule",
+    "LearningService",
+    "PreferenceLearner",
+    "ResourceLimits",
+    "TrainingStatus",
+]

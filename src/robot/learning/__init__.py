@@ -1,0 +1,147 @@
+"""Local learning infrastructure for DeskBot.
+
+This package implements a small neural-network framework, experience
+memory, state encoding, world model, action learning, background
+continual learning, multimodal encoding, preference learning, and
+safety evaluation - all running on-device with no external inference
+APIs or pretrained models.
+"""
+
+from robot.learning.action_learning import (
+    REWARD_NEGATIVE,
+    REWARD_NEUTRAL,
+    REWARD_POSITIVE,
+    ActionLearner,
+    ActionLearningEnv,
+    ActionSpace,
+    ActionValidator,
+    DefaultValidator,
+    LearningAction,
+    Reward,
+    RewardFunction,
+    deskbot_action_space,
+)
+from robot.learning.experience import (
+    EpisodicMemory,
+    Experience,
+    ExperienceStore,
+    InMemoryExperienceStore,
+    ReplayBuffer,
+    SqliteExperienceStore,
+    WorkingMemory,
+)
+from robot.learning.learning_service import (
+    CheckpointConfig,
+    CheckpointManager,
+    LearningSchedule,
+    LearningService,
+    ResourceLimits,
+    TrainingStatus,
+)
+from robot.learning.multimodal import (
+    AUDIO_ENCODER_INPUT,
+    AUDIO_ENCODER_OUTPUT,
+    DEFAULT_HISTORY_LENGTH,
+    MULTIMODAL_BASE_SIZE,
+    MULTIMODAL_VERSION,
+    VISION_ENCODER_INPUT as VISION_ENCODER_INPUT,
+    VISION_ENCODER_OUTPUT as VISION_ENCODER_OUTPUT,
+    AudioEncoder,
+    HistoryBuffer,
+    MultimodalEncoder,
+    MultimodalEnvironment,
+    VisionEncoder,
+    multimodal_size,
+)
+from robot.learning.network import MLP, Network
+from robot.learning.preference_learner import (
+    LearnedPreference,
+    PatternObservation,
+    PreferenceLearner,
+)
+from robot.learning.safety import (
+    ActionSafetyValidator,
+    EvaluationResult,
+    EvaluationThresholds,
+    LearningSafetyManager,
+    ModelEvaluator,
+)
+from robot.learning.state_encoder import (
+    ENCODER_VERSION,
+    STATE_SIZE,
+    AudioFeatures,
+    StateEncoder,
+    VisionFeatures,
+    state_layout,
+    state_size,
+)
+from robot.learning.tensor import Tensor
+from robot.learning.world_model import (
+    DEFAULT_ACTION_SIZE,
+    SimpleEnvironment,
+    TrainingMetrics,
+    TrainingResult,
+    WorldModel,
+)
+
+__all__ = [
+    "AUDIO_ENCODER_INPUT",
+    "AUDIO_ENCODER_OUTPUT",
+    "DEFAULT_ACTION_SIZE",
+    "DEFAULT_HISTORY_LENGTH",
+    "ENCODER_VERSION",
+    "MLP",
+    "MULTIMODAL_BASE_SIZE",
+    "MULTIMODAL_VERSION",
+    "REWARD_NEGATIVE",
+    "REWARD_NEUTRAL",
+    "REWARD_POSITIVE",
+    "STATE_SIZE",
+    "ActionLearner",
+    "ActionLearningEnv",
+    "ActionSafetyValidator",
+    "ActionSpace",
+    "ActionValidator",
+    "AudioEncoder",
+    "AudioFeatures",
+    "CheckpointConfig",
+    "CheckpointManager",
+    "DefaultValidator",
+    "EpisodicMemory",
+    "EvaluationResult",
+    "EvaluationThresholds",
+    "Experience",
+    "ExperienceStore",
+    "HistoryBuffer",
+    "InMemoryExperienceStore",
+    "LearnedPreference",
+    "LearningAction",
+    "LearningSafetyManager",
+    "LearningSchedule",
+    "LearningService",
+    "ModelEvaluator",
+    "MultimodalEncoder",
+    "MultimodalEnvironment",
+    "Network",
+    "PatternObservation",
+    "PreferenceLearner",
+    "ReplayBuffer",
+    "ResourceLimits",
+    "Reward",
+    "RewardFunction",
+    "SimpleEnvironment",
+    "SqliteExperienceStore",
+    "StateEncoder",
+    "Tensor",
+    "TrainingMetrics",
+    "TrainingResult",
+    "TrainingStatus",
+    "VisionEncoder",
+    "VisionFeatures",
+    "WorkingMemory",
+    "WorldModel",
+    "deskbot_action_space",
+    "multimodal_size",
+    "state_layout",
+    "state_size",
+]

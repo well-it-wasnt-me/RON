@@ -1,0 +1,278 @@
+[project]
+name = "deskbot"
+version = "1.0.0b0"
+description = "A modular desktop companion robot powered by a Raspberry Pi 5"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Antonio D'Angelo" },
+]
+requires-python = ">=3.12"
+keywords = [
+    "robot",
+    "raspberry-pi",
+    "companion",
+    "robotics",
+    "embedded",
+    "ai",
+    "neural network"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "pydantic>=2.7,<3",
+    "pydantic-settings>=2.4,<3",
+    "structlog>=24.1,<25",
+    "anyio>=4.4,<5",
+    "aiosqlite>=0.20,<1",
+    "sentence-transformers==5.7.0"
+]
+
+[dependency-groups]
+dev = [
+    "coverage>=7.6",
+    "mypy>=1.11,<2",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+    "textual>=0.79",
+]
+
+[project.optional-dependencies]
+
+hardware = [
+    "spidev>=3.6 ; sys_platform == 'linux'",
+    "rpi-lgpio>=0.6 ; sys_platform == 'linux' and platform_machine == 'aarch64'",
+    "gpiozero>=2.0 ; sys_platform == 'linux' and platform_machine == 'aarch64'",
+    "adafruit-circuitpython-busdevice>=5.2.17 ; sys_platform == 'linux' and platform_machine == 'aarch64'",
+    "adafruit-circuitpython-gc9a01a>=1.0.3 ; sys_platform == 'linux' and platform_machine == 'aarch64'",
+    "adafruit-circuitpython-display-text>=1.3 ; sys_platform == 'linux' and platform_machine == 'aarch64'",
+    "adafruit-blinka>=8.0 ; sys_platform == 'linux' and platform_machine == 'aarch64'",
+    "click>=8.0 ; sys_platform == 'linux' and platform_machine == 'aarch64'",
+]
+
+ai = [
+    "openai>=1.40",
+    "ollama>=0.3",
+    "httpx>=0.27",
+]
+audio = [
+    "sounddevice>=0.4.6",
+    "numpy>=1.26",
+    "scipy>=1.13",
+]
+wakeword = [
+    "openwakeword",
+]
+tts = [
+    "piper-tts>=1.6",
+]
+vision = [
+    "opencv-python>=4.10",
+    "numpy>=1.26",
+]
+
+api = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "websockets>=13",
+]
+mqtt = [
+    "paho-mqtt>=2.1",
+]
+homeassistant = [
+    "homeassistant-api>=4.0",
+]
+docs = [
+    "mkdocs>=1.6",
+    "mkdocstrings[python]>=0.25",
+    "mkdocs-autorefs>=1.0",
+    "pymdown-extensions>=10.0",
+]
+all = [
+    "deskbot[hardware,ai,audio,wakeword,tts,vision,api,mqtt,homeassistant,docs]",
+]
+
+[project.urls]
+Homepage = "https://example.com/deskbot"
+Documentation = "https://example.com/deskbot/docs"
+Repository = "https://example.com/deskbot.git"
+Issues = "https://example.com/deskbot/issues"
+
+[project.scripts]
+deskbot = "robot.cli.entrypoint:main"
+deskbot-doctor = "robot.cli.doctor:main"
+deskbot-calibration = "robot.cli.calibration:main"
+deskbot-eye-demo = "robot.cli.eye_demo:main"
+deskbot-simulate = "robot.cli.simulate:main"
+deskbot-display-test = "robot.cli.display_test:main"
+deskbot-profile = "robot.cli.profile:main"
+deskbot-hardware-check = "robot.cli.hardware_check:main"
+deskbot-face-test = "robot.cli.face_test:main"
+deskbot-learning-status = "robot.cli.learning:main"
+deskbot-learning-train = "robot.cli.learning:main"
+deskbot-learning-evaluate = "robot.cli.learning:main"
+deskbot-learning-reset = "robot.cli.learning:main"
+deskbot-learning-export = "robot.cli.learning:main"
+deskbot-interactive = "robot.cli.interactive.app:run_interactive"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/robot"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/robot",
+    "tests",
+    "docs",
+    "assets",
+    "config",
+    "README.md",
+    "LICENSE",
+    "web",
+]
+# ---------------------------------------------------------------------------
+# Ruff (linter + formatter, replaces Black + isort + flake8)
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+extend-exclude = [
+    ".venv",
+    "build",
+    "dist",
+    "*.egg-info",
+]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "B", "UP", "SIM", "RUF",
+    "N", "C4", "PT", "RET", "TID", "TCH", "PTH", "ERA", "PL",
+]
+ignore = [
+    "PLR0913",
+    "PLR0915",
+    "PT011",
+    "PT018",
+    "UP040",
+    "PLR0917",
+    "PLR2004",
+    "E501",
+    "B008",
+    "B904",
+    "UP042",
+    "TC001",
+    "TC002",
+    "TC003",
+    "PLC0415",
+    "PLR2004",
+    "E501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "PLR2004", "B011"]
+"src/robot/hardware/**/*.py" = ["T201"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["robot"]
+combine-as-imports = true
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+# ---------------------------------------------------------------------------
+# MyPy (strict typing)
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+strict = true
+warn_unreachable = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+disallow_any_explicit = false
+disallow_any_generics = true
+check_untyped_defs = true
+disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]
+exclude = [".venv", "build", "dist"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = ["RPi.*", "spidev", "rpi_lgpio", "smbus2", "gpiozero.*"]
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------------------
+# Pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--showlocals",
+    "--tb=short",
+]
+asyncio_mode = "auto"
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning:anyio.*",
+    "ignore::DeprecationWarning:pydantic.*",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "hardware: marks tests that require real hardware",
+    "hardware: requires physical hardware",
+    "audio: requires physical audio hardware",
+    "pi: requires Raspberry Pi hardware",
+]
+
+# ---------------------------------------------------------------------------
+# Coverage
+# ---------------------------------------------------------------------------
+[tool.coverage.run]
+branch = true
+source = ["robot"]
+omit = [
+    "src/robot/hardware/*",
+    "src/robot/__main__*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+fail_under = 80
+precision = 1
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+    "\\.\\.\\.",
+]
+

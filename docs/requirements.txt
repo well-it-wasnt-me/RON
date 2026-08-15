@@ -1,0 +1,6 @@
+# Pin the docs toolchain for reproducible builds.
+# Install with: pip install -r docs/requirements.txt
+mkdocs>=1.6
+mkdocstrings[python]>=0.25
+mkdocs-autorefs>=1.0
+pymdown-extensions>=10.0
