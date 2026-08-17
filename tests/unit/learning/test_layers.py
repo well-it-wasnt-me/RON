@@ -161,6 +161,36 @@ class TestDenseLayerNumericalGradient:
         # Relax tolerance for ReLU because of the non-linearity
         assert np.allclose(layer.weight_grad.data, numerical_w, atol=1e-3)
 
+    def test_weight_gradients_sigmoid_single_sample(self) -> None:
+        """Sigmoid backward must use the activated output in its derivative."""
+        layer = DenseLayer(2, 2, activation="sigmoid", weight_init="xavier", seed=42)
+        x = Tensor([[0.7, -1.2]])
+        target = Tensor([[0.2, 0.8]])
+
+        pred = layer.forward(x)
+        from robot.learning.losses import mse_derivative
+
+        layer.backward(mse_derivative(pred, target))
+        numerical_w, numerical_b = self._numerical_gradient(layer, x, target)
+
+        assert np.allclose(layer.weight_grad.data, numerical_w, atol=1e-4)
+        assert np.allclose(layer.bias_grad.data, numerical_b, atol=1e-4)
+
+    def test_weight_gradients_tanh_single_sample(self) -> None:
+        """Tanh backward must use the activated output in its derivative."""
+        layer = DenseLayer(2, 2, activation="tanh", weight_init="xavier", seed=42)
+        x = Tensor([[0.7, -1.2]])
+        target = Tensor([[0.2, -0.4]])
+
+        pred = layer.forward(x)
+        from robot.learning.losses import mse_derivative
+
+        layer.backward(mse_derivative(pred, target))
+        numerical_w, numerical_b = self._numerical_gradient(layer, x, target)
+
+        assert np.allclose(layer.weight_grad.data, numerical_w, atol=1e-4)
+        assert np.allclose(layer.bias_grad.data, numerical_b, atol=1e-4)
+
 
 class TestDenseLayerState:
     def test_save_load_round_trip(self) -> None:
