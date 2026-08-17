@@ -68,6 +68,7 @@ nav:
     - Plugins: modules/plugins.md
     - MQTT Bridge: modules/mqtt.md
     - Home Assistant: modules/home-assistant.md
+    - Telegram Bridge: modules/telegram.md
 - CLI:
   - Overview: cli/index.md
   - Interactive CLI: cli/interactive.md
