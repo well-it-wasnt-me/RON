@@ -71,7 +71,7 @@ class OpenWakeWordChecker(WakeWordChecker):
         if self._model is not None:
             return self._model
         try:
-            from openwakeword.model import Model  # type: ignore[import-untyped]
+            from openwakeword.model import Model
         except ImportError as exc:
             raise ImportError(
                 "openwakeword is required for OpenWakeWordChecker. "

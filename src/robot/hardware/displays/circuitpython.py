@@ -94,10 +94,10 @@ class CircuitPythonDisplay:
 
         # Lazy import so the rest of the codebase runs on any machine.
         try:
-            import board  # type: ignore[import-not-found]
-            import displayio  # type: ignore[import-not-found]
-            from adafruit_gc9a01a import GC9A01A  # type: ignore[import-not-found]
-            from fourwire import FourWire  # type: ignore[import-not-found]
+            import board
+            import displayio
+            from adafruit_gc9a01a import GC9A01A
+            from fourwire import FourWire
         except ImportError as exc:  # pragma: no cover - hardware-specific
             raise DisplayError(
                 f"CircuitPython displayio dependencies not available: {exc!r}. "

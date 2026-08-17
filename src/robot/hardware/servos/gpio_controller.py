@@ -96,15 +96,13 @@ class _GPIOServo:
         max_angle = self.channel.max_angle_deg
         if not min_angle <= angle <= max_angle:
             raise ServoError(
-                f"angle {angle} out of range "
-                f"[{min_angle}, {max_angle}] for servo {self.name!r}"
+                f"angle {angle} out of range [{min_angle}, {max_angle}] for servo {self.name!r}"
             )
 
         span = max_angle - min_angle
         if span <= 0:
             raise ServoError(
-                f"invalid angle range [{min_angle}, {max_angle}] "
-                f"for servo {self.name!r}"
+                f"invalid angle range [{min_angle}, {max_angle}] for servo {self.name!r}"
             )
 
         fraction = (angle - min_angle) / span

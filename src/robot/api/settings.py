@@ -95,13 +95,13 @@ def _encode_jpeg(rgb: bytes, width: int, height: int) -> bytes | None:
         bgr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
         ok, buf = cv2.imencode(".jpg", bgr, [cv2.IMWRITE_JPEG_QUALITY, 80])
         if ok:
-            return buf.tobytes()
+            return bytes(buf.tobytes())
     except Exception:
         pass
 
     # Try Pillow.
     try:
-        from PIL import Image  # type: ignore[import-not-found]
+        from PIL import Image
 
         img = Image.frombytes("RGB", (width, height), rgb)
         pil_buf = io.BytesIO()
@@ -597,7 +597,7 @@ async def _list_sd_devices(kind: str) -> AudioDevicesResponse:
     import threading
 
     try:
-        import sounddevice as sd  # type: ignore[import-untyped]
+        import sounddevice as sd
     except ImportError:
         return AudioDevicesResponse.model_validate({"devices": [], "available": False})
 

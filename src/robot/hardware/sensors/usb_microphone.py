@@ -89,7 +89,7 @@ class UsbMicrophone(Microphone):
 
     def __post_init__(self) -> None:
         try:
-            import sounddevice as sd  # type: ignore[import-untyped]
+            import sounddevice as sd
         except ImportError as exc:  # pragma: no cover - hardware-specific
             raise RuntimeError(
                 f"sounddevice is required for UsbMicrophone: {exc!r}. "

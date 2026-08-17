@@ -27,10 +27,10 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 
 # Run in simulation mode (no hardware needed)
-deskbot simulate
+deskbot-simulate
 ```
 
-See the [Developer Setup](developer-setup.md) guide for full instructions,
+See the [Developer Setup](getting-started/developer-setup.md) guide for full instructions,
 including hardware wiring and deployment.
 
 ## What's inside?
@@ -39,15 +39,17 @@ including hardware wiring and deployment.
 |-----------|-------------|
 | **Face engine** | Animated eyes, mouth, and expressions on a GC9A01 round display |
 | **Body language** | Servo choreography for head pan/tilt and arm gestures |
-| **Behavior engine** | State machine (idle -> curious -> listening -> thinking -> speaking) |
+| **Behavior engine** | State machine (idle → curious → listening → thinking → speaking) |
 | **Perception** | YuNet face detection via USB camera |
-| **Speech** | Whisper STT, Piper/eSpeak/OpenAI TTS, wake-word detection |
+| **Speech** | Whisper STT, Piper/eSpeak/OpenAI/ElevenLabs TTS, wake-word detection |
 | **Conversation** | Ollama or OpenAI LLM with streaming, tools, and persistence |
+| **Learning** | On-device neural network: experience recording, world model, preference learning |
 | **Preferences** | Learns user name, volume, pace, formality, humour, and more |
 | **REST API** | FastAPI server with WebSocket event streaming |
 | **MQTT bridge** | Publishes events and receives commands over MQTT |
 | **Home Assistant** | MQTT Auto Discovery for native HA integration |
 | **Plugin system** | Extend DeskBot via Python entry points |
+| **Lifecycle** | Graceful degradation — robot never crashes on hardware failure |
 
 ## Architecture
 
@@ -60,15 +62,21 @@ Read the full [Architecture Overview](architecture/overview.md).
 
 ## Documentation
 
-- **Getting Started**: [Developer Setup](developer-setup.md) · [Wiring Guide](wiring.md) · [Deployment](deployment.md)
-- **Core Modules**: [Face](modules/face.md) · [Body Language](modules/body_language.md) · [Behavior](modules/behavior.md) · [Animation](modules/animation.md) · [Events](modules/events.md)
-- **Intelligence**: [Conversation & AI](modules/ai.md) · [Speech](modules/speech.md) · [Tools](modules/tools.md) · [Preferences](modules/preferences.md) · [Vector Memory](modules/vector_memory.md)
-- **Integrations**: [Plugins](modules/plugins.md) · [MQTT Bridge](modules/mqtt.md) · [Home Assistant](modules/home_assistant.md) · [Face Animations](modules/animations.md)
-- **Reference**: [Config](reference/config.md) · [Events](reference/events.md) · [Errors](reference/errors.md) · [REST API](reference/api.md) · [Hardware](reference/hardware.md)
+- **Getting Started**: [Developer Setup](getting-started/developer-setup.md) · [Wiring Guide](getting-started/wiring.md) · [Deployment](getting-started/deployment.md) · [Contributing](getting-started/contributing.md)
+- **Architecture**: [Overview](architecture/overview.md) · [Learning](architecture/learning.md) · [Audio](architecture/audio.md) · [Lifecycle](architecture/lifecycle.md)
+- **Expression**: [Face](modules/face.md) · [Animations](modules/face-animations.md) · [Eye Engine](modules/eye-engine.md) · [Body Language](modules/body-language.md) · [Animation](modules/animation.md)
+- **Behavior**: [Behavior Engine](modules/behavior.md) · [Behavior Library](modules/behavior-library.md) · [Perception](modules/perception.md)
+- **Conversation & AI**: [Conversation](modules/conversation.md) · [Speech](modules/speech.md) · [Tools](modules/tools.md) · [Preferences](modules/preferences.md) · [Vector Memory](modules/vector-memory.md)
+- **Learning**: [Local Brain](modules/learning.md)
+- **Infrastructure**: [Events](modules/events.md) · [Interfaces](modules/interfaces.md) · [Lifecycle](modules/lifecycle.md) · [Services](modules/services.md) · [Simulation](modules/simulation.md) · [Performance](modules/performance.md)
+- **Hardware**: [Servos](modules/servos.md)
+- **Integration**: [Plugins](modules/plugins.md) · [MQTT Bridge](modules/mqtt.md) · [Home Assistant](modules/home-assistant.md)
+- **CLI**: [Overview](cli/index.md) · [Interactive CLI](cli/interactive.md)
+- **Reference**: [Config](reference/config.md) · [REST API](reference/api.md) · [Errors](reference/errors.md) · [Events](reference/events.md) · [Hardware](reference/hardware.md) · [Performance](reference/performance.md)
 
 ## Contributing
 
-We welcome contributions! See [Contributing](contributing.md) for guidelines.
+We welcome contributions! See [Contributing](getting-started/contributing.md) for guidelines.
 
 ## License
 

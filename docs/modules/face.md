@@ -11,7 +11,7 @@ overlays, accessories, and body-language hints.
 - `FaceRenderer`: display-independent drawing.
 - `FaceAnimator`: animation loop and state transitions.
 - `FaceOrchestrator`: connects face animation to application events.
-- `face.themes`: seven visual themes.
+- `face.themes`: six visual themes.
 - `face.animations`: reusable speaking, wake, and thinking-dot animations.
 
 ## Emotions

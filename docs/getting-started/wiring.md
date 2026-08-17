@@ -111,5 +111,5 @@ make display-test
 For hardware diagnostics:
 
 ```bash
-make hardware-check
+deskbot-hardware-check
 ```

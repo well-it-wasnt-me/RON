@@ -47,11 +47,16 @@ DESKBOT_API__PORT=8000
 - `wakeword`
 - `sounds`
 - `memory`
+- `vector_memory`
+- `learning`
+- `preferences`
 - `conversation`
 - `tools`
 - `plugins`
 - `mqtt`
+- `homeassistant`
 - `api`
+- `performance`
 
 The generated API configuration endpoint masks sensitive values before
 returning them.
@@ -73,7 +78,7 @@ DESKBOT_TTS__PROVIDER=elevenlabs
 DESKBOT_TTS__ELEVENLABS__API_KEY=your-api-key
 DESKBOT_TTS__ELEVENLABS__VOICE_ID=21m00Tcm4TlvDq8ikWAM
 DESKBOT_TTS__ELEVENLABS__MODEL_ID=eleven_multilingual_v2
-DESKBOT_WAKEWORD__PROVIDER=energy
+DESKBOT_WAKEWORD__PROVIDER=openwakeword
 
 DESKBOT_API__ENABLED=true
 DESKBOT_API__HOST=0.0.0.0

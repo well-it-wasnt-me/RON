@@ -75,7 +75,7 @@ class UsbSpeaker:
 
     def __post_init__(self) -> None:
         try:
-            import sounddevice as sd  # type: ignore[import-untyped]
+            import sounddevice as sd
         except ImportError as exc:
             raise RuntimeError(
                 f"sounddevice is required for UsbSpeaker: {exc!r}. "

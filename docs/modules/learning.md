@@ -8,7 +8,7 @@ measurable relationships from that experience, *retain* what it learned, and
 on the Raspberry Pi with **no external inference APIs, no pretrained models,
 and no cloud calls**.
 
-> See also the high-level [Learning Architecture](../architecture-learning.md)
+> See also the high-level [Learning Architecture](../architecture/learning.md)
 > overview. This document is the detailed reference for the module itself.
 
 ---
@@ -54,6 +54,7 @@ robot/learning/
 ├── multimodal.py        # Trainable vision/audio sub-encoders + history window
 ├── preference_learner.py# Confidence-scored preference learning with decay
 ├── safety.py            # ModelEvaluator, ActionSafetyValidator, LearningSafetyManager
+├── observation_adapter.py # Event-bus -> PreferenceLearner bridge (user-preference signals)
 └── learning_service.py  # Background continual-learning service (the orchestrator)
 ```
 

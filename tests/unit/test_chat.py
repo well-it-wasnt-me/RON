@@ -28,11 +28,9 @@ from robot.speech.tts import MockTTS
 class _TTSLike(Protocol):
     """Minimal TTS interface required by ConversationService."""
 
-    async def speak(self, text: str) -> AudioBuffer:
-        ...
+    async def speak(self, text: str) -> AudioBuffer: ...
 
-    async def close(self) -> None:
-        ...
+    async def close(self) -> None: ...
 
 
 class _RecordingTTS:
@@ -224,10 +222,7 @@ async def test_tts_failure_preserves_text_response() -> None:
     assert service.state_machine.state is RobotState.IDLE
 
     messages = service.conversation.current.messages
-    assert any(
-        m.role.value == "assistant" and m.content == "Hi there!"
-        for m in messages
-    )
+    assert any(m.role.value == "assistant" and m.content == "Hi there!" for m in messages)
 
     service.detach()
 
@@ -551,6 +546,7 @@ async def test_memory_failure_does_not_crash_conversation() -> None:
 
 def test_vector_memory_dim_none_fallback() -> None:
     """VectorMemory.add() handles _dim being None gracefully."""
+
     class _BrokenEmbedding:
         _dim: int | None = None
 
@@ -619,6 +615,7 @@ async def test_memory_search_failure_does_not_crash_conversation() -> None:
 
 def test_vector_memory_search_similar_dim_none_fallback() -> None:
     """search_similar handles _dim being None gracefully."""
+
     class _BrokenEmbedding:
         _dim: int | None = None
 

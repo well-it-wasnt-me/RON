@@ -26,6 +26,7 @@ Available implementations include:
 - `OpenAITTS`
 - `PiperTTS`
 - `EspeakNGTTS`
+- `ElevenLabsTTS`
 
 Configuration:
 
@@ -39,23 +40,34 @@ Piper-specific settings live below `DESKBOT_TTS__PIPER__...`.
 
 ## Wake word
 
-Wake-word providers currently include:
+Wake-word providers are selected with `DESKBOT_WAKEWORD__PROVIDER`:
 
-- `mock`
-- `energy`
-- `openwakeword`
+- `mock` - auto-triggers after a few chunks; intended for tests, not production.
+- `openwakeword` - model-based detection; the recommended production backend
+  (requires the optional `openwakeword` dependency).
+- `porcupine` - Picovoice Porcupine engine (requires `pvporcupine`).
+- `snowboy` - Snowboy hotword engine (requires `snowboy`).
 
-Porcupine and Snowboy are reserved configuration values but are not current
-providers.
+If the chosen backend's dependency or model is missing, DeskBot safely
+degrades to no wake detection (`NullWakeWordChecker`) rather than waking on
+any loud sound.
 
-Energy detection uses RMS audio level rather than speech recognition. It is
-therefore a sound trigger, not a semantic understanding of the phrase.
+!!! warning "Energy is not a wake-word provider"
+
+    An RMS/energy threshold is **not** a valid value for
+    `DESKBOT_WAKEWORD__PROVIDER`. It was removed because loud audio is not a
+    wake phrase (it would also trigger on DeskBot's own TTS output). Energy /
+    volume detection is now a non-semantic *audio activity detector* (VAD),
+    `robot.speech.wakeword_energy.EnergyActivityDetector`, used for low-level
+    audio gating only, not for wake-word recognition. Selecting `"energy"` is a
+    configuration validation error.
 
 ```env
-DESKBOT_WAKEWORD__PROVIDER=energy
+DESKBOT_WAKEWORD__PROVIDER=openwakeword
 DESKBOT_WAKEWORD__PHRASE=hey deskbot
-DESKBOT_WAKEWORD__ENERGY_THRESHOLD=0.05
-DESKBOT_WAKEWORD__ENERGY_COOLDOWN_S=1.5
+DESKBOT_WAKEWORD__THRESHOLD=0.5
+# Optional custom openWakeWord ONNX model:
+DESKBOT_WAKEWORD__MODEL_PATH=
 ```
 
 ## Conversation audio loop
@@ -109,7 +121,7 @@ TTS speech on the same audio output; they remain available via the REST API
 
 ```env
 DESKBOT_SOUNDS__ENABLED=true
-DESKOT_SOUNDS__VOLUME=0.8
+DESKBOT_SOUNDS__VOLUME=0.8
 DESKBOT_SOUNDS__REACTIONS_ENABLED=true   # auto-play on emotions/state
 ```
 

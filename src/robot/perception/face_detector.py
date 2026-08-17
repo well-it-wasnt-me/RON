@@ -310,7 +310,7 @@ class CascadeFaceDetector:
         if cascade_path is not None:
             self._cascade = cv2.CascadeClassifier(str(cascade_path))
         else:
-            default = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"  # type: ignore[attr-defined]
+            default = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
             self._cascade = cv2.CascadeClassifier(default)
         if self._cascade.empty():
             raise RuntimeError(f"Failed to load cascade from {cascade_path!r}")

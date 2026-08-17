@@ -33,7 +33,7 @@ class PorcupineWakeWordChecker(WakeWordChecker):
         sensitivity: float = 0.5,
     ) -> None:
         try:
-            import pvporcupine  # type: ignore[import-not-found]
+            import pvporcupine
         except ImportError as exc:
             raise ImportError(
                 "pvporcupine is required for PorcupineWakeWordChecker. "

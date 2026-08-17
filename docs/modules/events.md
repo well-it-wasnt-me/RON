@@ -30,6 +30,7 @@ running.
 | `WakeWordDetected` | Wake word detected |
 | `SoundEffectPlayed` | Sound effect played |
 | `LLMTokenReceived` | Streaming LLM token arrived |
+| `BotReply` | A complete assistant reply was produced |
 
 `PerceptionScan` is also defined by the perception service and is published
 when a scan cycle completes.

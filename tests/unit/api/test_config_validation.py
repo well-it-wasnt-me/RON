@@ -81,11 +81,7 @@ async def test_validate_invalid_env(client: AsyncClient) -> None:
     assert data["valid"] is False
     assert len(data["errors"]) > 0
 
-    env_errors = [
-        error
-        for error in data["errors"]
-        if "env" in error["field"]
-    ]
+    env_errors = [error for error in data["errors"] if "env" in error["field"]]
     assert len(env_errors) > 0
 
 
@@ -101,11 +97,7 @@ async def test_validate_invalid_port(client: AsyncClient) -> None:
     data = response.json()
     assert data["valid"] is False
 
-    port_errors = [
-        error
-        for error in data["errors"]
-        if "port" in error["field"]
-    ]
+    port_errors = [error for error in data["errors"] if "port" in error["field"]]
     assert len(port_errors) > 0
 
 
@@ -121,11 +113,7 @@ async def test_validate_invalid_spi_hz(client: AsyncClient) -> None:
     data = response.json()
     assert data["valid"] is False
 
-    hz_errors = [
-        error
-        for error in data["errors"]
-        if "spi_hz" in error["field"]
-    ]
+    hz_errors = [error for error in data["errors"] if "spi_hz" in error["field"]]
     assert len(hz_errors) > 0
 
 
@@ -212,11 +200,7 @@ async def test_validate_api_key_not_applied(
 
     assert after.status_code == 200
 
-    assert "sk-test-key" not in (
-        after.json()
-        .get("llm", {})
-        .get("api_key", "")
-    )
+    assert "sk-test-key" not in (after.json().get("llm", {}).get("api_key", ""))
 
 
 # ------------------------------------------------------------ config/schema GET

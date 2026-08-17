@@ -1,1694 +1,3139 @@
 openapi: 3.1.0
 info:
   title: DeskBot API
-  version: 0.1.0
-  summary: REST API for monitoring and controlling DeskBot.
-  description: |
-    HTTP API for monitoring and controlling a DeskBot instance.
-
-    The API exposes robot state, configuration, perception, audio and
-    conversation status, conversational history, speech and emotion commands,
-    hardware calibration, user preferences, learning, and performance
-    profiling endpoints.
-
-    The WebSocket event stream is documented with the `x-websocket` extension
-    because standard OpenAPI does not define WebSocket operations.
-
-servers:
-  - url: http://localhost:8000/api/v1
-    description: Local DeskBot API
-
-tags:
-  - name: health
-    description: API health and version information.
-  - name: state
-    description: Robot state and runtime status.
-  - name: commands
-    description: Commands sent to the robot.
-  - name: conversations
-    description: Persistent and active conversation history.
-  - name: calibration
-    description: Servo and display calibration endpoints.
-  - name: preferences
-    description: User preference retrieval and management.
-  - name: learning
-    description: On-device learning service status and control.
-  - name: config
-    description: Configuration validation and schema endpoints.
-  - name: performance
-    description: Frame budget, servo latency, and event bus profiling.
-
+  description: REST API for monitoring and controlling DeskBot.
+  version: 1.0.0b0
 paths:
-  /health:
+  /api/v1/health:
     get:
-      tags: [health]
+      tags:
+      - health
       summary: Health check
-      operationId: healthCheck
+      description: 'Return overall health status including component degradation info.
+
+
+        The response includes the overall status (``"ok"`` or ``"degraded"``)
+
+        and per-component details when a :class:`DegradationRegistry` is
+
+        available on the app state bridge.'
+      operationId: health_check_api_v1_health_get
       responses:
-        "200":
-          description: API is responding.
+        '200':
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HealthResponse"
-              example:
-                status: ok
-
-  /version:
+                $ref: '#/components/schemas/HealthResponse'
+  /api/v1/version:
     get:
-      tags: [health]
-      summary: Get API version
-      operationId: versionInfo
+      tags:
+      - health
+      summary: Version info
+      description: Return the API version.
+      operationId: version_info_api_v1_version_get
       responses:
-        "200":
-          description: API version information.
+        '200':
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/VersionResponse"
-              example:
-                version: 0.1.0
-                name: DeskBot API
-
-  /state:
+                $ref: '#/components/schemas/VersionResponse'
+  /api/v1/state:
     get:
-      tags: [state]
-      summary: Get current robot state
-      operationId: getState
+      tags:
+      - state
+      summary: Current robot state
+      description: 'Return the current robot state (IDLE, CURIOUS, LISTENING, etc.).
+
+
+        Returns a placeholder if the state machine hasn''t been started yet.'
+      operationId: get_state_api_v1_state_get
       responses:
-        "200":
-          description: Current robot state.
+        '200':
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/StateResponse"
-              examples:
-                attached:
-                  value:
-                    state: idle
-                unavailable:
-                  value:
-                    state: unknown
-                    detail: DeskBot app not attached
-
+                $ref: '#/components/schemas/StateResponse'
     post:
-      tags: [commands]
-      summary: Transition robot state
-      operationId: setState
+      tags:
+      - commands
+      summary: Transition state
+      description: Transition the robot to a new state.
+      operationId: set_state_api_v1_state_post
       requestBody:
-        required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/StateRequest"
-            example:
-              state: curious
+              $ref: '#/components/schemas/StateRequest'
+        required: true
       responses:
-        "200":
-          description: Command accepted or rejected by the running application.
+        '200':
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CommandResponse"
-              examples:
-                success:
-                  value:
-                    status: ok
-                    state: curious
-                invalid:
-                  value:
-                    status: error
-                    detail: "Invalid state. Valid: ['boot', 'idle', 'curious', 'listening', 'thinking', 'speaking', 'sleeping']"
-                unavailable:
-                  value:
-                    status: error
-                    detail: DeskBot app not attached
-        "422":
-          $ref: "#/components/responses/ValidationError"
-
-  /config:
+                $ref: '#/components/schemas/CommandResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/config:
     get:
-      tags: [state]
-      summary: Get current configuration
-      description: |
-        Returns the current application configuration.
+      tags:
+      - state
+      summary: Current configuration
+      description: 'Return the current configuration as a JSON dict.
 
-        Sensitive LLM API keys are masked before the configuration is returned.
-      operationId: getConfig
+
+        Sensitive fields (API keys) are masked.'
+      operationId: get_config_api_v1_config_get
       responses:
-        "200":
-          description: Current configuration.
+        '200':
+          description: Successful Response
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
-
-  /config/validate:
+                $ref: '#/components/schemas/ConfigResponse'
+  /api/v1/perception:
+    get:
+      tags:
+      - state
+      summary: Perception status
+      description: Return the current perception status (face detection, scan interval).
+      operationId: get_perception_api_v1_perception_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerceptionResponse'
+  /api/v1/audio:
+    get:
+      tags:
+      - state
+      summary: Audio output status
+      description: Return the current audio output status.
+      operationId: get_audio_api_v1_audio_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AudioStatusResponse'
+  /api/v1/conversation:
+    get:
+      tags:
+      - state
+      summary: Conversation status
+      description: Return the current conversation service status.
+      operationId: get_conversation_api_v1_conversation_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationStatusResponse'
+  /api/v1/speak:
     post:
-      tags: [config]
+      tags:
+      - commands
+      summary: Speak text
+      description: 'Send text through the conversation pipeline (LLM -> TTS).
+
+
+        Uses :meth:`ConversationService.handle_user_text` so typed input
+
+        enters the same canonical path as speech recognition.'
+      operationId: speak_api_v1_speak_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpeakRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/speak-direct:
+    post:
+      tags:
+      - commands
+      summary: Speak text directly via TTS
+      description: 'Speak text directly through TTS without going through the LLM pipeline.
+
+
+        This bypasses STT and LLM entirely - just synthesizes the given text.'
+      operationId: speak_direct_api_v1_speak_direct_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpeakRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/emotion:
+    post:
+      tags:
+      - commands
+      summary: Set emotion
+      description: Set the robot's current emotion.
+      operationId: set_emotion_api_v1_emotion_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmotionRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/conversations:
+    get:
+      tags:
+      - conversations
+      summary: List conversations
+      description: 'List durable conversations, newest first.
+
+
+        With the default in-memory configuration, the active conversation is
+
+        returned as a single ephemeral entry.'
+      operationId: list_conversations_api_v1_conversations_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ConversationSummary'
+                type: array
+                title: Response List Conversations Api V1 Conversations Get
+  /api/v1/conversations/{conversation_id}:
+    get:
+      tags:
+      - conversations
+      summary: Get conversation
+      description: Get a conversation, including ordered messages.
+      operationId: get_conversation_api_v1_conversations__conversation_id__get
+      parameters:
+      - name: conversation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Conversation Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationDetail'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - conversations
+      summary: Delete conversation
+      description: Delete a saved conversation; deleting the active one resets it.
+      operationId: delete_conversation_api_v1_conversations__conversation_id__delete
+      parameters:
+      - name: conversation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Conversation Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/calibration/servos:
+    get:
+      tags:
+      - calibration
+      - calibration
+      summary: List all servos
+      operationId: list_servos_api_v1_calibration_servos_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServoListResponse'
+  /api/v1/calibration/servos/{name}/move:
+    post:
+      tags:
+      - calibration
+      - calibration
+      summary: Move a servo to an angle
+      operationId: move_servo_api_v1_calibration_servos__name__move_post
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      - name: angle
+        in: query
+        required: true
+        schema:
+          type: number
+          title: Angle
+      - name: duration_s
+        in: query
+        required: false
+        schema:
+          type: number
+          default: 0.4
+          title: Duration S
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServoMoveResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/calibration/servos/{name}/release:
+    post:
+      tags:
+      - calibration
+      - calibration
+      summary: Release a servo
+      operationId: release_servo_api_v1_calibration_servos__name__release_post
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServoReleaseResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/calibration/servos/release_all:
+    post:
+      tags:
+      - calibration
+      - calibration
+      summary: Release all servos
+      operationId: release_all_servos_api_v1_calibration_servos_release_all_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReleaseAllResponse'
+  /api/v1/calibration/servos/calibrate/{name}:
+    post:
+      tags:
+      - calibration
+      - calibration
+      summary: Run servo calibration sequence
+      description: Centre a servo safely, optionally testing configured endpoints.
+      operationId: calibrate_servo_api_v1_calibration_servos_calibrate__name__post
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      - name: include_limits
+        in: query
+        required: false
+        schema:
+          type: boolean
+          description: Also visit configured endpoints
+          default: false
+          title: Include Limits
+        description: Also visit configured endpoints
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalibrateServoResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/calibration/display:
+    get:
+      tags:
+      - calibration
+      - calibration
+      summary: Get display configuration
+      operationId: get_display_config_api_v1_calibration_display_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisplayConfigResponse'
+  /api/v1/calibration/display/test_pattern:
+    post:
+      tags:
+      - calibration
+      - calibration
+      summary: Show a test pattern
+      operationId: show_test_pattern_api_v1_calibration_display_test_pattern_post
+      parameters:
+      - name: pattern
+        in: query
+        required: false
+        schema:
+          type: string
+          default: gradient
+          title: Pattern
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestPatternResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/calibration/display/clear:
+    post:
+      tags:
+      - calibration
+      - calibration
+      summary: Clear the display
+      operationId: clear_display_api_v1_calibration_display_clear_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClearDisplayResponse'
+  /api/v1/preferences:
+    get:
+      tags:
+      - preferences
+      summary: List all preferences
+      description: Return all learned user preferences.
+      operationId: list_preferences_api_v1_preferences_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreferenceListResponse'
+  /api/v1/preferences/{key}:
+    get:
+      tags:
+      - preferences
+      summary: Get a specific preference
+      description: Return a single preference by key.
+      operationId: get_preference_api_v1_preferences__key__get
+      parameters:
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreferenceItem'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - preferences
+      summary: Delete a preference
+      description: Delete a preference by key.
+      operationId: delete_preference_api_v1_preferences__key__delete
+      parameters:
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreferenceDeleteResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/learning/status:
+    get:
+      tags:
+      - learning
+      - learning
+      summary: Learning service status
+      description: Return the current learning service status.
+      operationId: learning_status_api_v1_learning_status_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LearningStatusResponse'
+  /api/v1/learning/preferences:
+    get:
+      tags:
+      - learning
+      - learning
+      summary: Learned preferences
+      description: Return all learned preferences.
+      operationId: learning_preferences_api_v1_learning_preferences_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LearningPreferencesResponse'
+  /api/v1/learning/config:
+    get:
+      tags:
+      - learning
+      - learning
+      summary: Learning configuration
+      description: Return the current learning configuration.
+      operationId: learning_config_api_v1_learning_config_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LearningConfigResponse'
+  /api/v1/learning/train:
+    post:
+      tags:
+      - learning
+      - learning
+      summary: Force a training cycle
+      description: Force an immediate training cycle regardless of schedule.
+      operationId: force_train_api_v1_learning_train_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForceTrainResponse'
+  /api/v1/config/validate:
+    post:
+      tags:
+      - config
       summary: Validate proposed configuration
-      description: |
-        Validate a proposed configuration without applying it.
+      description: 'Validate a proposed configuration without applying it.
+
 
         Accepts a JSON body with partial or full config overrides. The
+
         proposed values are merged with the current defaults and validated
-        against the Pydantic settings model. Returns `{valid: true}` on
-        success, or `{valid: false, errors: [...]}` with per-field error
-        messages on failure.
 
-        This endpoint **never** modifies the running configuration.
-      operationId: validateConfig
+        against the :class:`AppSettings` Pydantic model.
+
+
+        Returns ``{valid: true}`` on success, or ``{valid: false, errors: [...]}``
+
+        with field-level error messages on failure.
+
+
+        This endpoint **never** modifies the running configuration.'
+      operationId: validate_config_api_v1_config_validate_post
       requestBody:
-        required: true
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: true
-            example:
-              llm:
-                provider: ollama
-                model: llama3
-      responses:
-        "200":
-          description: Validation result.
-          content:
-            application/json:
-              schema:
-                oneOf:
-                  - $ref: "#/components/schemas/ConfigValidResponse"
-                  - $ref: "#/components/schemas/ConfigInvalidResponse"
-              examples:
-                valid:
-                  value:
-                    valid: true
-                invalid:
-                  value:
-                    valid: false
-                    errors:
-                      - field: llm.model
-                        message: "Field required"
-                        type: missing
-
-  /config/schema:
-    get:
-      tags: [config]
-      summary: Get configuration JSON Schema
-      description: |
-        Returns the full JSON Schema for the application settings model.
-
-        Enables dynamic form generation in the config validator UI with
-        field descriptions, types, defaults, and validation constraints.
-      operationId: getConfigSchema
-      responses:
-        "200":
-          description: JSON Schema for AppSettings.
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: true
-
-  /perception:
-    get:
-      tags: [state]
-      summary: Get perception status
-      operationId: getPerception
-      responses:
-        "200":
-          description: Current perception status.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PerceptionStatus"
-              examples:
-                disabled:
-                  value:
-                    enabled: false
-                enabled:
-                  value:
-                    enabled: true
-                    running: true
-                    scan_interval_s: 0.2
-                    max_faces: 1
-
-  /audio:
-    get:
-      tags: [state]
-      summary: Get audio output status
-      operationId: getAudio
-      responses:
-        "200":
-          description: Current audio output status.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AudioStatus"
-              examples:
-                disabled:
-                  value:
-                    enabled: false
-                    detail: DeskBot app not attached
-                enabled:
-                  value:
-                    enabled: true
-                    talking: false
-
-  /conversation:
-    get:
-      tags: [state]
-      summary: Get conversation service status
-      operationId: getConversationStatus
-      responses:
-        "200":
-          description: Current conversation service status.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ConversationStatus"
-              examples:
-                disabled:
-                  value:
-                    enabled: false
-                enabled:
-                  value:
-                    enabled: true
-                    state: idle
-                    wake_checker: OpenWakeWordChecker
-                    stt: WhisperSpeechToText
-                    tts: PiperTTS
-                    llm: OllamaLLM
-
-  /speak:
-    post:
-      tags: [commands]
-      summary: Send text through the conversation pipeline
-      description: |
-        Publishes the supplied text as a `SpeechRecognized` event so the
-        conversation pipeline can process it through the configured LLM/TTS
-        flow.
-
-        This is different from `/speak-direct`, which bypasses STT and LLM.
-      operationId: speak
-      requestBody:
+              $ref: '#/components/schemas/ConfigValidateRequest'
         required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SpeakRequest"
-            example:
-              text: Hello DeskBot
       responses:
-        "200":
-          description: Command accepted or rejected by the running application.
+        '200':
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CommandResponse"
-              examples:
-                success:
-                  value:
-                    status: ok
-                    text: Hello DeskBot
-                unavailable:
-                  value:
-                    status: error
-                    detail: DeskBot app not attached
-        "422":
-          $ref: "#/components/responses/ValidationError"
-
-  /speak-direct:
-    post:
-      tags: [commands]
-      summary: Speak text directly through TTS
-      description: |
-        Synthesizes and plays the supplied text directly through the configured
-        TTS provider. The STT and LLM stages are bypassed.
-      operationId: speakDirect
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SpeakRequest"
-            example:
-              text: Direct TTS test
-      responses:
-        "200":
-          description: Command accepted or rejected by the running application.
+                $ref: '#/components/schemas/ConfigValidateResponse'
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CommandResponse"
-              examples:
-                success:
-                  value:
-                    status: ok
-                    text: Direct TTS test
-                unavailable:
-                  value:
-                    status: error
-                    detail: DeskBot or TTS not attached
-        "422":
-          $ref: "#/components/responses/ValidationError"
-
-  /emotion:
-    post:
-      tags: [commands]
-      summary: Set current emotion
-      description: |
-        Publishes an emotion change event.
-
-        The API currently accepts the emotion as a string and returns a
-        command-level error for an unknown value rather than using an HTTP 4xx
-        response.
-      operationId: setEmotion
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/EmotionRequest"
-            examples:
-              happy:
-                value:
-                  emotion: happy
-                  intensity: 0.9
-              curious:
-                value:
-                  emotion: curious
-                  intensity: 1.0
-      responses:
-        "200":
-          description: Command accepted or rejected by the running application.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CommandResponse"
-              examples:
-                success:
-                  value:
-                    status: ok
-                    emotion: happy
-                invalid:
-                  value:
-                    status: error
-                    detail: "Invalid emotion. Valid: ['neutral', 'happy', 'curious', 'thinking', 'sleepy', 'embarrassed', 'excited', 'sad', 'surprised', 'angry']"
-                unavailable:
-                  value:
-                    status: error
-                    detail: DeskBot app not attached
-        "422":
-          $ref: "#/components/responses/ValidationError"
-
-  /conversations:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/config/schema:
     get:
-      tags: [conversations]
-      summary: List conversations
-      description: |
-        Lists durable conversations newest first. If no persistent conversation
-        store is configured, the active conversation is returned as an
-        ephemeral entry.
-      operationId: listConversations
+      tags:
+      - config
+      summary: Configuration JSON Schema
+      description: 'Return the full JSON Schema for :class:`AppSettings`.
+
+
+        This enables the config validator UI to build dynamic form inputs,
+
+        show field descriptions, types, defaults, and validation constraints.'
+      operationId: get_config_schema_api_v1_config_schema_get
       responses:
-        "200":
-          description: Conversation summaries.
+        '200':
+          description: Successful Response
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ConversationSummary"
-
-  /conversations/{conversation_id}:
+                $ref: '#/components/schemas/ConfigSchemaResponse'
+  /api/v1/performance:
     get:
-      tags: [conversations]
-      summary: Get conversation
-      operationId: getConversation
-      parameters:
-        - $ref: "#/components/parameters/ConversationId"
-      responses:
-        "200":
-          description: Conversation with ordered messages.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ConversationDetail"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "503":
-          $ref: "#/components/responses/ServiceUnavailable"
-
-    delete:
-      tags: [conversations]
-      summary: Delete conversation
-      description: |
-        Deletes a saved conversation. Deleting the active conversation resets it.
-      operationId: deleteConversation
-      parameters:
-        - $ref: "#/components/parameters/ConversationId"
-      responses:
-        "200":
-          description: Conversation deleted or active conversation reset.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/IdCommandResponse"
-              example:
-                status: ok
-                id: 2d3c7b6f
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "503":
-          $ref: "#/components/responses/ServiceUnavailable"
-
-  /preferences:
-    get:
-      tags: [preferences]
-      summary: List all preferences
-      description: |
-        Returns all learned user preferences, sorted by confidence.
-      operationId: listPreferences
-      responses:
-        "200":
-          description: List of preferences.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PreferenceListResponse"
-        "404":
-          description: Preference tracker not available or not enabled.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HTTPError"
-              example:
-                detail: Preference tracker not enabled
-
-  /preferences/{key}:
-    get:
-      tags: [preferences]
-      summary: Get a specific preference
-      operationId: getPreference
-      parameters:
-        - $ref: "#/components/parameters/PreferenceKey"
-      responses:
-        "200":
-          description: Preference value.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PreferenceItem"
-        "404":
-          description: Preference not found.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HTTPError"
-              example:
-                detail: "Preference 'name' not found"
-
-    delete:
-      tags: [preferences]
-      summary: Delete a preference
-      description: |
-        Removes a preference by key. Returns the deleted key.
-      operationId: deletePreference
-      parameters:
-        - $ref: "#/components/parameters/PreferenceKey"
-      responses:
-        "200":
-          description: Preference deleted.
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [status, key]
-                properties:
-                  status:
-                    type: string
-                    example: deleted
-                  key:
-                    type: string
-                    example: name
-        "404":
-          description: Preference not found.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HTTPError"
-              example:
-                detail: "Preference 'name' not found"
-
-  /learning/status:
-    get:
-      tags: [learning]
-      summary: Learning service status
-      description: |
-        Returns the current learning service status including experience counts,
-        model loss, training cycle information, and model version.
-      operationId: learningStatus
-      responses:
-        "200":
-          description: Learning service status.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LearningStatusResponse"
-        "404":
-          description: Learning service not available.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HTTPError"
-              example:
-                detail: Learning service not available
-
-  /learning/preferences:
-    get:
-      tags: [learning]
-      summary: Learned preferences
-      description: |
-        Returns preferences learned by the learning service, including
-        confidence, observation count, and average reward for each pattern.
-      operationId: learningPreferences
-      responses:
-        "200":
-          description: Learned preferences.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LearningPreferencesResponse"
-        "404":
-          description: Learning service not available.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HTTPError"
-              example:
-                detail: Learning service not available
-
-  /learning/config:
-    get:
-      tags: [learning]
-      summary: Learning configuration
-      description: |
-        Returns the current learning service configuration including schedule,
-        resource limits, and checkpoint settings.
-      operationId: learningConfig
-      responses:
-        "200":
-          description: Learning configuration.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LearningConfigResponse"
-        "404":
-          description: Learning service not available.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HTTPError"
-              example:
-                detail: Learning service not available
-
-  /learning/train:
-    post:
-      tags: [learning]
-      summary: Force a training cycle
-      description: |
-        Forces an immediate training cycle regardless of the configured
-        schedule. Returns whether training was triggered and the current
-        training state.
-      operationId: forceTrain
-      responses:
-        "200":
-          description: Training cycle result.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LearningTrainResponse"
-              examples:
-                triggered:
-                  value:
-                    triggered: true
-                    training_cycles_completed: 3
-                    is_training: true
-                rejected:
-                  value:
-                    triggered: false
-                    training_cycles_completed: 2
-                    is_training: false
-        "404":
-          description: Learning service not available.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HTTPError"
-              example:
-                detail: Learning service not available
-
-  /performance:
-    get:
-      tags: [performance]
+      tags:
+      - performance
       summary: Combined performance summary
-      description: |
-        Returns a combined summary of all profiler data: frame budget,
-        servo latency, and event bus throughput. Each section includes
-        an `enabled` boolean indicating whether the profiler is active.
-      operationId: getPerformanceSummary
+      description: Return a combined summary of all profiler data.
+      operationId: get_performance_summary_api_v1_performance_get
       responses:
-        "200":
-          description: Combined performance data.
+        '200':
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PerformanceSummary"
-
-  /performance/frames:
+                $ref: '#/components/schemas/PerformanceSummaryResponse'
+  /api/v1/performance/frames:
     get:
-      tags: [performance]
+      tags:
+      - performance
       summary: Frame budget stats
-      description: |
-        Returns frame rendering performance statistics including target and
-        actual FPS, average frame time, and percentile latency breakdowns.
-      operationId: getFrameStats
+      description: Return frame budget performance statistics.
+      operationId: get_frame_stats_api_v1_performance_frames_get
       responses:
-        "200":
-          description: Frame budget statistics.
+        '200':
+          description: Successful Response
           content:
             application/json:
               schema:
-                oneOf:
-                  - $ref: "#/components/schemas/FrameStats"
-                  - $ref: "#/components/schemas/ProfilerDisabled"
-
-  /performance/servos:
+                $ref: '#/components/schemas/FrameStatsResponse'
+  /api/v1/performance/servos:
     get:
-      tags: [performance]
+      tags:
+      - performance
       summary: Servo latency stats
-      description: |
-        Returns per-servo latency statistics (average, p50, p95) and
-        command counts.
-      operationId: getServoStats
+      description: Return per-servo latency statistics.
+      operationId: get_servo_stats_api_v1_performance_servos_get
       responses:
-        "200":
-          description: Servo latency statistics.
+        '200':
+          description: Successful Response
           content:
             application/json:
               schema:
-                oneOf:
-                  - $ref: "#/components/schemas/ServoLatencyStats"
-                  - $ref: "#/components/schemas/ProfilerDisabled"
-
-  /performance/bus:
+                $ref: '#/components/schemas/ServoProfilerStatsResponse'
+  /api/v1/performance/bus:
     get:
-      tags: [performance]
+      tags:
+      - performance
       summary: Event bus throughput
-      description: |
-        Returns event bus throughput and latency statistics including
-        events per second, processing time percentiles, and event counts
-        by type.
-      operationId: getBusStats
+      description: Return event bus throughput and latency statistics.
+      operationId: get_bus_stats_api_v1_performance_bus_get
       responses:
-        "200":
-          description: Event bus statistics.
+        '200':
+          description: Successful Response
           content:
             application/json:
               schema:
-                oneOf:
-                  - $ref: "#/components/schemas/BusStats"
-                  - $ref: "#/components/schemas/ProfilerDisabled"
-
-  /calibration/servos:
+                $ref: '#/components/schemas/BusProfilerStatsResponse'
+  /api/v1/settings/info:
     get:
-      tags: [calibration]
-      summary: List servos
-      operationId: listServos
+      tags:
+      - settings
+      - settings
+      summary: Hardware & subsystem overview
+      description: Return a comprehensive overview of all testable subsystems.
+      operationId: settings_info_api_v1_settings_info_get
       responses:
-        "200":
-          description: Current servo positions.
+        '200':
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ServoListResponse"
-        "503":
-          $ref: "#/components/responses/ServiceUnavailable"
-
-  /calibration/servos/{name}/move:
-    post:
-      tags: [calibration]
-      summary: Move a servo to an angle
-      operationId: moveServo
-      parameters:
-        - $ref: "#/components/parameters/ServoName"
-        - name: angle
-          in: query
-          required: true
-          description: Target servo angle in degrees.
-          schema:
-            type: number
-            format: float
-          example: 90
-        - name: duration_s
-          in: query
-          required: false
-          description: Movement duration in seconds.
-          schema:
-            type: number
-            format: float
-            default: 0.4
-            minimum: 0
-          example: 0.4
-      responses:
-        "200":
-          description: Servo movement completed.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ServoMoveResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "503":
-          $ref: "#/components/responses/ServiceUnavailable"
-
-  /calibration/servos/{name}/release:
-    post:
-      tags: [calibration]
-      summary: Release a servo
-      description: Stops actively driving the named servo so it can be moved by hand.
-      operationId: releaseServo
-      parameters:
-        - $ref: "#/components/parameters/ServoName"
-      responses:
-        "200":
-          description: Servo released.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ServoReleaseResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "503":
-          $ref: "#/components/responses/ServiceUnavailable"
-
-  /calibration/servos/release_all:
-    post:
-      tags: [calibration]
-      summary: Release all servos
-      operationId: releaseAllServos
-      responses:
-        "200":
-          description: All servos released.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ReleaseAllResponse"
-        "503":
-          $ref: "#/components/responses/ServiceUnavailable"
-
-  /calibration/servos/calibrate/{name}:
-    post:
-      tags: [calibration]
-      summary: Run servo calibration sequence
-      description: |
-        Moves the selected servo through minimum, centre, maximum, and centre
-        positions with pauses between movements.
-      operationId: calibrateServo
-      parameters:
-        - $ref: "#/components/parameters/ServoName"
-      responses:
-        "200":
-          description: Calibration sequence completed.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ServoCalibrationResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "503":
-          $ref: "#/components/responses/ServiceUnavailable"
-
-  /calibration/display:
+                $ref: '#/components/schemas/SettingsInfoResponse'
+  /api/v1/settings/camera/info:
     get:
-      tags: [calibration]
-      summary: Get display configuration
-      operationId: getDisplayConfig
+      tags:
+      - settings
+      - settings
+      summary: Camera info
+      description: Return camera type and resolution.
+      operationId: camera_info_api_v1_settings_camera_info_get
       responses:
-        "200":
-          description: Current display configuration.
+        '200':
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/DisplayConfig"
-        "503":
-          $ref: "#/components/responses/ServiceUnavailable"
+                $ref: '#/components/schemas/CameraInfoResponse'
+  /api/v1/settings/camera/frame:
+    get:
+      tags:
+      - settings
+      - settings
+      summary: Capture a single frame
+      description: Capture a single frame and return it as a JPEG (or BMP fallback).
+      operationId: camera_frame_api_v1_settings_camera_frame_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/v1/settings/camera/stream:
+    get:
+      tags:
+      - settings
+      - settings
+      summary: Live MJPEG camera preview
+      description: "Stream a live MJPEG feed from the camera.\n\nThe browser can display this directly in an ``<img>`` tag::\n\n    <img src=\"/api/v1/settings/camera/stream\" />"
+      operationId: camera_stream_api_v1_settings_camera_stream_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/v1/settings/mic/info:
+    get:
+      tags:
+      - settings
+      - settings
+      summary: Microphone info
+      description: Return microphone type and sample rate.
+      operationId: mic_info_api_v1_settings_mic_info_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MicrophoneInfoResponse'
+  /api/v1/settings/mic/level:
+    get:
+      tags:
+      - settings
+      - settings
+      summary: Current microphone input level
+      description: 'Return the current microphone RMS level (0..1).
 
-  /calibration/display/test_pattern:
+
+        For :class:`UsbMicrophone` this reads the continuously-updated
+
+        ``_last_rms_value`` from the background capture thread (zero
+
+        conflict with the conversation audio loop). For other microphones
+
+        a best-effort value is returned.'
+      operationId: mic_level_api_v1_settings_mic_level_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MicLevelResponse'
+  /api/v1/settings/mic/test:
     post:
-      tags: [calibration]
-      summary: Show a display test pattern
-      operationId: showDisplayTestPattern
-      parameters:
-        - name: pattern
-          in: query
-          required: false
-          description: Test pattern to display.
-          schema:
-            type: string
-            enum: [gradient, grid, solid, checkerboard]
-            default: gradient
-          example: grid
-      responses:
-        "200":
-          description: Test pattern displayed.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DisplayTestPatternResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "503":
-          $ref: "#/components/responses/ServiceUnavailable"
+      tags:
+      - settings
+      - settings
+      summary: Record and play back a mic test
+      description: 'Record *duration* seconds from a temporary microphone and return WAV.
 
-  /calibration/display/clear:
-    post:
-      tags: [calibration]
-      summary: Clear the display
-      operationId: clearDisplay
-      responses:
-        "200":
-          description: Display cleared.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DisplayClearResponse"
-        "503":
-          $ref: "#/components/responses/ServiceUnavailable"
 
-  /ws/events:
-    x-websocket:
-      summary: Stream robot events
-      description: |
-        WebSocket endpoint that streams events published by the robot event bus.
+        A **temporary** microphone instance is created with the same settings
 
-        Connect to:
+        as the active one so the conversation audio loop is not disturbed.
 
-        `ws://<host>:8000/ws/events`
-
-        Messages use the following envelope:
-
-        ```json
-        {
-          "type": "StateChanged",
-          "data": {
-            "previous": "idle",
-            "current": "curious"
-          }
-        }
-        ```
-
-        The `type` field contains the Python event class name. The `data`
-        object contains the event dataclass fields. Enum values are serialized
-        using their string value.
-
-        A client may send the literal text `ping`; the server responds with
-        `pong`.
-      message:
-        $ref: "#/components/schemas/WebSocketEventEnvelope"
-
-components:
-  parameters:
-    ConversationId:
-      name: conversation_id
-      in: path
-      required: true
-      description: Conversation identifier.
-      schema:
-        type: string
-
-    ServoName:
-      name: name
-      in: path
-      required: true
-      description: Configured servo name.
-      schema:
-        type: string
-      example: head_pan
-
-    PreferenceKey:
-      name: key
-      in: path
-      required: true
-      description: Preference key.
-      schema:
-        type: string
-      example: name
-
-  responses:
-    BadRequest:
-      description: Request was invalid.
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/HTTPError"
-          example:
-            detail: "Unknown pattern: 'foo'"
-
-    NotFound:
-      description: Requested resource was not found.
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/HTTPError"
-          example:
-            detail: Conversation not found
-
-    ServiceUnavailable:
-      description: Required DeskBot service or hardware is not available.
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/HTTPError"
-          example:
-            detail: No servo controller available
-
-    ValidationError:
-      description: Request body failed FastAPI/Pydantic validation.
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/HTTPValidationError"
-
-  schemas:
-    HealthResponse:
-      type: object
-      required: [status]
-      properties:
-        status:
-          type: string
-          example: ok
-
-    VersionResponse:
-      type: object
-      required: [version, name]
-      properties:
-        version:
-          type: string
-          example: 0.1.0
-        name:
-          type: string
-          example: DeskBot API
-
-    StateRequest:
-      type: object
-      required: [state]
-      properties:
-        state:
-          type: string
-          description: |
-            Target robot state. The server currently validates this value
-            inside the command handler rather than through the request schema.
-          example: idle
-
-    StateResponse:
-      type: object
-      required: [state]
-      properties:
-        state:
-          type: string
-          example: idle
-        detail:
-          type: string
-          description: Present when the DeskBot application is not attached.
-
-    SpeakRequest:
-      type: object
-      required: [text]
-      properties:
-        text:
-          type: string
-          minLength: 1
-          maxLength: 1000
-          description: Text to process or speak.
-          example: Hello DeskBot
-
-    EmotionRequest:
-      type: object
-      required: [emotion]
-      properties:
-        emotion:
-          type: string
-          description: |
-            Emotion name. Supported values are neutral, happy, curious,
-            thinking, sleepy, embarrassed, excited, sad, surprised, and angry.
-          example: happy
-        intensity:
-          type: number
-          format: float
-          minimum: 0
-          maximum: 1
-          default: 1
-          description: Emotion intensity.
-
-    CommandResponse:
-      type: object
-      required: [status]
-      properties:
-        status:
-          type: string
-          enum: [ok, error]
-        detail:
-          type: string
-          description: Present when the command was rejected.
-        text:
-          type: string
-          description: Echo of the requested speech text.
-        emotion:
-          type: string
-          description: Resulting emotion.
-        state:
-          type: string
-          description: Resulting robot state.
-
-    IdCommandResponse:
-      type: object
-      required: [status, id]
-      properties:
-        status:
-          type: string
-          enum: [ok]
-        id:
-          type: string
-
-    PerceptionStatus:
-      type: object
-      required: [enabled]
-      properties:
-        enabled:
-          type: boolean
-        running:
-          type: boolean
-        scan_interval_s:
-          type: number
-          format: float
-        max_faces:
-          type: integer
-
-    AudioStatus:
-      type: object
-      required: [enabled]
-      properties:
-        enabled:
-          type: boolean
-        talking:
-          type: boolean
-        detail:
-          type: string
-
-    ConversationStatus:
-      type: object
-      required: [enabled]
-      properties:
-        enabled:
-          type: boolean
-        state:
-          type: string
-        wake_checker:
-          type: string
-        stt:
-          type: string
-        tts:
-          type: string
-        llm:
-          type: string
-
-    ConversationSummary:
-      type: object
-      required: [id, created_at, system_prompt, message_count]
-      properties:
-        id:
-          type: string
-        created_at:
-          type: string
-          format: date-time
-        system_prompt:
-          type: string
-        message_count:
-          type: integer
-          minimum: 0
-
-    MessageItem:
-      type: object
-      required: [role, content]
-      properties:
-        role:
-          type: string
+        The recorded audio is returned as a WAV file for the browser to play.'
+      operationId: mic_test_api_v1_settings_mic_test_post
+      requestBody:
         content:
-          type: string
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MicTestRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/settings/audio/info:
+    get:
+      tags:
+      - settings
+      - settings
+      summary: Audio output info
+      description: Return audio output type, sample rate, and channels.
+      operationId: audio_info_api_v1_settings_audio_info_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AudioInfoResponse'
+  /api/v1/settings/audio/devices:
+    get:
+      tags:
+      - settings
+      - settings
+      summary: List available audio output devices
+      description: 'List available audio output devices via ``sounddevice``.
 
-    ConversationDetail:
-      type: object
-      required: [id, system_prompt, messages]
-      properties:
-        id:
-          type: string
-        system_prompt:
-          type: string
-        messages:
-          type: array
-          items:
-            $ref: "#/components/schemas/MessageItem"
 
-    PreferenceItem:
-      type: object
-      required: [key, value, confidence, source, updated_at]
-      properties:
-        key:
-          type: string
-          description: Preference category (e.g. "name", "humour").
-          example: name
-        value:
-          type: string
-          description: Learned preference value.
-          example: Alice
-        confidence:
-          type: number
-          format: float
-          description: Confidence score in [0, 1].
-          example: 0.9
-        source:
-          type: string
-          description: How the preference was learned ("explicit" or "inferred").
-          example: explicit
-        updated_at:
-          type: string
-          format: date-time
-          description: When the preference was last updated.
+        Returns an empty list when ``sounddevice`` is not installed or when
 
-    PreferenceListResponse:
-      type: object
-      required: [preferences]
-      properties:
-        preferences:
-          type: array
-          items:
-            $ref: "#/components/schemas/PreferenceItem"
+        no audio subsystem is available.  The PortAudio query runs in a
 
-    LearningStatusResponse:
-      type: object
-      required: [enabled, total_experiences, new_experiences_since_train, training_cycles_completed, is_training, model_version]
-      properties:
-        enabled:
-          type: boolean
-          example: true
-        total_experiences:
+        thread with a 3-second timeout so it can never block the API.'
+      operationId: audio_devices_api_v1_settings_audio_devices_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AudioDevicesResponse'
+  /api/v1/settings/audio/input-devices:
+    get:
+      tags:
+      - settings
+      - settings
+      summary: List available audio input devices
+      description: List available audio input devices via ``sounddevice``.
+      operationId: audio_input_devices_api_v1_settings_audio_input_devices_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AudioDevicesResponse'
+  /api/v1/settings/audio/tone:
+    post:
+      tags:
+      - settings
+      - settings
+      summary: Play a test tone
+      description: Play a sine-wave test tone through the current audio output.
+      operationId: audio_tone_api_v1_settings_audio_tone_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToneRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToneResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/settings/audio/test-device:
+    post:
+      tags:
+      - settings
+      - settings
+      summary: Play a test tone through a specific device
+      description: 'Play a test tone through a specific output device (temporary).
+
+
+        This creates a temporary :class:`UsbSpeaker` for the given device,
+
+        plays the tone, and closes it. Useful for testing different outputs
+
+        before committing to a config change.'
+      operationId: audio_test_device_api_v1_settings_audio_test_device_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AudioDeviceTestRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AudioTestDeviceResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/settings/audio/switch:
+    post:
+      tags:
+      - settings
+      - settings
+      summary: Switch the active audio output device
+      description: 'Switch the active audio output to a different device at runtime.
+
+
+        Creates a new :class:`UsbSpeaker` for the requested device and swaps
+
+        it into the bridge, TTS engine, and sound-effects player. The old
+
+        output is closed.'
+      operationId: audio_switch_api_v1_settings_audio_switch_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AudioSwitchRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AudioSwitchResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/settings/audio/stop:
+    post:
+      tags:
+      - settings
+      - settings
+      summary: Stop audio playback
+      description: Stop whatever is currently playing on the audio output.
+      operationId: audio_stop_api_v1_settings_audio_stop_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToneResponse'
+  /api/v1/settings/tts/test:
+    post:
+      tags:
+      - settings
+      - settings
+      summary: Speak a test phrase
+      description: Speak a test phrase through the configured TTS engine.
+      operationId: tts_test_api_v1_settings_tts_test_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TTSTestRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TTSTestResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/settings/llm/test:
+    post:
+      tags:
+      - settings
+      - settings
+      summary: Send a test prompt to the LLM
+      description: Send a test prompt to the LLM and return the response text.
+      operationId: llm_test_api_v1_settings_llm_test_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LLMTestRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LLMTestResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/settings/sound-effect/{name}:
+    post:
+      tags:
+      - settings
+      - settings
+      summary: Play a sound effect
+      description: Play a named sound effect (e.g. ``talk``, ``thinking``, ``cute``).
+      operationId: play_sound_effect_api_v1_settings_sound_effect__name__post
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SoundEffectResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/settings/sound-effects:
+    get:
+      tags:
+      - settings
+      - settings
+      summary: List available sound effects
+      description: List all available sound effect names.
+      operationId: list_sound_effects_api_v1_settings_sound_effects_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SoundEffectsListResponse'
+  /api/v1/system/info:
+    get:
+      tags:
+      - system
+      - system
+      summary: System information
+      description: Return system information for the dashboard.
+      operationId: system_info_api_v1_system_info_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemInfoResponse'
+  /api/v1/system/logs:
+    get:
+      tags:
+      - system
+      - system
+      summary: Recent log entries
+      description: Return recent log entries from the in-memory ring buffer.
+      operationId: system_logs_api_v1_system_logs_get
+      parameters:
+      - name: level
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Filter by level (DEBUG, INFO, WARNING, ERROR)
+          title: Level
+        description: Filter by level (DEBUG, INFO, WARNING, ERROR)
+      - name: search
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Text search
+          title: Search
+        description: Text search
+      - name: limit
+        in: query
+        required: false
+        schema:
           type: integer
-          example: 42
-        new_experiences_since_train:
-          type: integer
-          example: 5
-        training_cycles_completed:
-          type: integer
-          example: 3
-        current_model_loss:
-          type: number
-          format: float
-          nullable: true
-          description: Current model loss, or null if not yet trained.
-        candidate_model_loss:
-          type: number
-          format: float
-          nullable: true
-          description: Candidate model loss, or null if no candidate.
-        last_training_time:
-          type: string
-          format: date-time
-          nullable: true
-          description: ISO timestamp of the last training cycle, or null.
-        last_training_duration_s:
-          type: number
-          format: float
-          example: 2.5
-        is_training:
-          type: boolean
-          example: false
-        promotions:
-          type: integer
-          example: 2
-        rollbacks:
-          type: integer
-          example: 0
-        model_version:
-          type: integer
-          example: 2
-
-    LearnedPreference:
-      type: object
-      required: [key, category, value, confidence, observation_count, avg_reward, source, last_observed]
-      properties:
-        key:
-          type: string
-          example: volume
-        category:
-          type: string
-          example: audio
-        value:
-          type: string
-          example: "0.7"
-        confidence:
-          type: number
-          format: float
-          example: 0.85
-        observation_count:
-          type: integer
-          example: 12
-        avg_reward:
-          type: number
-          format: float
-          example: 0.92
-        source:
-          type: string
-          example: inferred
-        last_observed:
-          type: string
-          format: date-time
-
-    LearningPreferencesResponse:
-      type: object
-      required: [preferences, total_patterns]
-      properties:
-        preferences:
-          type: array
-          items:
-            $ref: "#/components/schemas/LearnedPreference"
-        total_patterns:
-          type: integer
-          example: 7
-
-    LearningConfigResponse:
-      type: object
-      required: [schedule, resource_limits, checkpoint_config]
-      properties:
-        schedule:
-          type: object
-          required: [min_new_experiences, train_interval_s, min_experiences_for_training]
-          properties:
-            min_new_experiences:
-              type: integer
-              example: 10
-            train_interval_s:
-              type: number
-              format: float
-              example: 300.0
-            min_experiences_for_training:
-              type: integer
-              example: 5
-        resource_limits:
-          type: object
-          required: [batch_size, training_epochs_per_cycle, max_cpu_fraction, max_model_params, eval_sample_size]
-          properties:
-            batch_size:
-              type: integer
-              example: 32
-            training_epochs_per_cycle:
-              type: integer
-              example: 3
-            max_cpu_fraction:
-              type: number
-              format: float
-              example: 0.3
-            max_model_params:
-              type: integer
-              example: 10000
-            eval_sample_size:
-              type: integer
-              example: 100
-        checkpoint_config:
-          type: object
-          required: [checkpoint_dir, keep_last_n, promote_threshold]
-          properties:
-            checkpoint_dir:
-              type: string
-              example: /home/user/.deskbot/checkpoints
-            keep_last_n:
-              type: integer
-              example: 3
-            promote_threshold:
-              type: number
-              format: float
-              example: 0.01
-
-    LearningTrainResponse:
-      type: object
-      required: [triggered, training_cycles_completed, is_training]
-      properties:
-        triggered:
-          type: boolean
-          example: true
-        training_cycles_completed:
-          type: integer
-          example: 3
-        is_training:
-          type: boolean
-          example: true
-
-    ConfigValidResponse:
-      type: object
-      required: [valid]
-      properties:
-        valid:
-          type: boolean
-          example: true
-
-    ConfigInvalidResponse:
-      type: object
-      required: [valid, errors]
-      properties:
-        valid:
-          type: boolean
-          example: false
-        errors:
-          type: array
-          items:
-            $ref: "#/components/schemas/ConfigValidationError"
-
-    ConfigValidationError:
-      type: object
-      required: [field, message, type]
-      properties:
-        field:
-          type: string
-          description: Dot-path to the invalid field.
-          example: llm.model
-        message:
-          type: string
-          description: Human-readable error message.
-          example: "Field required"
-        type:
-          type: string
-          description: Pydantic error type.
-          example: missing
-        input:
-          description: The invalid input value (may be any type).
-
-    PerformanceSummary:
-      type: object
-      required: [frames, servos, bus]
-      properties:
-        frames:
-          $ref: "#/components/schemas/FrameStats"
-        servos:
-          $ref: "#/components/schemas/ServoLatencyStats"
-        bus:
-          $ref: "#/components/schemas/BusStats"
-
-    FrameStats:
-      type: object
-      required: [target_fps, actual_fps, avg_frame_time_ms, p50_frame_time_ms, p95_frame_time_ms, p99_frame_time_ms, dropped_frames, total_frames]
-      properties:
-        target_fps:
-          type: integer
-          description: Target frames per second.
-          example: 30
-        actual_fps:
-          type: number
-          format: float
-          description: Measured average FPS over the rolling window.
-          example: 28.5
-        avg_frame_time_ms:
-          type: number
-          format: float
-          example: 33.2
-        p50_frame_time_ms:
-          type: number
-          format: float
-          example: 32.0
-        p95_frame_time_ms:
-          type: number
-          format: float
-          example: 45.0
-        p99_frame_time_ms:
-          type: number
-          format: float
-          example: 50.0
-        dropped_frames:
-          type: integer
-          description: Frames that exceeded the budget.
-          example: 12
-        total_frames:
-          type: integer
-          description: Total frames recorded.
-          example: 1500
-
-    ProfilerDisabled:
-      type: object
-      required: [enabled]
-      properties:
-        enabled:
-          type: boolean
-          example: false
-
-    ServoLatencyStats:
-      type: object
-      description: Per-servo latency statistics mapping servo name to stats.
-      additionalProperties:
-        type: object
-        required: [avg_ms, p50_ms, p95_ms, count]
-        properties:
-          avg_ms:
-            type: number
-            format: float
-            example: 12.5
-          p50_ms:
-            type: number
-            format: float
-            example: 11.0
-          p95_ms:
-            type: number
-            format: float
-            example: 25.0
-          count:
-            type: number
-            example: 100.0
-      example:
-        head_pan:
-          avg_ms: 12.5
-          p50_ms: 11.0
-          p95_ms: 25.0
-          count: 100.0
-        head_tilt:
-          avg_ms: 15.0
-          p50_ms: 14.0
-          p95_ms: 30.0
-          count: 80.0
-
-    BusStats:
-      type: object
-      required: [total_events, sampled_events, sample_rate, events_per_second, elapsed_seconds, avg_processing_time_ms, p50_processing_time_ms, p95_processing_time_ms, max_processing_time_ms, events_by_type]
-      properties:
-        total_events:
-          type: integer
-          example: 5000
-        sampled_events:
-          type: integer
-          example: 500
-        sample_rate:
-          type: number
-          format: float
-          example: 0.1
-        events_per_second:
-          type: number
-          format: float
-          example: 42.5
-        elapsed_seconds:
-          type: number
-          format: float
-          example: 117.6
-        avg_processing_time_ms:
-          type: number
-          format: float
-          example: 1.2
-        p50_processing_time_ms:
-          type: number
-          format: float
-          example: 0.8
-        p95_processing_time_ms:
-          type: number
-          format: float
-          example: 3.5
-        max_processing_time_ms:
-          type: number
-          format: float
-          example: 12.0
-        events_by_type:
-          type: object
-          additionalProperties:
-            type: integer
-          description: Event counts by type name.
-          example:
-            FaceDetected: 1200
-            StateChanged: 50
-
-    Servo:
-      type: object
-      required: [name, angle]
+          maximum: 500
+          minimum: 1
+          default: 200
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - system
+      - system
+      summary: Clear log buffer
+      description: Clear the in-memory log ring buffer.
+      operationId: clear_logs_api_v1_system_logs_delete
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+  /api/v1/system/bluetooth:
+    get:
+      tags:
+      - system
+      - system
+      summary: Bluetooth status
+      description: Return Bluetooth speaker status if available.
+      operationId: bluetooth_status_api_v1_system_bluetooth_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BluetoothResponse'
+components:
+  schemas:
+    AudioDevice:
       properties:
         name:
-          type: string
-        angle:
-          type: number
-          format: float
-
-    ServoListResponse:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        index:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Index
+        channels:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Channels
+        default:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Default
+      additionalProperties: true
       type: object
-      required: [servos]
+      title: AudioDevice
+      description: A single sounddevice entry.
+      examples:
+      - channels: 2
+        default: true
+        index: 2
+        name: hw:1,0
+    AudioDeviceTestRequest:
       properties:
-        servos:
-          type: array
-          items:
-            $ref: "#/components/schemas/Servo"
-
-    ServoMoveResponse:
-      type: object
-      required: [name, angle, duration_s]
-      properties:
-        name:
-          type: string
-        angle:
+        device:
+          anyOf:
+          - type: string
+          - type: integer
+          title: Device
+          default: default
+        frequency_hz:
           type: number
-          format: float
+          maximum: 20000.0
+          minimum: 20.0
+          title: Frequency Hz
+          default: 440.0
         duration_s:
           type: number
-          format: float
-
-    ServoReleaseResponse:
-      type: object
-      required: [name, released]
-      properties:
-        name:
-          type: string
-        released:
-          type: boolean
-
-    ReleaseAllResponse:
-      type: object
-      required: [released]
-      properties:
-        released:
-          type: boolean
-
-    ServoCalibrationStep:
-      type: object
-      required: [position, angle, actual_angle]
-      properties:
-        position:
-          type: string
-          enum: [min, centre, max]
-        angle:
+          maximum: 10.0
+          minimum: 0.1
+          title: Duration S
+          default: 1.0
+        volume:
           type: number
-          format: float
-        actual_angle:
-          type: number
-          format: float
-
-    ServoCalibrationResponse:
+          maximum: 1.0
+          minimum: 0.0
+          title: Volume
+          default: 0.5
+      additionalProperties: true
       type: object
-      required: [servo, sequence]
+      title: AudioDeviceTestRequest
+      description: Play a test tone through a specific output device (runtime test).
+      examples:
+      - device: default
+        duration_s: 1.0
+        frequency_hz: 440.0
+        volume: 0.5
+    AudioDevicesResponse:
+      properties:
+        devices:
+          items:
+            $ref: '#/components/schemas/AudioDevice'
+          type: array
+          title: Devices
+          default: []
+        available:
+          type: boolean
+          title: Available
+          default: true
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+      additionalProperties: true
+      type: object
+      title: AudioDevicesResponse
+      description: List of available audio devices.
+      examples:
+      - available: true
+        devices:
+        - channels: 2
+          default: true
+          index: 2
+          name: hw:1,0
+      - available: false
+        devices: []
+        error: sounddevice not installed
+    AudioInfoResponse:
+      properties:
+        type:
+          type: string
+          title: Type
+        sample_rate:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Sample Rate
+        channels:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Channels
+        is_mock:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Is Mock
+        output_device:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Output Device
+      additionalProperties: true
+      type: object
+      required:
+      - type
+      title: AudioInfoResponse
+      description: Audio output type, sample rate, and channels.
+      examples:
+      - channels: 2
+        is_mock: false
+        output_device: default
+        sample_rate: 48000
+        type: UsbSpeaker
+    AudioStatusResponse:
+      properties:
+        enabled:
+          type: boolean
+          title: Enabled
+        talking:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Talking
+        detail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Detail
+      additionalProperties: true
+      type: object
+      required:
+      - enabled
+      title: AudioStatusResponse
+      description: Audio output status.
+      examples:
+      - enabled: true
+        talking: false
+      - detail: DeskBot app not attached
+        enabled: false
+    AudioSwitchRequest:
+      properties:
+        device:
+          anyOf:
+          - type: string
+          - type: integer
+          title: Device
+          default: default
+      additionalProperties: true
+      type: object
+      title: AudioSwitchRequest
+      description: Switch the active audio output device at runtime.
+      examples:
+      - device: usb_headset
+    AudioSwitchResponse:
+      properties:
+        status:
+          type: string
+          title: Status
+        device:
+          anyOf:
+          - type: string
+          - type: integer
+          - type: 'null'
+          title: Device
+        type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Type
+      additionalProperties: true
+      type: object
+      required:
+      - status
+      title: AudioSwitchResponse
+      description: Acknowledgement of an audio device switch.
+      examples:
+      - device: usb_headset
+        status: ok
+        type: UsbSpeaker
+    AudioTestDeviceResponse:
+      properties:
+        status:
+          type: string
+          title: Status
+        device:
+          anyOf:
+          - type: string
+          - type: integer
+          - type: 'null'
+          title: Device
+        frequency_hz:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Frequency Hz
+        duration_s:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Duration S
+      additionalProperties: true
+      type: object
+      required:
+      - status
+      title: AudioTestDeviceResponse
+      description: Acknowledgement of a device test tone.
+      examples:
+      - device: default
+        duration_s: 1.0
+        frequency_hz: 440.0
+        status: ok
+    BluetoothResponse:
+      properties:
+        available:
+          type: boolean
+          title: Available
+        type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Type
+        is_bluetooth:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Is Bluetooth
+        connected:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Connected
+        sink_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sink Name
+        device_mac:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Mac
+        device_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Name
+        auto_connect:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Auto Connect
+        playing:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Playing
+        sample_rate:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Sample Rate
+        channels:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Channels
+      additionalProperties: true
+      type: object
+      required:
+      - available
+      title: BluetoothResponse
+      description: Bluetooth speaker status.
+      examples:
+      - available: true
+        connected: true
+        device_name: DeskBot BT
+        is_bluetooth: true
+        type: BluetoothSpeaker
+      - available: false
+    BusProfilerStatsResponse:
+      properties:
+        enabled:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Enabled
+      additionalProperties: true
+      type: object
+      title: BusProfilerStatsResponse
+      description: Event bus throughput and latency statistics.
+      examples:
+      - avg_latency_ms: 0.4
+        events_per_s: 120.0
+        subscribers: 12
+        total_events: 5400
+      - enabled: false
+    CalibrateServoResponse:
       properties:
         servo:
           type: string
+          title: Servo
         sequence:
-          type: array
           items:
-            $ref: "#/components/schemas/ServoCalibrationStep"
-
-    DisplayConfig:
+            $ref: '#/components/schemas/CalibrationStep'
+          type: array
+          title: Sequence
+      additionalProperties: true
       type: object
-      required: [backend, width, height, rotation, spi_hz, invert]
+      required:
+      - servo
+      - sequence
+      title: CalibrateServoResponse
+      description: Result of a servo calibration sequence.
+      examples:
+      - sequence:
+        - actual_angle: 0.0
+          angle: 0.0
+          position: min
+        - actual_angle: 90.0
+          angle: 90.0
+          position: centre
+        servo: pan
+    CalibrationStep:
       properties:
-        backend:
+        position:
           type: string
-        width:
-          type: integer
-        height:
-          type: integer
-        rotation:
-          type: integer
-        spi_hz:
-          type: integer
-        invert:
-          type: boolean
-
-    DisplayTestPatternResponse:
+          title: Position
+        angle:
+          type: number
+          title: Angle
+        actual_angle:
+          type: number
+          title: Actual Angle
+      additionalProperties: true
       type: object
-      required: [pattern, width, height]
+      required:
+      - position
+      - angle
+      - actual_angle
+      title: CalibrationStep
+      description: One step of a calibration sequence.
+      examples:
+      - actual_angle: 0.0
+        angle: 0.0
+        position: min
+    CameraInfoResponse:
       properties:
-        pattern:
+        type:
           type: string
-          enum: [gradient, grid, solid, checkerboard]
+          title: Type
         width:
-          type: integer
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Width
         height:
-          type: integer
-
-    DisplayClearResponse:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Height
+        is_mock:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Is Mock
+        captured:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Captured
+      additionalProperties: true
       type: object
-      required: [cleared]
+      required:
+      - type
+      title: CameraInfoResponse
+      description: Camera type and resolution.
+      examples:
+      - captured: 1024
+        height: 480
+        is_mock: false
+        type: UsbCamera
+        width: 640
+    ClearDisplayResponse:
       properties:
         cleared:
           type: boolean
-
-    HTTPError:
+          title: Cleared
+      additionalProperties: true
       type: object
-      required: [detail]
+      required:
+      - cleared
+      title: ClearDisplayResponse
+      description: Acknowledgement of display clear.
+      examples:
+      - cleared: true
+    CommandResponse:
+      properties:
+        status:
+          type: string
+          title: Status
+          description: '"ok" or "error".'
+        detail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Detail
+      additionalProperties: true
+      type: object
+      required:
+      - status
+      title: CommandResponse
+      description: Generic command acknowledgement with the echoed payload.
+      examples:
+      - status: ok
+        text: Hello!
+      - emotion: happy
+        status: ok
+      - state: curious
+        status: ok
+      - detail: DeskBot app not attached
+        status: error
+    ConfigResponse:
+      properties: {}
+      additionalProperties: true
+      type: object
+      title: ConfigResponse
+      description: Current (masked) configuration. Free-form nested object.
+      examples:
+      - displays:
+          backend: gc9a01
+          height: 240
+          rotation: 0
+          width: 240
+        env: development
+        hardware: mock
+        llm:
+          api_key: sk-x****
+          model: gpt-4o-mini
+          provider: openai
+    ConfigSchemaResponse:
+      properties: {}
+      additionalProperties: true
+      type: object
+      title: ConfigSchemaResponse
+      description: The full JSON Schema for the :class:`AppSettings` model (free-form).
+      examples:
+      - properties:
+          env:
+            default: development
+            type: string
+        title: AppSettings
+        type: object
+    ConfigValidateRequest:
+      properties: {}
+      additionalProperties: true
+      type: object
+      title: ConfigValidateRequest
+      description: 'A partial or full configuration override to validate.
+
+
+        Any subset of the :class:`AppSettings` fields may be supplied; omitted
+
+        fields fall back to the current defaults during validation.'
+      examples:
+      - displays:
+          backend: gc9a01
+          height: 240
+          width: 240
+        env: development
+      - servos:
+          pan:
+            max: 180
+            min: 0
+    ConfigValidateResponse:
+      properties:
+        valid:
+          type: boolean
+          title: Valid
+        errors:
+          items:
+            $ref: '#/components/schemas/ConfigValidationErrorItem'
+          type: array
+          title: Errors
+          default: []
+      additionalProperties: true
+      type: object
+      required:
+      - valid
+      title: ConfigValidateResponse
+      description: Result of a config validation request.
+      examples:
+      - valid: true
+      - errors:
+        - field: displays.width
+          input: -1
+          message: Input should be greater than 0
+          type: greater_than
+        valid: false
+    ConfigValidationErrorItem:
+      properties:
+        field:
+          type: string
+          title: Field
+        message:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Type
+        input:
+          title: Input
+      additionalProperties: true
+      type: object
+      required:
+      - field
+      - message
+      - type
+      title: ConfigValidationErrorItem
+      description: A single validation error.
+      examples:
+      - field: displays.width
+        input: -1
+        message: Input should be greater than 0
+        type: greater_than
+    ConversationDetail:
+      properties:
+        id:
+          type: string
+          title: Id
+        system_prompt:
+          type: string
+          title: System Prompt
+        messages:
+          items:
+            $ref: '#/components/schemas/MessageItem'
+          type: array
+          title: Messages
+      type: object
+      required:
+      - id
+      - system_prompt
+      title: ConversationDetail
+      description: A conversation and its messages.
+      examples:
+      - id: abc123
+        messages:
+        - content: Hello! Who are you?
+          role: user
+        - content: I'm DeskBot, your desktop companion!
+          role: assistant
+        system_prompt: You are a helpful desktop robot.
+    ConversationStatusResponse:
+      properties:
+        enabled:
+          type: boolean
+          title: Enabled
+        state:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: State
+        wake_checker:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Wake Checker
+        stt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Stt
+        tts:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Tts
+        llm:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Llm
+      additionalProperties: true
+      type: object
+      required:
+      - enabled
+      title: ConversationStatusResponse
+      description: Conversation pipeline status.
+      examples:
+      - enabled: true
+        llm: OpenAILLM
+        state: idle
+        stt: WhisperSTT
+        tts: OpenAITTS
+        wake_checker: OpenWakeWordChecker
+      - enabled: false
+    ConversationSummary:
+      properties:
+        id:
+          type: string
+          title: Id
+        created_at:
+          type: string
+          title: Created At
+        system_prompt:
+          type: string
+          title: System Prompt
+        message_count:
+          type: integer
+          title: Message Count
+      type: object
+      required:
+      - id
+      - created_at
+      - system_prompt
+      - message_count
+      title: ConversationSummary
+      description: Metadata for one saved conversation.
+      examples:
+      - created_at: '2026-08-12T10:00:00Z'
+        id: abc123
+        message_count: 8
+        system_prompt: You are a helpful desktop robot.
+    DisplayConfigResponse:
+      properties:
+        backend:
+          type: string
+          title: Backend
+        width:
+          type: integer
+          title: Width
+        height:
+          type: integer
+          title: Height
+        rotation:
+          type: integer
+          title: Rotation
+        spi_hz:
+          type: integer
+          title: Spi Hz
+        invert:
+          type: boolean
+          title: Invert
+      additionalProperties: true
+      type: object
+      required:
+      - backend
+      - width
+      - height
+      - rotation
+      - spi_hz
+      - invert
+      title: DisplayConfigResponse
+      description: Display configuration.
+      examples:
+      - backend: gc9a01
+        height: 240
+        invert: false
+        rotation: 0
+        spi_hz: 40000000
+        width: 240
+    EmotionRequest:
+      properties:
+        emotion:
+          type: string
+          title: Emotion
+          description: Emotion name (neutral, happy, curious, etc.).
+        intensity:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Intensity
+          default: 1.0
+      additionalProperties: true
+      type: object
+      required:
+      - emotion
+      title: EmotionRequest
+      description: Request body for the emotion command.
+      examples:
+      - emotion: happy
+        intensity: 0.8
+    ForceTrainResponse:
+      properties:
+        triggered:
+          type: boolean
+          title: Triggered
+        training_cycles_completed:
+          type: integer
+          title: Training Cycles Completed
+        is_training:
+          type: boolean
+          title: Is Training
+      additionalProperties: true
+      type: object
+      required:
+      - triggered
+      - training_cycles_completed
+      - is_training
+      title: ForceTrainResponse
+      description: Result of a forced training cycle.
+      examples:
+      - is_training: false
+        training_cycles_completed: 9
+        triggered: true
+    FrameStatsResponse:
+      properties:
+        enabled:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Enabled
+        target_fps:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Target Fps
+        actual_fps:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Actual Fps
+        avg_frame_time_ms:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Avg Frame Time Ms
+        p50_frame_time_ms:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: P50 Frame Time Ms
+        p95_frame_time_ms:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: P95 Frame Time Ms
+        p99_frame_time_ms:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: P99 Frame Time Ms
+        dropped_frames:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Dropped Frames
+        total_frames:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Total Frames
+      additionalProperties: true
+      type: object
+      title: FrameStatsResponse
+      description: Frame budget statistics.
+      examples:
+      - actual_fps: 29.4
+        avg_frame_time_ms: 34.0
+        dropped_frames: 3
+        p50_frame_time_ms: 33.0
+        p95_frame_time_ms: 38.0
+        p99_frame_time_ms: 42.0
+        target_fps: 30
+        total_frames: 1200
+      - enabled: false
+    HTTPValidationError:
       properties:
         detail:
-          type: string
-
-    ValidationError:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
       type: object
-      required: [loc, msg, type]
+      title: HTTPValidationError
+    HealthResponse:
+      properties:
+        status:
+          type: string
+          title: Status
+          description: '"ok" or "degraded".'
+      additionalProperties: true
+      type: object
+      required:
+      - status
+      title: HealthResponse
+      description: Overall health, possibly with per-component degradation info.
+      examples:
+      - status: ok
+      - components:
+          camera:
+            reason: device not found
+            status: degraded
+          microphone:
+            status: ok
+        status: degraded
+    LLMTestRequest:
+      properties:
+        prompt:
+          type: string
+          title: Prompt
+          default: Hello! Who are you?
+      additionalProperties: true
+      type: object
+      title: LLMTestRequest
+      description: Send a test prompt to the LLM and return the response.
+      examples:
+      - prompt: Hello! Who are you?
+    LLMTestResponse:
+      properties:
+        status:
+          type: string
+          title: Status
+        prompt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Prompt
+        response:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Response
+        engine:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Engine
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+      additionalProperties: true
+      type: object
+      required:
+      - status
+      title: LLMTestResponse
+      description: Result of an LLM test prompt.
+      examples:
+      - engine: OpenAILLM
+        prompt: Hello! Who are you?
+        response: I'm DeskBot, your desktop companion!
+        status: ok
+      - error: No LLM configured
+        prompt: Hello!
+        status: error
+    LearnedPreferenceItem:
+      properties:
+        key:
+          type: string
+          title: Key
+        category:
+          type: string
+          title: Category
+        value:
+          type: string
+          title: Value
+        confidence:
+          type: number
+          title: Confidence
+        observation_count:
+          type: integer
+          title: Observation Count
+        avg_reward:
+          type: number
+          title: Avg Reward
+        source:
+          type: string
+          title: Source
+        last_observed:
+          type: string
+          title: Last Observed
+      additionalProperties: true
+      type: object
+      required:
+      - key
+      - category
+      - value
+      - confidence
+      - observation_count
+      - avg_reward
+      - source
+      - last_observed
+      title: LearnedPreferenceItem
+      description: A single learned preference with confidence.
+      examples:
+      - avg_reward: 0.82
+        category: preferred_action
+        confidence: 0.75
+        key: preferred_action:celebrate
+        last_observed: '2026-08-12T10:25:00Z'
+        observation_count: 12
+        source: behavioral
+        value: celebrate
+    LearningCheckpointSchema:
+      properties:
+        checkpoint_dir:
+          type: string
+          title: Checkpoint Dir
+        keep_last_n:
+          type: integer
+          title: Keep Last N
+        promote_threshold:
+          type: number
+          title: Promote Threshold
+      additionalProperties: true
+      type: object
+      required:
+      - checkpoint_dir
+      - keep_last_n
+      - promote_threshold
+      title: LearningCheckpointSchema
+      description: Checkpoint management configuration.
+      examples:
+      - checkpoint_dir: ~/.deskbot/checkpoints
+        keep_last_n: 5
+        promote_threshold: 1.0
+    LearningConfigResponse:
+      properties:
+        schedule:
+          $ref: '#/components/schemas/LearningScheduleSchema'
+        resource_limits:
+          $ref: '#/components/schemas/LearningResourceLimitsSchema'
+        checkpoint_config:
+          $ref: '#/components/schemas/LearningCheckpointSchema'
+      additionalProperties: true
+      type: object
+      required:
+      - schedule
+      - resource_limits
+      - checkpoint_config
+      title: LearningConfigResponse
+      description: Learning service configuration.
+      examples:
+      - checkpoint_config:
+          checkpoint_dir: ~/.deskbot/checkpoints
+          keep_last_n: 5
+          promote_threshold: 1.0
+        resource_limits:
+          batch_size: 32
+          eval_sample_size: 128
+          max_cpu_fraction: 0.3
+          max_model_params: 500000
+          training_epochs_per_cycle: 5
+        schedule:
+          min_experiences_for_training: 64
+          min_new_experiences: 32
+          train_interval_s: 30.0
+    LearningPreferencesResponse:
+      properties:
+        preferences:
+          items:
+            $ref: '#/components/schemas/LearnedPreferenceItem'
+          type: array
+          title: Preferences
+        total_patterns:
+          type: integer
+          title: Total Patterns
+          default: 0
+      additionalProperties: true
+      type: object
+      required:
+      - preferences
+      title: LearningPreferencesResponse
+      description: All learned preferences and the total tracked pattern count.
+      examples:
+      - preferences:
+        - avg_reward: 0.82
+          category: preferred_action
+          confidence: 0.75
+          key: preferred_action:celebrate
+          last_observed: '2026-08-12T10:25:00Z'
+          observation_count: 12
+          source: behavioral
+          value: celebrate
+        total_patterns: 17
+    LearningResourceLimitsSchema:
+      properties:
+        batch_size:
+          type: integer
+          title: Batch Size
+        training_epochs_per_cycle:
+          type: integer
+          title: Training Epochs Per Cycle
+        max_cpu_fraction:
+          type: number
+          title: Max Cpu Fraction
+        max_model_params:
+          type: integer
+          title: Max Model Params
+        eval_sample_size:
+          type: integer
+          title: Eval Sample Size
+      additionalProperties: true
+      type: object
+      required:
+      - batch_size
+      - training_epochs_per_cycle
+      - max_cpu_fraction
+      - max_model_params
+      - eval_sample_size
+      title: LearningResourceLimitsSchema
+      description: Resource limits for background training.
+      examples:
+      - batch_size: 32
+        eval_sample_size: 128
+        max_cpu_fraction: 0.3
+        max_model_params: 500000
+        training_epochs_per_cycle: 5
+    LearningScheduleSchema:
+      properties:
+        min_new_experiences:
+          type: integer
+          title: Min New Experiences
+        train_interval_s:
+          type: number
+          title: Train Interval S
+        min_experiences_for_training:
+          type: integer
+          title: Min Experiences For Training
+      additionalProperties: true
+      type: object
+      required:
+      - min_new_experiences
+      - train_interval_s
+      - min_experiences_for_training
+      title: LearningScheduleSchema
+      description: Training schedule configuration.
+      examples:
+      - min_experiences_for_training: 64
+        min_new_experiences: 32
+        train_interval_s: 30.0
+    LearningStatusResponse:
+      properties:
+        enabled:
+          type: boolean
+          title: Enabled
+        total_experiences:
+          type: integer
+          title: Total Experiences
+        new_experiences_since_train:
+          type: integer
+          title: New Experiences Since Train
+        training_cycles_completed:
+          type: integer
+          title: Training Cycles Completed
+        current_model_loss:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Current Model Loss
+        candidate_model_loss:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Candidate Model Loss
+        last_training_time:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Training Time
+        last_training_duration_s:
+          type: number
+          title: Last Training Duration S
+          default: 0.0
+        is_training:
+          type: boolean
+          title: Is Training
+          default: false
+        promotions:
+          type: integer
+          title: Promotions
+          default: 0
+        rollbacks:
+          type: integer
+          title: Rollbacks
+          default: 0
+        model_version:
+          type: integer
+          title: Model Version
+          default: 0
+      additionalProperties: true
+      type: object
+      required:
+      - enabled
+      - total_experiences
+      - new_experiences_since_train
+      - training_cycles_completed
+      title: LearningStatusResponse
+      description: Snapshot of the background learning service.
+      examples:
+      - candidate_model_loss: 0.0118
+        current_model_loss: 0.0123
+        enabled: true
+        is_training: false
+        last_training_duration_s: 1.842
+        last_training_time: '2026-08-12T10:29:55Z'
+        model_version: 5
+        new_experiences_since_train: 12
+        promotions: 5
+        rollbacks: 3
+        total_experiences: 1280
+        training_cycles_completed: 8
+    LogEntry:
+      properties:
+        timestamp:
+          type: string
+          title: Timestamp
+        level:
+          type: string
+          title: Level
+        logger:
+          type: string
+          title: Logger
+        event:
+          type: string
+          title: Event
+        data:
+          additionalProperties: true
+          type: object
+          title: Data
+          default: {}
+      additionalProperties: true
+      type: object
+      required:
+      - timestamp
+      - level
+      - logger
+      - event
+      title: LogEntry
+      description: A single log entry.
+      examples:
+      - data:
+          text: hi
+        event: speak
+        level: INFO
+        logger: api.commands
+        timestamp: '2026-08-12T10:30:00Z'
+    LogsResponse:
+      properties:
+        count:
+          type: integer
+          title: Count
+        entries:
+          items:
+            $ref: '#/components/schemas/LogEntry'
+          type: array
+          title: Entries
+          default: []
+      additionalProperties: true
+      type: object
+      required:
+      - count
+      title: LogsResponse
+      description: Recent log entries.
+      examples:
+      - count: 2
+        entries:
+        - data:
+            text: hi
+          event: speak
+          level: INFO
+          logger: api.commands
+          timestamp: '2026-08-12T10:30:00Z'
+    MessageItem:
+      properties:
+        role:
+          type: string
+          title: Role
+        content:
+          type: string
+          title: Content
+      type: object
+      required:
+      - role
+      - content
+      title: MessageItem
+      description: A single conversation message.
+      examples:
+      - content: Hello! Who are you?
+        role: user
+      - content: I'm DeskBot, your desktop companion!
+        role: assistant
+    MicLevelResponse:
+      properties:
+        level:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Level
+      additionalProperties: true
+      type: object
+      title: MicLevelResponse
+      description: Current microphone RMS level.
+      examples:
+      - level: 0.18
+    MicTestRequest:
+      properties:
+        duration_s:
+          type: number
+          maximum: 10.0
+          minimum: 0.5
+          title: Duration S
+          default: 3.0
+        play_back:
+          type: boolean
+          title: Play Back
+          default: true
+      additionalProperties: true
+      type: object
+      title: MicTestRequest
+      description: Parameters for a microphone record-and-playback test.
+      examples:
+      - duration_s: 3.0
+        play_back: true
+    MicrophoneInfoResponse:
+      properties:
+        type:
+          type: string
+          title: Type
+        sample_rate:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Sample Rate
+        is_mock:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Is Mock
+      additionalProperties: true
+      type: object
+      required:
+      - type
+      title: MicrophoneInfoResponse
+      description: Microphone type and sample rate.
+      examples:
+      - is_mock: false
+        sample_rate: 16000
+        type: UsbMicrophone
+    OkResponse:
+      properties:
+        status:
+          type: string
+          title: Status
+          description: Outcome of the request.
+          default: ok
+        detail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Detail
+          description: Optional human-readable detail.
+      additionalProperties: true
+      type: object
+      title: OkResponse
+      description: 'Generic ``{status: "ok"}`` acknowledgement.'
+      examples:
+      - status: ok
+    PerceptionResponse:
+      properties:
+        enabled:
+          type: boolean
+          title: Enabled
+        running:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Running
+        scan_interval_s:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Scan Interval S
+        max_faces:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Max Faces
+      additionalProperties: true
+      type: object
+      required:
+      - enabled
+      title: PerceptionResponse
+      description: Perception (face detection) status.
+      examples:
+      - enabled: true
+        max_faces: 3
+        running: true
+        scan_interval_s: 0.5
+      - enabled: false
+    PerformanceSummaryResponse:
+      properties:
+        frames:
+          additionalProperties: true
+          type: object
+          title: Frames
+          default: {}
+        servos:
+          additionalProperties: true
+          type: object
+          title: Servos
+          default: {}
+        bus:
+          additionalProperties: true
+          type: object
+          title: Bus
+          default: {}
+      additionalProperties: true
+      type: object
+      title: PerformanceSummaryResponse
+      description: Combined profiler summary.
+      examples:
+      - bus:
+          avg_latency_ms: 0.4
+          events_per_s: 120.0
+        frames:
+          actual_fps: 29.4
+          avg_frame_time_ms: 34.0
+          dropped_frames: 3
+          p50_frame_time_ms: 33.0
+          p95_frame_time_ms: 38.0
+          p99_frame_time_ms: 42.0
+          target_fps: 30
+          total_frames: 1200
+        servos:
+          pan:
+            avg_ms: 2.1
+            count: 100
+            max_ms: 5.0
+    PreferenceDeleteResponse:
+      properties:
+        status:
+          type: string
+          title: Status
+        key:
+          type: string
+          title: Key
+      additionalProperties: true
+      type: object
+      required:
+      - status
+      - key
+      title: PreferenceDeleteResponse
+      description: Acknowledgement of a preference deletion.
+      examples:
+      - key: tts:voice
+        status: deleted
+    PreferenceItem:
+      properties:
+        key:
+          type: string
+          title: Key
+        value:
+          title: Value
+        confidence:
+          type: number
+          title: Confidence
+        source:
+          type: string
+          title: Source
+        updated_at:
+          type: string
+          title: Updated At
+      additionalProperties: true
+      type: object
+      required:
+      - key
+      - value
+      - confidence
+      - source
+      - updated_at
+      title: PreferenceItem
+      description: A single user preference.
+      examples:
+      - confidence: 0.9
+        key: tts:voice
+        source: explicit
+        updated_at: '2026-08-12T10:30:00Z'
+        value: alloy
+    PreferenceListResponse:
+      properties:
+        preferences:
+          items:
+            $ref: '#/components/schemas/PreferenceItem'
+          type: array
+          title: Preferences
+      additionalProperties: true
+      type: object
+      required:
+      - preferences
+      title: PreferenceListResponse
+      description: All stored preferences.
+      examples:
+      - preferences:
+        - confidence: 0.9
+          key: tts:voice
+          source: explicit
+          updated_at: '2026-08-12T10:30:00Z'
+          value: alloy
+    ReleaseAllResponse:
+      properties:
+        released:
+          type: boolean
+          title: Released
+      additionalProperties: true
+      type: object
+      required:
+      - released
+      title: ReleaseAllResponse
+      description: Acknowledgement of release-all command.
+      examples:
+      - released: true
+    ServoInfo:
+      properties:
+        name:
+          type: string
+          title: Name
+        angle:
+          type: number
+          title: Angle
+      additionalProperties: true
+      type: object
+      required:
+      - name
+      - angle
+      title: ServoInfo
+      description: A single servo's name and current angle.
+      examples:
+      - angle: 90.0
+        name: pan
+    ServoListResponse:
+      properties:
+        servos:
+          items:
+            $ref: '#/components/schemas/ServoInfo'
+          type: array
+          title: Servos
+      additionalProperties: true
+      type: object
+      required:
+      - servos
+      title: ServoListResponse
+      description: All servos and their angles.
+      examples:
+      - servos:
+        - angle: 90.0
+          name: pan
+        - angle: 90.0
+          name: tilt
+    ServoMoveResponse:
+      properties:
+        name:
+          type: string
+          title: Name
+        angle:
+          type: number
+          title: Angle
+        duration_s:
+          type: number
+          title: Duration S
+      additionalProperties: true
+      type: object
+      required:
+      - name
+      - angle
+      - duration_s
+      title: ServoMoveResponse
+      description: Acknowledgement of a servo move command.
+      examples:
+      - angle: 45.0
+        duration_s: 0.4
+        name: pan
+    ServoProfilerStatsResponse:
+      properties:
+        enabled:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Enabled
+      additionalProperties: true
+      type: object
+      title: ServoProfilerStatsResponse
+      description: Per-servo latency statistics (free-form, keyed by servo name).
+      examples:
+      - pan:
+          avg_ms: 2.1
+          count: 100
+          max_ms: 5.0
+        tilt:
+          avg_ms: 1.8
+          count: 100
+          max_ms: 4.2
+      - enabled: false
+    ServoReleaseResponse:
+      properties:
+        name:
+          type: string
+          title: Name
+        released:
+          type: boolean
+          title: Released
+      additionalProperties: true
+      type: object
+      required:
+      - name
+      - released
+      title: ServoReleaseResponse
+      description: Acknowledgement of a servo release command.
+      examples:
+      - name: pan
+        released: true
+    SettingsInfoResponse:
+      properties:
+        ready:
+          type: boolean
+          title: Ready
+          default: false
+      additionalProperties: true
+      type: object
+      title: SettingsInfoResponse
+      description: Hardware & subsystem overview (free-form nested).
+      examples:
+      - audio:
+          sample_rate: 48000
+          type: UsbSpeaker
+        camera:
+          captured: 1024
+          height: 480
+          is_mock: false
+          type: UsbCamera
+          width: 640
+        display:
+          backend: gc9a01
+          fps: 30
+          height: 240
+          rotation: 0
+          width: 240
+        microphone:
+          sample_rate: 16000
+          type: UsbMicrophone
+        ready: true
+        servos:
+          count: 4
+          servos:
+          - angle: 90.0
+            name: pan
+      - ready: false
+    SoundEffectResponse:
+      properties:
+        status:
+          type: string
+          title: Status
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+      additionalProperties: true
+      type: object
+      required:
+      - status
+      title: SoundEffectResponse
+      description: Acknowledgement of a sound effect play.
+      examples:
+      - name: talk
+        status: ok
+      - error: not found
+        name: unknown
+        status: error
+    SoundEffectsListResponse:
+      properties:
+        available:
+          type: boolean
+          title: Available
+        effects:
+          items:
+            type: string
+          type: array
+          title: Effects
+          default: []
+      additionalProperties: true
+      type: object
+      required:
+      - available
+      title: SoundEffectsListResponse
+      description: List of available sound effects.
+      examples:
+      - available: true
+        effects:
+        - talk
+        - thinking
+        - cute
+      - available: false
+        effects: []
+    SpeakRequest:
+      properties:
+        text:
+          type: string
+          maxLength: 1000
+          minLength: 1
+          title: Text
+          description: Text to speak.
+      additionalProperties: true
+      type: object
+      required:
+      - text
+      title: SpeakRequest
+      description: Request body for the speak command.
+      examples:
+      - text: Hello! How are you today?
+    StateRequest:
+      properties:
+        state:
+          type: string
+          title: State
+          description: Target state (idle, curious, listening, thinking, speaking, sleeping).
+      additionalProperties: true
+      type: object
+      required:
+      - state
+      title: StateRequest
+      description: Request body for the state transition command.
+      examples:
+      - state: curious
+    StateResponse:
+      properties:
+        state:
+          type: string
+          title: State
+          description: Robot state (idle, curious, listening, thinking, speaking, sleeping) or 'unknown'.
+        detail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Detail
+      additionalProperties: true
+      type: object
+      required:
+      - state
+      title: StateResponse
+      description: Current robot state.
+      examples:
+      - state: idle
+      - detail: DeskBot app not attached
+        state: unknown
+    SystemInfoResponse:
+      properties:
+        hostname:
+          type: string
+          title: Hostname
+        platform:
+          type: string
+          title: Platform
+        machine:
+          type: string
+          title: Machine
+        processor:
+          type: string
+          title: Processor
+        python_version:
+          type: string
+          title: Python Version
+        cpu_count:
+          type: integer
+          title: Cpu Count
+        uptime_s:
+          type: number
+          title: Uptime S
+        uptime_human:
+          type: string
+          title: Uptime Human
+        pid:
+          type: integer
+          title: Pid
+        app_version:
+          type: string
+          title: App Version
+        env:
+          type: string
+          title: Env
+        health:
+          additionalProperties: true
+          type: object
+          title: Health
+          default: {}
+      additionalProperties: true
+      type: object
+      required:
+      - hostname
+      - platform
+      - machine
+      - processor
+      - python_version
+      - cpu_count
+      - uptime_s
+      - uptime_human
+      - pid
+      - app_version
+      - env
+      title: SystemInfoResponse
+      description: System information for the dashboard.
+      examples:
+      - app_version: 0.1.0
+        cpu_count: 4
+        env: production
+        health:
+          status: ok
+        hostname: deskbot
+        machine: aarch64
+        pid: 12345
+        platform: Linux-6.1.0-aarch64
+        processor: aarch64
+        python_version: 3.12.4
+        uptime_human: 1h 0m
+        uptime_s: 3600.5
+    TTSTestRequest:
+      properties:
+        text:
+          type: string
+          title: Text
+          default: Hello! This is a test of the text to speech system.
+        direct:
+          type: boolean
+          title: Direct
+          description: When True, speak directly via TTS (no LLM). When False, go through the LLM pipeline.
+          default: true
+      additionalProperties: true
+      type: object
+      title: TTSTestRequest
+      description: Speak a test phrase through the TTS engine.
+      examples:
+      - direct: true
+        text: Hello! This is a test of the text to speech system.
+    TTSTestResponse:
+      properties:
+        status:
+          type: string
+          title: Status
+        text:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Text
+        engine:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Engine
+        via:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Via
+      additionalProperties: true
+      type: object
+      required:
+      - status
+      title: TTSTestResponse
+      description: Acknowledgement of a TTS test.
+      examples:
+      - engine: OpenAITTS
+        status: ok
+        text: Hello!
+      - status: ok
+        text: Hello!
+        via: llm_pipeline
+    TestPatternResponse:
+      properties:
+        pattern:
+          type: string
+          title: Pattern
+        width:
+          type: integer
+          title: Width
+        height:
+          type: integer
+          title: Height
+      additionalProperties: true
+      type: object
+      required:
+      - pattern
+      - width
+      - height
+      title: TestPatternResponse
+      description: Acknowledgement of a display test pattern.
+      examples:
+      - height: 240
+        pattern: gradient
+        width: 240
+    ToneRequest:
+      properties:
+        frequency_hz:
+          type: number
+          maximum: 20000.0
+          minimum: 20.0
+          title: Frequency Hz
+          default: 440.0
+        duration_s:
+          type: number
+          maximum: 10.0
+          minimum: 0.1
+          title: Duration S
+          default: 1.0
+        volume:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Volume
+          default: 0.5
+      additionalProperties: true
+      type: object
+      title: ToneRequest
+      description: Parameters for an audio test tone.
+      examples:
+      - duration_s: 1.0
+        frequency_hz: 440.0
+        volume: 0.5
+    ToneResponse:
+      properties:
+        status:
+          type: string
+          title: Status
+        frequency_hz:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Frequency Hz
+        duration_s:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Duration S
+        sample_rate:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Sample Rate
+      additionalProperties: true
+      type: object
+      required:
+      - status
+      title: ToneResponse
+      description: Acknowledgement of a test tone.
+      examples:
+      - duration_s: 1.0
+        frequency_hz: 440.0
+        sample_rate: 48000
+        status: ok
+    ValidationError:
       properties:
         loc:
-          type: array
           items:
-            oneOf:
-              - type: string
-              - type: integer
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
         msg:
           type: string
+          title: Message
         type:
           type: string
-        input: {}
+          title: Error Type
+        input:
+          title: Input
         ctx:
           type: object
-          additionalProperties: true
-
-    HTTPValidationError:
+          title: Context
       type: object
-      required: [detail]
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    VersionResponse:
       properties:
-        detail:
-          type: array
-          items:
-            $ref: "#/components/schemas/ValidationError"
-
-    WebSocketEventEnvelope:
-      type: object
-      required: [type, data]
-      properties:
-        type:
+        version:
           type: string
-          description: Python event class name.
-          examples:
-            - StateChanged
-            - EmotionChanged
-            - FaceDetected
-            - WakeWordDetected
-            - LLMTokenReceived
-        data:
-          type: object
-          additionalProperties: true
-          description: Event dataclass fields serialized as JSON.
+          title: Version
+        name:
+          type: string
+          title: Name
+      additionalProperties: true
+      type: object
+      required:
+      - version
+      - name
+      title: VersionResponse
+      description: API name and version.
+      examples:
+      - name: DeskBot API
+        version: 0.1.0

@@ -153,7 +153,7 @@ Enable SPI/I²C as required by the chosen hardware.
 DeskBot uses **standalone PulseAudio** for audio output, not
 PipeWire/WirePlumber. The installer handles this automatically.
 
-See [Audio Architecture](audio-architecture.md) for the full design
+See [Audio Architecture](../architecture/audio.md) for the full design
 and troubleshooting guide.
 
 ### Bluetooth speaker setup
@@ -209,6 +209,8 @@ DeskBot includes a multi-page web dashboard at the root URL:
 | `/#/controls` | Robot controls (emotion, state, speak) |
 | `/settings/` | Hardware test page (camera, mic, audio output) |
 | `/calibration/` | Servo and display calibration |
+| `/config` | Configuration validator (validate YAML/.env config) |
+| `/learning/` | Learning dashboard (local-brain status, preferences, force training) |
 
 ## Security
 

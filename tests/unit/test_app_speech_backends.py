@@ -87,10 +87,7 @@ def _settings() -> AppSettings:
 
 def _report(app: DeskBotApp) -> dict[str, Any]:
     assert app._degradation is not None
-    return {
-        entry.component: entry
-        for entry in app._degradation.report()
-    }
+    return {entry.component: entry for entry in app._degradation.report()}
 
 
 def test_real_microphone_real_tts_real_audio(
