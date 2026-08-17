@@ -101,8 +101,11 @@ docs = [
     "mkdocs-autorefs>=1.0",
     "pymdown-extensions>=10.0",
 ]
+telegram = [
+    "httpx>=0.27",
+]
 all = [
-    "deskbot[hardware,ai,audio,wakeword,tts,vision,api,mqtt,homeassistant,docs]",
+    "deskbot[hardware,ai,audio,wakeword,tts,vision,api,mqtt,homeassistant,telegram,docs]",
 ]
 
 [project.urls]
@@ -164,7 +167,7 @@ extend-exclude = [
 [tool.ruff.lint]
 select = [
     "E", "W", "F", "I", "B", "UP", "SIM", "RUF",
-    "N", "C4", "PT", "RET", "TID", "TCH", "PTH", "ERA", "PL",
+    "N", "C4", "PT", "RET", "TID", "TC", "PTH", "ERA", "PL",
 ]
 ignore = [
     "PLR0913",
@@ -220,6 +223,42 @@ exclude = [".venv", "build", "dist"]
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
+disallow_untyped_decorators = false
+
+[[tool.mypy.overrides]]
+module = [
+    "sounddevice",
+    "cv2",
+    "spidev",
+    "gpiozero",
+    "rpi-lgpio",
+    "adafruit_circuitpython_gc9a01a",
+    "adafruit_circuitpython_busdevice",
+    "adafruit_circuitpython_display_text",
+    "adafruit_blinka",
+    "board",
+    "digitalio",
+    "busio",
+    "pulseio",
+    "openwakeword",
+    "openwakeword.*",
+    "pvporcupine",
+    "snowboy",
+    "paho",
+    "paho.*",
+    "whisper",
+    "sentence_transformers",
+    "sentence_transformers.*",
+    "PIL",
+    "PIL.*",
+    "click",
+    "piper",
+    "piper.*",
+    "fourwire",
+    "displayio",
+    "adafruit_gc9a01a",
+]
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["RPi.*", "spidev", "rpi_lgpio", "smbus2", "gpiozero.*"]

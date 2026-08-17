@@ -150,6 +150,7 @@ class DeskBotApp:
     _plugin_registry: PluginRegistry | None = field(default=None, init=False, repr=False)
     _mqtt_bridge: object | None = field(default=None, init=False, repr=False)
     _ha_bridge: object | None = field(default=None, init=False, repr=False)
+    _telegram_bridge: object | None = field(default=None, init=False, repr=False)
     _task_group: anyio.abc.TaskGroup | None = field(default=None, init=False, repr=False)
     _degradation: DegradationRegistry | None = field(default=None, init=False, repr=False)
     _frame_profiler: FrameProfiler | None = field(default=None, init=False, repr=False)
@@ -594,6 +595,37 @@ class DeskBotApp:
             except Exception:
                 _log.exception("ha.bridge_start_failed")
                 self._ha_bridge = None
+        # Start Telegram bridge if configured.
+        if self.settings.telegram.enabled and self.settings.telegram.bot_token:
+            try:
+                from robot.services.telegram_bridge import (
+                    TelegramBridge as TelegramBridgeImpl,
+                    TelegramConfig as TelegramBridgeCfg,
+                )
+
+                tg_config = TelegramBridgeCfg(
+                    bot_token=self.settings.telegram.bot_token,
+                    enabled=self.settings.telegram.enabled,
+                    allowed_user_ids=self.settings.telegram.allowed_user_ids,
+                    chat_timeout_s=self.settings.telegram.chat_timeout_s,
+                    api_base=self.settings.telegram.api_base,
+                )
+                self._telegram_bridge = TelegramBridgeImpl(
+                    config=tg_config,
+                    bus=self.bus,
+                    app=self,
+                )
+                await self._telegram_bridge.start()
+                _log.info("telegram.bridge_started")
+            except ImportError:
+                _log.warning(
+                    "telegram.httpx_not_installed",
+                    msg="Install httpx to enable the Telegram bridge",
+                )
+                self._telegram_bridge = None
+            except Exception:
+                _log.exception("telegram.bridge_start_failed")
+                self._telegram_bridge = None
         # Start the local learning service (background training thread).
         if self._learning_service is not None:
             with contextlib.suppress(Exception):
@@ -631,6 +663,10 @@ class DeskBotApp:
         if self._ha_bridge is not None:
             await self._ha_bridge.stop()  # type: ignore[attr-defined]
             self._ha_bridge = None
+        # Stop Telegram bridge.
+        if self._telegram_bridge is not None:
+            await self._telegram_bridge.stop()  # type: ignore[attr-defined]
+            self._telegram_bridge = None
         # Stop performance profilers.
         if self._servo_profiler is not None:
             self._servo_profiler.stop()
