@@ -115,7 +115,7 @@ class TestUsbSpeakerPlay:
             patch.dict("sys.modules", {"sounddevice": MagicMock()}),
             patch.dict("sys.modules", {"numpy": MagicMock()}),
         ):
-            import sounddevice as sd_mock  # type: ignore[import-untyped]
+            import sounddevice as sd_mock
 
             # Make sd.play a sync no-op.
             sd_mock.play = MagicMock()

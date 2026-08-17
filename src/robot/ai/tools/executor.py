@@ -109,7 +109,13 @@ class ToolExecutor:
                 return value
         if ptype == ToolParameterType.BOOLEAN:
             lower = value.lower()
-            return True if lower in ("true", "1", "yes") else False if lower in ("false", "0", "no") else None
+            return (
+                True
+                if lower in ("true", "1", "yes")
+                else False
+                if lower in ("false", "0", "no")
+                else None
+            )
         return value
 
     @staticmethod
