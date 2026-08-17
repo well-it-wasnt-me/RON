@@ -131,6 +131,7 @@ class DenseLayer:
         """
         assert self._input is not None, "backward() called before forward()"
         assert self._pre_activation is not None
+        assert self._output is not None
 
         batch_size = self._input.shape[0]
 
@@ -142,8 +143,11 @@ class DenseLayer:
             # already the combined gradient.
             grad_pre_activation = grad_output
         else:
-            # Element-wise: grad * activation_derivative(pre_activation)
-            act_deriv = self._derivative_fn(self._pre_activation)
+            # Element-wise activations expose derivatives in terms of the
+            # activation output.  This is equivalent for ReLU/linear and
+            # required for sigmoid/tanh, whose derivatives are expressed as
+            # y * (1 - y) and 1 - y^2 respectively.
+            act_deriv = self._derivative_fn(self._output)
             grad_pre_activation = Tensor(grad_output.data * act_deriv.data)
 
         # Weight gradient: average over batch
