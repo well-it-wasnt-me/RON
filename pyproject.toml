@@ -102,8 +102,11 @@ docs = [
     "mkdocs-material>=9.5",
     "pymdown-extensions>=10.0",
 ]
+telegram = [
+    "httpx>=0.27",
+]
 all = [
-    "deskbot[hardware,ai,audio,wakeword,tts,vision,api,mqtt,homeassistant,docs]",
+    "deskbot[hardware,ai,audio,wakeword,tts,vision,api,mqtt,homeassistant,telegram,docs]",
 ]
 
 [project.urls]

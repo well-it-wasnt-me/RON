@@ -919,6 +919,46 @@ class LearningConfig(BaseSettings):
     )
 
 
+class TelegramConfig(BaseSettings):
+    """Telegram bot bridge configuration.
+
+    When ``enabled`` is ``True``, the app starts a Telegram bot that lets
+    you chat with DeskBot and control every aspect via Telegram messages.
+
+    Requires ``httpx`` (already a core API dependency).
+
+    Create a bot token by talking to ``@BotFather`` on Telegram, then set::
+
+        DESKBOT_TELEGRAM__ENABLED=true
+        DESKBOT_TELEGRAM__BOT_TOKEN=123456:ABC-DEF...
+        DESKBOT_TELEGRAM__ALLOWED_USER_IDS=[123456789]
+    """
+
+    model_config = SettingsConfigDict(env_prefix="DESKBOT_TELEGRAM__", extra="ignore")
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to start the Telegram bot bridge.",
+    )
+    bot_token: str = Field(
+        default="",
+        description="Telegram bot token from @BotFather.",
+    )
+    allowed_user_ids: list[int] = Field(
+        default_factory=list,
+        description="If non-empty, only these Telegram user IDs may interact with the bot.",
+    )
+    chat_timeout_s: float = Field(
+        default=60.0,
+        gt=0.0,
+        description="Seconds to wait for a BotReply event before timing out.",
+    )
+    api_base: str = Field(
+        default="https://api.telegram.org",
+        description="Telegram Bot API base URL (override for self-hosted instances).",
+    )
+
+
 class AppSettings(BaseSettings):
     """Root configuration for the DeskBot application."""
 
@@ -987,6 +1027,7 @@ class AppSettings(BaseSettings):
     plugins: PluginConfig = Field(default_factory=PluginConfig)
     mqtt: MqttConfig = Field(default_factory=MqttConfig)
     homeassistant: HomeAssistantConfig = Field(default_factory=HomeAssistantConfig)
+    telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     api: ApiConfig = Field(default_factory=ApiConfig)
     performance: PerformanceConfig = Field(default_factory=PerformanceConfig)
 
@@ -1037,6 +1078,7 @@ __all__ = [
     "ServosConfig",
     "SoundsConfig",
     "TTSConfig",
+    "TelegramConfig",
     "VectorMemoryConfig",
     "WakeWordConfig",
     "load_settings",
