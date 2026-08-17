@@ -125,8 +125,11 @@ class TestStartStop:
 
         await bridge.stop()
 
-        assert bridge._poll_task is None
-        assert bridge._http is None
+        # stop() sets both to None.
+        poll_task = getattr(bridge, "_poll_task", "not-none")
+        http = getattr(bridge, "_http", "not-none")
+        assert poll_task is None
+        assert http is None
 
 
 class TestCommandHandling:
@@ -135,7 +138,7 @@ class TestCommandHandling:
         result = await bridge._cmd_emotion("happy 0.8", ["happy", "0.8"])
         assert "happy" in result
         assert "0.8" in result
-        bridge._bus.publish.assert_called()
+        bridge._bus.publish.assert_called()  # type: ignore[attr-defined]
 
     @pytest.mark.asyncio
     async def test_emotion_invalid(self, bridge: TelegramBridge) -> None:
@@ -152,7 +155,7 @@ class TestCommandHandling:
     async def test_state_command(self, bridge: TelegramBridge) -> None:
         result = await bridge._cmd_state("curious", ["curious"])
         assert "curious" in result
-        bridge._bus.publish.assert_called()
+        bridge._bus.publish.assert_called()  # type: ignore[attr-defined]
 
     @pytest.mark.asyncio
     async def test_state_invalid(self, bridge: TelegramBridge) -> None:
@@ -241,7 +244,7 @@ class TestAuthorization:
     @pytest.mark.asyncio
     async def test_unauthorized_user(self, bridge: TelegramBridge) -> None:
         """Messages from users not in allowed_user_ids should be rejected."""
-        bridge._send_message = AsyncMock()
+        bridge._send_message = AsyncMock()  # type: ignore[method-assign]
         update = {
             "update_id": 1,
             "message": {
@@ -258,8 +261,8 @@ class TestAuthorization:
     @pytest.mark.asyncio
     async def test_authorized_user_passes(self, bridge: TelegramBridge) -> None:
         """Messages from authorized users should be processed."""
-        bridge._send_message = AsyncMock()
-        bridge._handle_chat = AsyncMock()
+        bridge._send_message = AsyncMock()  # type: ignore[method-assign]
+        bridge._handle_chat = AsyncMock()  # type: ignore[method-assign]
         update = {
             "update_id": 1,
             "message": {
@@ -276,7 +279,7 @@ class TestChatHandler:
     @pytest.mark.asyncio
     async def test_chat_no_conversation(self, bridge: TelegramBridge) -> None:
         bridge._app.conversation = None
-        bridge._send_message = AsyncMock()
+        bridge._send_message = AsyncMock()  # type: ignore[method-assign]
         await bridge._handle_chat(123, "hello")
         bridge._send_message.assert_called_once()
         assert "not available" in bridge._send_message.call_args[0][1].lower()
