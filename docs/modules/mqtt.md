@@ -103,7 +103,7 @@ Testament) to `deskbot/status`:
 
 ## Home Assistant integration
 
-See [Home Assistant integration](home_assistant.md) for MQTT Auto
+See [Home Assistant integration](home-assistant.md) for MQTT Auto
 Discovery support, which allows DeskBot to appear as a native device
 in Home Assistant without manual YAML configuration.
 

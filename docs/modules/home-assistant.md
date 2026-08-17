@@ -54,7 +54,7 @@ the following Home Assistant entities:
 
 | Entity ID | Options | Description |
 |-----------|---------|-------------|
-| `select.deskbot_state` | idle, curious, listening, thinking, speaking, sleeping | Robot state |
+| `select.deskbot_state` | boot, idle, curious, listening, thinking, speaking, sleeping, error | Robot state |
 | `select.deskbot_emotion` | neutral, happy, curious, thinking, sleepy, embarrassed, excited, sad, surprised, angry | Robot emotion |
 
 ### Sensor entities

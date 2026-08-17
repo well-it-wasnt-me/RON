@@ -1,240 +1,105 @@
 # DeskBot
 
-> A modular desktop companion robot for Raspberry Pi, with an animated face, expressive body language, perception, speech, LLM conversation, learning, and a web API.
+> A modular desktop companion robot for Raspberry Pi - animated face, body language, perception, speech, LLM conversation, on-device learning, and a web API.
 
 [![Python](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](https://www.python.org/)
 [![Ruff](https://img.shields.io/badge/lint-Ruff-orange.svg)](https://docs.astral.sh/ruff/)
 [![MyPy](https://img.shields.io/badge/types-MyPy%20strict-blue.svg)](https://mypy.readthedocs.io/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-DeskBot is an open, hardware-agnostic desktop companion robot designed around a Raspberry Pi.
+DeskBot is a hardware-agnostic desktop companion robot built around a Raspberry
+Pi. Its architecture separates robot behavior from hardware, so the same
+application runs against real hardware, mock implementations, or a headless
+simulation - meaning development and testing happen on any workstation before
+deployment to a Pi.
 
-Its architecture separates robot behavior from hardware and infrastructure, allowing the same application to run against real hardware, mock implementations, or a headless simulation environment.
+## Quick start
 
-DeskBot currently combines:
+```bash
+git clone https://github.com/well-it-wasnt-me/deskbot.git
+cd deskbot
+uv sync --all-extras          # or: pip install -e ".[dev]"
+deskbot-simulate              # runs with mock hardware - no Pi needed
+```
 
-* **Face**: animated eyes, eyebrows, mouth, emotions, themes, and overlays.
-* **Body**: expressive head and arm movement through servo-based body language.
-* **Perception**: camera input, face detection, gaze tracking, and perception-driven reactions.
-* **Conversation**: speech recognition, wake-word detection, LLM integration, memory, and text-mode interaction.
-* **Speech**: multiple STT and TTS providers.
-* **Learning**: experience recording, replay, memory, tensor operations, and learning workflows.
-* **Remote control**: FastAPI, WebSockets, and a browser dashboard.
-* **Simulation**: mock hardware and headless operation for development and CI.
+## Features
 
-The application is designed to run **without physical hardware**, so development and testing can happen on a normal Linux or macOS workstation before deployment to a Raspberry Pi.
-
----
-
-## Speech
-
-Available speech components include:
-
-### Text-to-speech
-
-* OpenAI TTS
-* ElevenLabs TTS
-* Piper TTS
-* eSpeak-NG TTS
-* Mock TTS
-
-### Speech-to-text
-
-* Whisper
-* Mock STT
-
-### Audio and wake word
-
-* openWakeWord integration
-* Mock audio backends
-
-Audio providers are abstracted behind interfaces so the conversation pipeline can be tested without physical audio hardware.
-
----
-
-## Perception
-
-The perception subsystem supports:
-
-* USB cameras
-* OpenCV
-* YuNet face detection
-* OpenCV cascade fallback
-* Headless/null perception for CI
-* Adaptive perception scan intervals
-* Smooth gaze tracking
-* Face-detection-driven robot reactions
-* Event-driven perception behavior
-
-Perception is separated from robot behavior. Detected events are published through the event bus and consumed by interested subsystems.
-
----
-
-## Learning
-
-DeskBot contains an emerging learning subsystem intended to support experience-based robot behavior.
-
-Current components include:
-
-* Experience recording
-* State encoding
-* Working memory
-* Replay buffers
-* Episodic-memory integration
-* Tensor operations
-* Learning/training workflows
-* Learning evaluation
-* Learning-state export/reset
-* Learning-related CLI tools
-
-The learning system is still under active development and should be considered experimental.
-
-The architectural direction is to allow robot experiences to be captured independently from the eventual learning algorithm,
-making it possible to experiment with different models and training approaches without changing the rest of the robot stack.
-
----
+| Subsystem         | What it does                                                                      |
+|-------------------|-----------------------------------------------------------------------------------|
+| **Face**          | Animated eyes, mouth, emotions, six themes, overlays on a GC9A01 round TFT        |
+| **Body language** | Servo-driven head pan/tilt and arm gestures                                       |
+| **Behavior**      | State machine: idle -> curious -> listening -> thinking -> speaking               |
+| **Perception**    | USB camera + YuNet face detection, gaze tracking, event-driven reactions          |
+| **Conversation**  | OpenAI/Ollama LLM with streaming, tool calling, memory, and persistence           |
+| **Speech**        | Whisper STT; Piper/eSpeak/OpenAI/ElevenLabs TTS; openWakeWord detection           |
+| **Learning**      | On-device neural network - experience recording, world model, preference learning |
+| **API**           | FastAPI REST + WebSocket event stream with a browser dashboard                    |
+| **Integration**   | MQTT bridge, Home Assistant Auto Discovery, plugin system via entry points        |
+| **Resilience**    | Graceful degradation - hardware failures fall back to mocks, never crash          |
 
 ## Architecture
 
-DeskBot is deliberately divided into independent layers.
+A central **event bus** decouples subsystems.
 
-```text
-                         ┌───────────────────────┐
-                         │      DeskBotApp       │
-                         │ application lifecycle │
-                         └───────────┬───────────┘
-                                     │
-             ┌───────────────────────┼───────────────────────┐
-             │                       │                       │
-             ▼                       ▼                       ▼
-      ┌─────────────┐        ┌─────────────┐        ┌──────────────┐
-      │  Behavior   │        │     AI      │        │  Perception  │
-      │   Engine    │        │ Conversation│        │   / Camera   │
-      └──────┬──────┘        └──────┬──────┘        └──────┬───────┘
-             │                      │                      │
-             │                      │                      │
-             └──────────────────────┼──────────────────────┘
-                                    ▼
-                         ┌─────────────────────┐
-                         │      Event Bus      │
-                         │   async pub/sub     │
-                         └─────────┬───────────┘
-                                   │
-              ┌────────────────────┼────────────────────┐
-              │                    │                    │
-              ▼                    ▼                    ▼
-       ┌────────────┐      ┌──────────────┐      ┌──────────────┐
-       │ Face Engine│      │ Body Language│      │ Speech / TTS │
-       │            │      │    Engine    │      │    / STT     │
-       └─────┬──────┘      └──────┬───────┘      └──────────────┘
-             │                    │
-             ▼                    ▼
-       ┌────────────┐      ┌─────────────┐
-       │  Display   │      │   Servos    │
-       │ GC9A01/mock│      │ GPIO/mock/… │
-       └────────────┘      └─────────────┘
+Components publish immutable
+events and subscribe to what they care about.
 
-                         ┌─────────────────────┐
-                         │      Learning       │
-                         │ experience / memory │
-                         │ replay / training   │
-                         └─────────────────────┘
-```
-
-The important architectural rule is:
-
-> **Application logic should not depend directly on hardware.**
-
-Hardware and infrastructure boundaries are represented by protocols such as:
-
+Hardware is abstracted behind protocol interfaces:
 * `Display`
 * `ServoController`
 * `AudioOutput`
 * `Microphone`
 * `Camera`
 * `LLM`
-* `StreamingLLM`
-* `SpeechToText`
 * `EventBus`
 
-This allows the same behavior to run against real hardware, mocks, or simulation.
+so behavior code never imports a concrete driver.
 
-See [`docs/architecture/overview.md`](docs/architecture/overview.md) for the detailed architecture.
-
----
+-> Full [architecture overview](docs/architecture/overview.md)
 
 ## Configuration
 
-DeskBot supports YAML configuration, `.env` files, and environment-variable overrides. Environment variables take precedence over YAML.
-
-Start from `config/example.yaml` or set environment variables directly:
+YAML, `.env`, or environment variables (which take precedence). Nested fields
+use `__`:
 
 ```env
 DESKBOT_HARDWARE=real
 DESKBOT_DISPLAYS__BACKEND=circuitpython
 DESKBOT_SERVOS__BACKEND=gpio
-DESKBOT_LLM__PROVIDER=openai
+DESKBOT_LLM__PROVIDER=ollama
 DESKBOT_TTS__PROVIDER=piper
 DESKBOT_STT__PROVIDER=whisper
 ```
 
-Nested fields use `__` as a separator:
+-> Full [configuration reference](docs/reference/config.md) · [example.yaml](config/example.yaml) · [.env.example](.env.example)
 
-```env
-DESKBOT_DISPLAYS__BACKEND=circuitpython
-DESKBOT_FACE__THEME=vector
-DESKBOT_API__PORT=8000
-```
-
-For the complete configuration reference, see [Configuration](docs/reference/config.md).
-
----
-
-## API and dashboard
-
-The optional API layer provides REST endpoints, a WebSocket event stream,
-and a browser dashboard.
+## API & dashboard
 
 ```text
 http://<PI_IP>:8000/               # main dashboard
-http://<PI_IP>:8000/calibration/   # servo and display calibration
+http://<PI_IP>:8000/calibration/   # servo & display calibration
 http://<PI_IP>:8000/settings/      # hardware test page
+http://<PI_IP>:8000/config         # configuration validator
+http://<PI_IP>:8000/learning/      # learning dashboard
 http://<PI_IP>:8000/docs           # OpenAPI documentation
 ```
 
-The WebSocket streams operator-facing events by default. Connect a client
-to `ws://<PI_IP>:8000/api/v1/ws/events` to receive a live feed of state
-changes, emotions, face detections, and wake words.
+WebSocket: `ws://<PI_IP>:8000/api/v1/ws/events`
 
-For the full API reference, see [REST API](docs/reference/api.md).
+-> Full [REST API reference](docs/reference/api.md)
 
----
+## Documentation
 
+Built with MkDocs Material - run `make docs-serve` for a local searchable site.
 
-# Documentation
+| Section                                                    | Key pages                                                                                                                                                                                                                                                                                                                                                                                                   |
+|------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [Getting Started](docs/getting-started/developer-setup.md) | [Developer setup](docs/getting-started/developer-setup.md) · [Wiring](docs/getting-started/wiring.md) · [Deployment](docs/getting-started/deployment.md) · [Contributing](docs/getting-started/contributing.md)                                                                                                                                                                                             |
+| [Architecture](docs/architecture/overview.md)              | [Overview](docs/architecture/overview.md) · [Learning](docs/architecture/learning.md) · [Audio](docs/architecture/audio.md) · [Lifecycle](docs/architecture/lifecycle.md)                                                                                                                                                                                                                                   |
+| [Modules](docs/modules/face.md)                            | [Face](docs/modules/face.md) · [Body language](docs/modules/body-language.md) · [Behavior](docs/modules/behavior.md) · [Perception](docs/modules/perception.md) · [Conversation](docs/modules/conversation.md) · [Speech](docs/modules/speech.md) · [Learning](docs/modules/learning.md) · [Events](docs/modules/events.md) · [Interfaces](docs/modules/interfaces.md) · [Plugins](docs/modules/plugins.md) |
+| [CLI](docs/cli/index.md)                                   | [Overview](docs/cli/index.md) · [Interactive TUI](docs/cli/interactive.md)                                                                                                                                                                                                                                                                                                                                  |
+| [Reference](docs/reference/config.md)                      | [Config](docs/reference/config.md) · [REST API](docs/reference/api.md) · [Errors](docs/reference/errors.md) · [Hardware](docs/reference/hardware.md) · [Performance](docs/reference/performance.md)                                                                                                                                                                                                         |
 
-Documentation is built with MkDocs:
+## License
 
-```bash
-make docs         # build
-make docs-serve   # serve with live reload
-```
-
-Key documentation:
-
-* [Architecture overview](docs/architecture/overview.md)
-* [Wiring guide](docs/wiring.md)
-* [Developer setup](docs/developer-setup.md)
-* [Configuration reference](docs/reference/config.md)
-* [Hardware reference](docs/reference/hardware.md)
-* [Deployment](docs/deployment.md)
-* [Contributing](docs/contributing.md)
-* [Events](docs/modules/events.md)
-* [Audio architecture](docs/audio-architecture.md)
-* [Learning architecture](docs/architecture-learning.md)
-
----
-
-# License
-
-RON DeskBot is released under the MIT License. See [LICENSE](LICENSE).
+Released under the [MIT License](LICENSE).

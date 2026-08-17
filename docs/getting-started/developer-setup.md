@@ -54,7 +54,7 @@ DESKBOT_FACE__THEME=vector
 DESKBOT_LLM__PROVIDER=ollama
 ```
 
-See [Configuration](reference/config.md).
+See [Configuration](../reference/config.md).
 
 ## Testing
 

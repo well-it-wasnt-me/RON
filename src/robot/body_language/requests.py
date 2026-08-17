@@ -119,7 +119,12 @@ class HeadTiltRequest(_BaseRequest):
 
     def frames(self) -> list[ServoFrame]:
         sign = -1.0 if self.direction == "left" else 1.0
-        return [ServoFrame(targets={SERVO_HEAD_TILT: max(MIN, min(MAX, CENTER + sign * self.amount))}, duration_s=self.duration_s)]
+        return [
+            ServoFrame(
+                targets={SERVO_HEAD_TILT: max(MIN, min(MAX, CENTER + sign * self.amount))},
+                duration_s=self.duration_s,
+            )
+        ]
 
 
 @dataclass(slots=True, frozen=True)
@@ -143,7 +148,12 @@ class LookLeft(_BaseRequest):
     duration_s: float = 0.3
 
     def frames(self) -> list[ServoFrame]:
-        return [ServoFrame(targets={SERVO_HEAD_PAN: max(MIN, min(MAX, CENTER - self.amount))}, duration_s=self.duration_s)]
+        return [
+            ServoFrame(
+                targets={SERVO_HEAD_PAN: max(MIN, min(MAX, CENTER - self.amount))},
+                duration_s=self.duration_s,
+            )
+        ]
 
 
 @dataclass(slots=True, frozen=True)
@@ -153,7 +163,12 @@ class LookRight(_BaseRequest):
     duration_s: float = 0.3
 
     def frames(self) -> list[ServoFrame]:
-        return [ServoFrame(targets={SERVO_HEAD_PAN: max(MIN, min(MAX, CENTER + self.amount))}, duration_s=self.duration_s)]
+        return [
+            ServoFrame(
+                targets={SERVO_HEAD_PAN: max(MIN, min(MAX, CENTER + self.amount))},
+                duration_s=self.duration_s,
+            )
+        ]
 
 
 @dataclass(slots=True, frozen=True)
@@ -162,7 +177,12 @@ class ArmsRelax(_BaseRequest):
     duration_s: float = 0.5
 
     def frames(self) -> list[ServoFrame]:
-        return [ServoFrame(targets={SERVO_LEFT_ARM: CENTER, SERVO_RIGHT_ARM: CENTER}, duration_s=self.duration_s)]
+        return [
+            ServoFrame(
+                targets={SERVO_LEFT_ARM: CENTER, SERVO_RIGHT_ARM: CENTER},
+                duration_s=self.duration_s,
+            )
+        ]
 
 
 @dataclass(slots=True, frozen=True)
@@ -172,7 +192,15 @@ class ArmsOpen(_BaseRequest):
     duration_s: float = 0.5
 
     def frames(self) -> list[ServoFrame]:
-        return [ServoFrame(targets={SERVO_LEFT_ARM: max(MIN, min(MAX, CENTER - self.amount)), SERVO_RIGHT_ARM: max(MIN, min(MAX, CENTER + self.amount))}, duration_s=self.duration_s)]
+        return [
+            ServoFrame(
+                targets={
+                    SERVO_LEFT_ARM: max(MIN, min(MAX, CENTER - self.amount)),
+                    SERVO_RIGHT_ARM: max(MIN, min(MAX, CENTER + self.amount)),
+                },
+                duration_s=self.duration_s,
+            )
+        ]
 
 
 @dataclass(slots=True, frozen=True)
@@ -199,8 +227,18 @@ class Celebrate(_BaseRequest):
     def frames(self) -> list[ServoFrame]:
         up = max(MIN, min(MAX, CENTER - 40.0))
         return [
-            ServoFrame(targets={SERVO_LEFT_ARM: up, SERVO_RIGHT_ARM: up, SERVO_HEAD_TILT: max(MIN, min(MAX, CENTER - 20.0))}, duration_s=self.duration_s / 2),
-            ServoFrame(targets={SERVO_LEFT_ARM: CENTER, SERVO_RIGHT_ARM: CENTER, SERVO_HEAD_TILT: CENTER}, duration_s=self.duration_s / 2),
+            ServoFrame(
+                targets={
+                    SERVO_LEFT_ARM: up,
+                    SERVO_RIGHT_ARM: up,
+                    SERVO_HEAD_TILT: max(MIN, min(MAX, CENTER - 20.0)),
+                },
+                duration_s=self.duration_s / 2,
+            ),
+            ServoFrame(
+                targets={SERVO_LEFT_ARM: CENTER, SERVO_RIGHT_ARM: CENTER, SERVO_HEAD_TILT: CENTER},
+                duration_s=self.duration_s / 2,
+            ),
         ]
 
 
@@ -211,7 +249,16 @@ class Shrug(_BaseRequest):
 
     def frames(self) -> list[ServoFrame]:
         up = max(MIN, min(MAX, CENTER - 30.0))
-        return [ServoFrame(targets={SERVO_LEFT_ARM: up, SERVO_RIGHT_ARM: up, SERVO_HEAD_TILT: max(MIN, min(MAX, CENTER - 10.0))}, duration_s=self.duration_s)]
+        return [
+            ServoFrame(
+                targets={
+                    SERVO_LEFT_ARM: up,
+                    SERVO_RIGHT_ARM: up,
+                    SERVO_HEAD_TILT: max(MIN, min(MAX, CENTER - 10.0)),
+                },
+                duration_s=self.duration_s,
+            )
+        ]
 
 
 @dataclass(slots=True, frozen=True)
@@ -222,9 +269,18 @@ class Greet(_BaseRequest):
     def frames(self) -> list[ServoFrame]:
         up = max(MIN, min(MAX, CENTER - 30.0))
         return [
-            ServoFrame(targets={SERVO_RIGHT_ARM: up, SERVO_HEAD_TILT: max(MIN, min(MAX, CENTER - 10.0))}, duration_s=self.duration_s / 3),
-            ServoFrame(targets={SERVO_RIGHT_ARM: CENTER, SERVO_HEAD_TILT: CENTER}, duration_s=self.duration_s / 3),
-            ServoFrame(targets={SERVO_RIGHT_ARM: up, SERVO_HEAD_TILT: max(MIN, min(MAX, CENTER - 10.0))}, duration_s=self.duration_s / 3),
+            ServoFrame(
+                targets={SERVO_RIGHT_ARM: up, SERVO_HEAD_TILT: max(MIN, min(MAX, CENTER - 10.0))},
+                duration_s=self.duration_s / 3,
+            ),
+            ServoFrame(
+                targets={SERVO_RIGHT_ARM: CENTER, SERVO_HEAD_TILT: CENTER},
+                duration_s=self.duration_s / 3,
+            ),
+            ServoFrame(
+                targets={SERVO_RIGHT_ARM: up, SERVO_HEAD_TILT: max(MIN, min(MAX, CENTER - 10.0))},
+                duration_s=self.duration_s / 3,
+            ),
         ]
 
 

@@ -159,6 +159,7 @@ async def test_audio_stop(wired_client: AsyncClient) -> None:
     assert r.status_code == 200
     assert r.json()["status"] == "ok"
 
+
 @pytest.mark.audio
 async def test_audio_devices(wired_client: AsyncClient) -> None:
     """GET /settings/audio/devices returns a list (may be empty if no sounddevice)."""

@@ -2,51 +2,135 @@
 
 The FastAPI application is created by `robot.api.create_app()`.
 
-The API is mounted under `/api/v1`.
+The API is mounted under `/api/v1`. FastAPI also serves its generated
+OpenAPI document and interactive documentation (`/docs`, `/redoc`) when the
+API is running.
 
-## REST endpoints
+## Health
 
-### Health
+- `GET /api/v1/health` - Health check
+- `GET /api/v1/version` - Version info
 
-- `GET /api/v1/health`
-- `GET /api/v1/version`
+## State and status
 
-### State and status
+- `GET /api/v1/state` - Current robot state
+- `POST /api/v1/state` - Transition state
+- `GET /api/v1/config` - Current configuration (sensitive values masked)
+- `GET /api/v1/perception` - Perception status
+- `GET /api/v1/audio` - Audio output status
+- `GET /api/v1/conversation` - Conversation status
 
-- `GET /api/v1/state`
-- `POST /api/v1/state`
-- `GET /api/v1/config`
-- `GET /api/v1/perception`
-- `GET /api/v1/audio`
-- `GET /api/v1/conversation`
+## Commands
 
-### Commands
-
-- `POST /api/v1/speak`
-- `POST /api/v1/speak-direct`
-- `POST /api/v1/emotion`
+- `POST /api/v1/speak` - Speak text (injected into the conversation pipeline)
+- `POST /api/v1/speak-direct` - Speak text directly via TTS (bypasses STT and LLM)
+- `POST /api/v1/emotion` - Set emotion
 
 `/speak` injects text into the conversational pipeline. `/speak-direct`
 bypasses STT and LLM and sends text directly to the configured TTS.
 
-### Conversations
+## Conversations
 
-- `GET /api/v1/conversations`
-- `GET /api/v1/conversations/{conversation_id}`
-- `DELETE /api/v1/conversations/{conversation_id}`
+- `GET /api/v1/conversations` - List conversations
+- `GET /api/v1/conversations/{conversation_id}` - Get a conversation
+- `DELETE /api/v1/conversations/{conversation_id}` - Delete a conversation
 
 These operate on the configured conversation store.
 
-### Calibration
+## Preferences
 
-- `GET /api/v1/calibration/servos`
-- `POST /api/v1/calibration/servos/{name}/move`
-- `POST /api/v1/calibration/servos/{name}/release`
-- `POST /api/v1/calibration/servos/release_all`
-- `POST /api/v1/calibration/servos/calibrate/{name}`
-- `GET /api/v1/calibration/display`
-- `POST /api/v1/calibration/display/test_pattern`
-- `POST /api/v1/calibration/display/clear`
+- `GET /api/v1/preferences` - List all preferences
+- `GET /api/v1/preferences/{key}` - Get a specific preference
+- `DELETE /api/v1/preferences/{key}` - Delete a preference
+
+See [Preference Tracking](../modules/preferences.md).
+
+## Learning
+
+- `GET /api/v1/learning/status` - Learning service status
+- `GET /api/v1/learning/preferences` - Learned preferences
+- `GET /api/v1/learning/config` - Learning configuration
+- `POST /api/v1/learning/train` - Force a training cycle
+
+These return "not available" responses when learning is disabled. See
+[Local Brain](../modules/learning.md).
+
+## Configuration validation
+
+- `GET /api/v1/config/schema` - Configuration JSON Schema
+- `POST /api/v1/config/validate` - Validate proposed configuration
+
+The validator checks a candidate configuration (YAML or env-style) against
+the `AppSettings` schema without applying it. The JSON Schema endpoint
+exposes the full Pydantic schema for tooling and the browser config
+validator at `/config`.
+
+## Calibration
+
+- `GET /api/v1/calibration/servos` - List all servos
+- `POST /api/v1/calibration/servos/{name}/move` - Move a servo to an angle
+- `POST /api/v1/calibration/servos/{name}/release` - Release a servo
+- `POST /api/v1/calibration/servos/release_all` - Release all servos
+- `POST /api/v1/calibration/servos/calibrate/{name}` - Run servo calibration sequence
+- `GET /api/v1/calibration/display` - Get display configuration
+- `POST /api/v1/calibration/display/test_pattern` - Show a test pattern
+- `POST /api/v1/calibration/display/clear` - Clear the display
+
+## Settings (hardware test)
+
+The settings router backs the hardware test page at `/settings/`.
+
+### Info
+
+- `GET /api/v1/settings/info` - Hardware & subsystem overview
+
+### Camera
+
+- `GET /api/v1/settings/camera/info` - Camera info
+- `GET /api/v1/settings/camera/frame` - Capture a single frame
+- `GET /api/v1/settings/camera/stream` - Live MJPEG camera preview
+
+### Microphone
+
+- `GET /api/v1/settings/mic/info` - Microphone info
+- `GET /api/v1/settings/mic/level` - Current microphone input level
+- `POST /api/v1/settings/mic/test` - Record and play back a mic test
+
+### Audio output
+
+- `GET /api/v1/settings/audio/info` - Audio output info
+- `GET /api/v1/settings/audio/devices` - List available audio output devices
+- `GET /api/v1/settings/audio/input-devices` - List available audio input devices
+- `POST /api/v1/settings/audio/switch` - Switch the active audio output device
+- `POST /api/v1/settings/audio/test-device` - Play a test tone through a specific device
+- `POST /api/v1/settings/audio/tone` - Play a test tone
+- `POST /api/v1/settings/audio/stop` - Stop audio playback
+
+### Sound effects
+
+- `GET /api/v1/settings/sound-effects` - List available sound effects
+- `POST /api/v1/settings/sound-effect/{name}` - Play a sound effect
+
+### LLM / TTS test
+
+- `POST /api/v1/settings/tts/test` - Speak a test phrase
+- `POST /api/v1/settings/llm/test` - Send a test prompt to the LLM
+
+## System
+
+- `GET /api/v1/system/info` - System information
+- `GET /api/v1/system/logs` - Recent log entries
+- `DELETE /api/v1/system/logs` - Clear log buffer
+- `GET /api/v1/system/bluetooth` - Bluetooth status
+
+## Performance
+
+- `GET /api/v1/performance` - Combined performance summary
+- `GET /api/v1/performance/frames` - Frame budget stats
+- `GET /api/v1/performance/servos` - Servo latency stats
+- `GET /api/v1/performance/bus` - Event bus throughput
+
+See [Performance Profiling](performance.md).
 
 ## WebSocket
 

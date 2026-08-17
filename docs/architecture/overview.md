@@ -70,8 +70,8 @@ Concrete implementations are selected by configuration.
 | Audio output | mock, USB speaker, Bluetooth speaker |
 | LLM | mock, OpenAI, Ollama |
 | STT | mock, Whisper, reserved Vosk/Google configuration values |
-| TTS | mock, OpenAI, Piper, eSpeak-NG |
-| Wake word | mock, energy, openWakeWord, reserved Porcupine/Snowboy values |
+| TTS | mock, OpenAI, Piper, eSpeak-NG, ElevenLabs |
+| Wake word | mock, openWakeWord, reserved Porcupine/Snowboy values |
 
 Factories fail fast when a configured real backend cannot be initialized. The
 application does not silently switch to another backend.

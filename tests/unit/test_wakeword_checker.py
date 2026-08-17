@@ -259,10 +259,7 @@ class TestWakeWordConfigPorcupineSnowboy:
             "DESKBOT_WAKEWORD__SNOWBOY_MODEL_PATH": "/path/to/model.pmdl",
         }
 
-        original: dict[str, str | None] = {
-            key: os.environ.get(key)
-            for key in env
-        }
+        original: dict[str, str | None] = {key: os.environ.get(key) for key in env}
 
         for key, value in env.items():
             os.environ[key] = value

@@ -142,14 +142,8 @@ def test_cli_runs_full_diag_then_returns_zero(
     assert fake.clears == 1
 
     captured = capsys.readouterr()
-    assert (
-        "display_test.start" in captured.out
-        or "display_test.start" in captured.err
-    )
-    assert (
-        "display_test.pass" in captured.out
-        or "display_test.pass" in captured.err
-    )
+    assert "display_test.start" in captured.out or "display_test.start" in captured.err
+    assert "display_test.pass" in captured.out or "display_test.pass" in captured.err
 
 
 def test_cli_skip_colours_skips_solid_fills(

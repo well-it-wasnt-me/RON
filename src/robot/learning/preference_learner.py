@@ -103,12 +103,8 @@ class LearnedPreference:
     value: str
     confidence: float = 0.2
     observation_count: int = 0
-    first_observed: datetime = field(
-        default_factory=lambda: datetime.now(tz=UTC)
-    )
-    last_observed: datetime = field(
-        default_factory=lambda: datetime.now(tz=UTC)
-    )
+    first_observed: datetime = field(default_factory=lambda: datetime.now(tz=UTC))
+    last_observed: datetime = field(default_factory=lambda: datetime.now(tz=UTC))
     total_reward: float = 0.0
     source: str = "behavioral"
 
@@ -137,9 +133,7 @@ class LearnedPreference:
 class PreferenceLearner:
     """Learn preferences from experience observations."""
 
-    store: PreferenceStore = field(
-        default_factory=InMemoryPreferenceStore
-    )
+    store: PreferenceStore = field(default_factory=InMemoryPreferenceStore)
     decay_days: float = 1.0
     min_confidence: float = _MIN_CONFIDENCE
 
@@ -179,11 +173,7 @@ class PreferenceLearner:
         existing = self._patterns.get(key)
 
         if existing is not None:
-            boost = (
-                _EXPLICIT_BOOST
-                if source == "explicit"
-                else _INFERRED_BOOST
-            )
+            boost = _EXPLICIT_BOOST if source == "explicit" else _INFERRED_BOOST
 
             existing.confidence = min(
                 1.0,
@@ -193,18 +183,13 @@ class PreferenceLearner:
             existing.last_observed = timestamp
             existing.total_reward += reward
 
-            if (
-                source == "explicit"
-                and existing.source == "behavioral"
-            ):
+            if source == "explicit" and existing.source == "behavioral":
                 existing.source = "explicit"
 
             pattern = existing
 
         else:
-            initial_confidence = (
-                0.5 if source == "explicit" else 0.2
-            )
+            initial_confidence = 0.5 if source == "explicit" else 0.2
 
             pattern = LearnedPreference(
                 key=key,
@@ -340,29 +325,21 @@ class PreferenceLearner:
         decayed: list[str] = []
 
         for key, pattern in self._patterns.items():
-            days_since = (
-                now - pattern.last_observed
-            ).total_seconds() / 86400.0
+            days_since = (now - pattern.last_observed).total_seconds() / 86400.0
 
             if days_since <= 0:
                 continue
 
-            confidence_above_min = (
-                pattern.confidence - self.min_confidence
-            )
+            confidence_above_min = pattern.confidence - self.min_confidence
 
             if confidence_above_min <= 0:
                 continue
 
-            new_confidence_above_min = (
-                confidence_above_min
-                * math.exp(-daily_decay_rate * days_since)
+            new_confidence_above_min = confidence_above_min * math.exp(
+                -daily_decay_rate * days_since
             )
 
-            new_confidence = (
-                self.min_confidence
-                + new_confidence_above_min
-            )
+            new_confidence = self.min_confidence + new_confidence_above_min
 
             if new_confidence < pattern.confidence:
                 pattern.confidence = new_confidence
@@ -398,9 +375,7 @@ class PreferenceLearner:
         """Return a preference for a category/value."""
 
         if value is not None:
-            return self._patterns.get(
-                f"{category}:{value}"
-            )
+            return self._patterns.get(f"{category}:{value}")
 
         best: LearnedPreference | None = None
 
@@ -408,10 +383,7 @@ class PreferenceLearner:
             if pattern.category != category:
                 continue
 
-            if (
-                best is None
-                or pattern.confidence > best.confidence
-            ):
+            if best is None or pattern.confidence > best.confidence:
                 best = pattern
 
         return best
@@ -425,11 +397,7 @@ class PreferenceLearner:
         prefs = list(self._patterns.values())
 
         if category is not None:
-            prefs = [
-                preference
-                for preference in prefs
-                if preference.category == category
-            ]
+            prefs = [preference for preference in prefs if preference.category == category]
 
         prefs.sort(
             key=lambda preference: preference.confidence,
@@ -481,34 +449,22 @@ class PreferenceLearner:
             raise TypeError("learned preference value must be a string")
 
         if not isinstance(confidence, (int, float)):
-            raise TypeError(
-                "learned preference confidence must be numeric"
-            )
+            raise TypeError("learned preference confidence must be numeric")
 
         if not isinstance(source, str):
-            raise TypeError(
-                "learned preference source must be a string"
-            )
+            raise TypeError("learned preference source must be a string")
 
         if not isinstance(observation_count, int):
-            raise TypeError(
-                "learned preference observation_count must be an int"
-            )
+            raise TypeError("learned preference observation_count must be an int")
 
         if not isinstance(total_reward, (int, float)):
-            raise TypeError(
-                "learned preference total_reward must be numeric"
-            )
+            raise TypeError("learned preference total_reward must be numeric")
 
         if not isinstance(first_observed, datetime):
-            raise TypeError(
-                "learned preference first_observed must be datetime"
-            )
+            raise TypeError("learned preference first_observed must be datetime")
 
         if not isinstance(last_observed, datetime):
-            raise TypeError(
-                "learned preference last_observed must be datetime"
-            )
+            raise TypeError("learned preference last_observed must be datetime")
 
         return {
             "key": key,
@@ -534,9 +490,7 @@ class PreferenceLearner:
                 # dictionaries. Validate each row at this boundary so mypy
                 # and runtime consumers both have concrete types.
                 for raw_row in raw_rows:
-                    row = self._coerce_learned_row(
-                        cast("dict[str, Any]", raw_row)
-                    )
+                    row = self._coerce_learned_row(cast("dict[str, Any]", raw_row))
 
                     key = row["key"]
 

@@ -92,7 +92,7 @@ class MqttBridge:
             ) from exc
 
         self._client = mqtt.Client(
-            callback_api_version=mqtt.CallbackAPIVersion.VERSION2,  # type: ignore[attr-defined]
+            callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
             client_id="deskbot-bridge",
         )
 

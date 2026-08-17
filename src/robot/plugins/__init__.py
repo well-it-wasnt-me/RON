@@ -4,13 +4,13 @@ The plugin system allows extending DeskBot with new capabilities at runtime.
 Plugins can subscribe to events, register new commands, and extend the
 application lifecycle.
 
-Three built-in plugins are provided:
+The plugin system is the extension point for third-party capabilities.
+Third-party plugins can be registered via ``deskbot.plugins`` entry points
+or manually via :class:`PluginRegistry`.
 
-* :class:`MqttBridgePlugin` - publishes/subscribes events via MQTT.
-* :class:`HomeAssistantPlugin` - exposes the robot as an HA entity.
-* :class:`CalibrationPlugin` - serves a web-based calibration dashboard.
-
-Third-party plugins can be registered via entry points or manually.
+Note: the MQTT bridge and Home Assistant discovery are app-level services
+(:mod:`robot.services.mqtt_bridge`, :mod:`robot.services.home_assistant`)
+wired directly into ``DeskBotApp``, not plugins.
 """
 
 from robot.plugins.plugin import Plugin, PluginInfo, PluginState

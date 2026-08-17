@@ -99,6 +99,7 @@ docs = [
     "mkdocs>=1.6",
     "mkdocstrings[python]>=0.25",
     "mkdocs-autorefs>=1.0",
+    "mkdocs-material>=9.5",
     "pymdown-extensions>=10.0",
 ]
 all = [
@@ -164,7 +165,7 @@ extend-exclude = [
 [tool.ruff.lint]
 select = [
     "E", "W", "F", "I", "B", "UP", "SIM", "RUF",
-    "N", "C4", "PT", "RET", "TID", "TCH", "PTH", "ERA", "PL",
+    "N", "C4", "PT", "RET", "TID", "TC", "PTH", "ERA", "PL",
 ]
 ignore = [
     "PLR0913",
@@ -220,6 +221,42 @@ exclude = [".venv", "build", "dist"]
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
+disallow_untyped_decorators = false
+
+[[tool.mypy.overrides]]
+module = [
+    "sounddevice",
+    "cv2",
+    "spidev",
+    "gpiozero",
+    "rpi-lgpio",
+    "adafruit_circuitpython_gc9a01a",
+    "adafruit_circuitpython_busdevice",
+    "adafruit_circuitpython_display_text",
+    "adafruit_blinka",
+    "board",
+    "digitalio",
+    "busio",
+    "pulseio",
+    "openwakeword",
+    "openwakeword.*",
+    "pvporcupine",
+    "snowboy",
+    "paho",
+    "paho.*",
+    "whisper",
+    "sentence_transformers",
+    "sentence_transformers.*",
+    "PIL",
+    "PIL.*",
+    "click",
+    "piper",
+    "piper.*",
+    "fourwire",
+    "displayio",
+    "adafruit_gc9a01a",
+]
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["RPi.*", "spidev", "rpi_lgpio", "smbus2", "gpiozero.*"]

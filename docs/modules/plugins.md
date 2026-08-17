@@ -169,16 +169,19 @@ class GreetPlugin:
         print(f"Emotion changed: {event.previous} -> {event.current}")
 ```
 
-### Built-in plugins
+### Built-in integrations (not plugins)
 
-DeskBot ships with three built-in plugins:
+The MQTT bridge and Home Assistant discovery are app-level *services* wired
+directly into `DeskBotApp`, not plugins. See:
 
-| Plugin | Description |
-|--------|-------------|
-| `MqttBridgePlugin` | Publishes/subscribes events via MQTT |
-| `HomeAssistantPlugin` | Exposes the robot as an HA entity via MQTT Auto Discovery |
-| `CalibrationPlugin` | Serves a web-based calibration dashboard |
+- [MQTT Bridge](mqtt.md) - publishes/subscribes events via MQTT.
+- [Home Assistant](home-assistant.md) - exposes the robot as an HA entity via
+  MQTT Auto Discovery.
 
+The calibration and settings web dashboards are served as static files by the
+API layer (see [REST API](../reference/api.md#calibration)), not as plugins.
+
+The plugin system is the *extension point* for third-party capabilities.
 Plugins should use the event bus rather than reaching directly into
 unrelated application components.
 
