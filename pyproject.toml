@@ -47,6 +47,7 @@ dev = [
     "pytest-asyncio>=0.24",
     "ruff>=0.6",
     "textual>=0.79",
+    "pre-commit>=4.6.2",
 ]
 
 [project.optional-dependencies]
@@ -275,4 +276,3 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "\\.\\.\\.",
 ]
-
