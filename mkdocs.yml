@@ -1,6 +1,6 @@
 site_name: DeskBot
 site_description: A modular desktop companion robot powered by Raspberry Pi
-repo_url: https://github.com/well-it-wasnt-me/deskbot
+repo_url: https://github.com/well-it-wasnt-me/RON
 theme:
   name: material
   palette:
