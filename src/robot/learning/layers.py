@@ -133,8 +133,6 @@ class DenseLayer:
         assert self._pre_activation is not None
         assert self._output is not None
 
-        batch_size = self._input.shape[0]
-
         # Activation derivative
         if self.activation_name == "softmax":
             # For softmax + cross-entropy, the combined derivative
@@ -150,11 +148,10 @@ class DenseLayer:
             act_deriv = self._derivative_fn(self._output)
             grad_pre_activation = Tensor(grad_output.data * act_deriv.data)
 
-        # Weight gradient: average over batch
-        # X^T @ grad / batch_size gives the per-sample-averaged gradient
-        self.weight_grad = Tensor(self._input.data.T @ grad_pre_activation.data / batch_size)
-        # Bias gradient: average over batch
-        self.bias_grad = Tensor(grad_pre_activation.data.mean(axis=0))
+        # grad_output already includes any reduction performed by the loss.
+        # Do not average over the batch a second time here.
+        self.weight_grad = Tensor(self._input.data.T @ grad_pre_activation.data)
+        self.bias_grad = Tensor(grad_pre_activation.data.sum(axis=0))
 
         # Input gradient: grad_pre_activation @ weights^T
         # (NOT divided by batch_size - propagates per-sample gradients)
