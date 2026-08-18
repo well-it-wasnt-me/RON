@@ -6,29 +6,22 @@ computes gradients and returns the gradient w.r.t. the input.
 
 Gradient convention
 -------------------
-The weight and bias gradients are averaged over the mini-batch
-(divided by ``batch_size``).  This makes the gradient magnitude
-independent of batch size, so the same learning rate works
-regardless of how many samples are in a batch.
+The weight and bias gradients are **not** averaged over the
+mini-batch.  The loss derivative (e.g. ``mse_derivative``)
+already normalises by the total number of elements
+``N = batch_size * output_features``, so the backward pass
+applies the gradient directly without an additional division.
 
-The loss derivative (e.g. ``mse_derivative``) normalises by the
-total number of elements ``N = batch_size * output_features``.
-Combined with the ``1/batch_size`` averaging in backward, the
-effective normalisation is ``1/(batch * features) * 1/batch
-= 1/(batch^2 * features)``.  To keep things simple and consistent,
-the loss derivative normalises by ``N`` (total elements), and
-backward divides by ``batch_size``.  This is the same convention
-used by PyTorch with ``reduction='mean'``.
+This matches the standard convention used by PyTorch with
+``reduction='mean'``: the loss derivative already includes
+the ``1/N`` normalisation, and the weight gradient is simply
+``Xᵀ @ dL/dpred`` (summed over batch implicitly through the
+matrix multiplication), with no extra ``1/batch_size`` factor.
 
-Numerical gradient checks should use the same loss function (e.g.
-``mse_loss``) without any additional normalisation, because the
-numerical gradient directly computes ``dL/dW`` where ``L`` is the
-scalar loss.  Since the analytical gradient includes the ``1/batch``
-averaging, the numerical gradient must be divided by ``batch_size``
-to match, or equivalently, the analytical gradient must be multiplied
-by ``batch_size``.  In practice, the test should compute the numerical
-gradient of the *per-sample* loss (i.e. divide the total MSE by
-``batch_size`` instead of ``N``).
+Numerical gradient checks should compute the finite-difference
+gradient of the same scalar loss (e.g. ``mse_loss``) without
+any additional normalisation — the analytical and numerical
+gradients should match directly.
 """
 
 from __future__ import annotations
@@ -133,7 +126,6 @@ class DenseLayer:
         assert self._pre_activation is not None
         assert self._output is not None
 
-        batch_size = self._input.shape[0]
 
         # Activation derivative
         if self.activation_name == "softmax":
@@ -152,9 +144,9 @@ class DenseLayer:
 
         # Weight gradient: average over batch
         # X^T @ grad / batch_size gives the per-sample-averaged gradient
-        self.weight_grad = Tensor(self._input.data.T @ grad_pre_activation.data / batch_size)
+        self.weight_grad = Tensor(self._input.data.T @ grad_pre_activation.data)
         # Bias gradient: average over batch
-        self.bias_grad = Tensor(grad_pre_activation.data.mean(axis=0))
+        self.bias_grad = Tensor(grad_pre_activation.data.sum(axis=0))
 
         # Input gradient: grad_pre_activation @ weights^T
         # (NOT divided by batch_size - propagates per-sample gradients)

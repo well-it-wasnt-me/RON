@@ -356,6 +356,34 @@ class ActionLearner:
         """Compute Q(s, a) for a single state-action pair."""
         return float(self.q_values(state)[action_index])
 
+    def q_values_batch(self, states: np.ndarray) -> np.ndarray:
+        """Compute Q-values for all actions across a batch of states.
+
+        Parameters
+        ----------
+        states:
+            Array of shape ``(batch, state_size)``.
+
+        Returns
+        -------
+        np.ndarray
+            Array of shape ``(batch, n_actions)``.
+        """
+        batch_size = states.shape[0]
+        n_actions = self.action_space.size
+        inputs = np.zeros(
+            (batch_size * n_actions, self.state_size + n_actions), dtype=np.float64
+        )
+        # Broadcast each state to n_actions rows
+        for i in range(batch_size):
+            row_start = i * n_actions
+            row_end = row_start + n_actions
+            inputs[row_start:row_end, : self.state_size] = states[i][np.newaxis, :]
+            for a in range(n_actions):
+                inputs[row_start + a, self.state_size + a] = 1.0
+        pred = self.model.predict(Tensor(inputs))
+        return pred.data.reshape(batch_size, n_actions)
+
     # ------------------------------------------------------------------ train
     def train_step(
         self,
@@ -395,18 +423,30 @@ class ActionLearner:
         next_states: np.ndarray,
         dones: np.ndarray,
     ) -> float:
-        """Run a batch of Q-learning updates."""
+        """Run a batch of Q-learning updates.
+
+        Vectorised: computes Q-values for all next states in a single
+        batch forward pass instead of looping per-sample.
+        """
         batch_size = len(states)
         n_actions = self.action_space.size
 
-        # Compute target Q-values
+        # Compute target Q-values in a single batch forward pass
         targets = np.zeros((batch_size, 1), dtype=np.float64)
-        for i in range(batch_size):
-            if dones[i]:
-                targets[i, 0] = rewards[i]
-            else:
-                next_q = self.q_values(next_states[i])
-                targets[i, 0] = rewards[i] + self.gamma * float(np.max(next_q))
+
+        # Only compute next_q for non-terminal transitions
+        non_terminal_mask = ~dones.astype(bool)
+        if np.any(non_terminal_mask):
+            # Batch Q-value computation for all non-terminal next states
+            next_q_all = self.q_values_batch(next_states[non_terminal_mask])
+            max_next_q = np.max(next_q_all, axis=1)
+            targets[non_terminal_mask, 0] = (
+                rewards[non_terminal_mask] + self.gamma * max_next_q
+            )
+
+        # Terminal transitions just get the reward
+        terminal_mask = dones.astype(bool)
+        targets[terminal_mask, 0] = rewards[terminal_mask]
 
         # Build input: [state, action_onehot]
         x = np.zeros((batch_size, self.state_size + n_actions), dtype=np.float64)

@@ -109,8 +109,17 @@ class Network:
 
     # ------------------------------------------------------------------ predict
     def predict(self, x: Tensor) -> Tensor:
-        """Forward pass without caching (no training side effects)."""
-        # Clear caches to avoid accidental gradient computation
+        """Forward pass for inference.
+
+        This calls :meth:`forward`, which does populate each layer's
+        internal cache (``_input``, ``_pre_activation``, ``_output``).
+        Those caches are overwritten on the next ``train_step`` call, so
+        calling ``predict`` between training steps does not produce
+        incorrect gradients.
+
+        However, ``predict`` is **not** side-effect-free: the layer caches
+        are set. Do not rely on them being empty after this call.
+        """
         return self.forward(x)
 
     # ------------------------------------------------------------------ state

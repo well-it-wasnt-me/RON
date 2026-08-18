@@ -15,6 +15,10 @@ import numpy as np
 class Tensor:
     """A named wrapper around a NumPy ndarray."""
 
+    # Explicitly mark Tensor as unhashable because it is mutable.
+    # This suppresses ruff PLW1641 and makes the unhashable contract explicit.
+    __hash__ = None  # type: ignore[assignment]
+
     __slots__ = ("_data",)
 
     _data: np.ndarray
@@ -154,12 +158,17 @@ class Tensor:
         return f"Tensor(shape={self.shape}, data={self._data})"
 
     def __eq__(self, other: object) -> bool:
+        """Value-based equality for testing and comparison.
+
+        Because Tensor is mutable (has ``__setitem__``), ``__hash__`` is
+        intentionally **not** defined. Python therefore treats instances as
+        unhashable (``__hash__ = None``), preventing accidental use as dict
+        keys or set members — which would break when the underlying data
+        is mutated.
+        """
         if not isinstance(other, Tensor):
             return NotImplemented
         return np.array_equal(self._data, other._data)
-
-    def __hash__(self) -> int:
-        return hash(self._data.tobytes())
 
 
 __all__ = ["Tensor"]

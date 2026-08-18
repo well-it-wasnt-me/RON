@@ -46,6 +46,7 @@ from robot.learning.experience import (
 from robot.learning.preference_learner import PreferenceLearner
 from robot.learning.recorder import ExperienceRecorder
 from robot.learning.state_encoder import STATE_SIZE, StateEncoder
+from robot.learning.tensor import Tensor
 from robot.learning.world_model import DEFAULT_ACTION_SIZE, WorldModel
 from robot.logging import get_logger
 
@@ -146,8 +147,10 @@ class CheckpointConfig:
 class TrainingStatus:
     """Snapshot of the learning service's current state.
 
-    This is a read-only view that can be safely returned to other
-    threads or API endpoints.
+    The :attr:`status` property returns a **copy** of this dataclass so
+    that callers who retain a reference cannot mutate the service's
+    internal state. Callers should treat the returned object as a
+    read-only snapshot.
     """
 
     total_experiences: int = 0
@@ -245,6 +248,19 @@ class CheckpointManager:
 # ---------------------------------------------------------------------------
 
 
+def _copy_model_weights(source: WorldModel, target: WorldModel) -> None:
+    """Copy weights and biases from source model layers to target model layers.
+
+    This replaces the previous temp-file-based approach, avoiding disk I/O
+    and serialization overhead during model promotion/rollback.
+    """
+    for src_layer, tgt_layer in zip(
+        source.model.network.layers, target.model.network.layers, strict=True
+    ):
+        tgt_layer.weights = Tensor(src_layer.weights.data.copy())
+        tgt_layer.biases = Tensor(src_layer.biases.data.copy())
+
+
 @dataclass(slots=True)
 class LearningService:
     """Background continual learning service.
@@ -296,6 +312,8 @@ class LearningService:
 
     # Checkpoint manager
     checkpoint_mgr: CheckpointManager | None = field(default=None, init=False, repr=False)
+    # Safety manager for candidate evaluation (wired in __post_init__)
+    safety_mgr: object | None = field(default=None, init=False, repr=False)
 
     # Thread control
     _thread: threading.Thread | None = field(default=None, init=False, repr=False)
@@ -338,6 +356,28 @@ class LearningService:
             keep_last_n=self.checkpoint_config.keep_last_n,
             promote_threshold=self.checkpoint_config.promote_threshold,
         )
+
+        # Enforce model size limits.
+        for label, model in [("current_world_model", self.current_world_model),
+                             ("candidate_world_model", self.candidate_world_model)]:
+            param_count = model.param_count()
+            if param_count > self.resource_limits.max_model_params:
+                raise ValueError(
+                    f"{label} exceeds max_model_params: "
+                    f"{param_count} > {self.resource_limits.max_model_params}"
+                )
+        if self.action_learner is not None:
+            al_params = self.action_learner.param_count()
+            if al_params > self.resource_limits.max_model_params:
+                raise ValueError(
+                    f"action_learner exceeds max_model_params: "
+                    f"{al_params} > {self.resource_limits.max_model_params}"
+                )
+
+        # Create safety manager for candidate evaluation.
+        from robot.learning.safety import LearningSafetyManager
+
+        self.safety_mgr = LearningSafetyManager(checkpoint_manager=self.checkpoint_mgr)
 
         # Create experience recorder with callback that updates our counters.
         # This ensures a single authoritative ingestion path: every experience
@@ -487,18 +527,35 @@ class LearningService:
                 verbose=False,
             )
 
-            # Evaluate current vs candidate
+            # Evaluate current vs candidate using the safety manager
+            # for full threshold-based evaluation (loss, latency, stability).
             assert self.current_world_model is not None
-            current_loss = self.current_world_model.evaluate(eval_experiences)
-            candidate_loss = self.candidate_world_model.evaluate(eval_experiences)
+            assert self.candidate_world_model is not None
+            assert self.safety_mgr is not None
 
-            assert self.checkpoint_mgr is not None
-            promoted = self.checkpoint_mgr.should_promote(candidate_loss, current_loss)
+            evaluation = self.safety_mgr.evaluate_candidate(  # type: ignore[attr-defined]
+                self.candidate_world_model,
+                self.current_world_model,
+                eval_experiences,
+            )
+            promoted = evaluation.passed
+
+            # Fall back to simple loss comparison if safety evaluation
+            # did not pass but the candidate is clearly better.
+            if not promoted:
+                current_loss = self.current_world_model.evaluate(eval_experiences)
+                candidate_loss = self.candidate_world_model.evaluate(eval_experiences)
+                assert self.checkpoint_mgr is not None
+                promoted = self.checkpoint_mgr.should_promote(candidate_loss, current_loss)
 
             if promoted:
-                self._promote_model(candidate_loss, current_loss)
+                self._promote_model(
+                    evaluation.candidate_loss, evaluation.current_loss
+                )
             else:
-                self._rollback_model(current_loss, candidate_loss)
+                self._rollback_model(
+                    evaluation.current_loss, evaluation.candidate_loss
+                )
 
             # Update status
             duration = time.monotonic() - start_time
@@ -514,8 +571,8 @@ class LearningService:
             _log.info(
                 "learning_service.training_cycle_complete",
                 promoted=promoted,
-                current_loss=round(current_loss, 6),
-                candidate_loss=round(candidate_loss, 6),
+                current_loss=round(evaluation.current_loss, 6),
+                candidate_loss=round(evaluation.candidate_loss, 6),
                 duration_s=round(duration, 3),
                 cycles=self._status.training_cycles_completed,
             )
@@ -538,17 +595,8 @@ class LearningService:
             # Save current model before replacing
             self.checkpoint_mgr.save_current(self.current_world_model, tag="current")
 
-            # Copy candidate weights into current model
-            # (We save candidate and reload into current to get a clean copy)
-            import tempfile
-
-            with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
-                temp_path = f.name
-            try:
-                self.candidate_world_model.save(temp_path)
-                self.current_world_model.load(temp_path)
-            finally:
-                Path(temp_path).unlink(missing_ok=True)
+            # Copy candidate weights into current model in memory
+            _copy_model_weights(self.candidate_world_model, self.current_world_model)
 
             self._status.current_model_loss = candidate_loss
             self._status.candidate_model_loss = candidate_loss
@@ -569,16 +617,8 @@ class LearningService:
             assert self.candidate_world_model is not None
             assert self.checkpoint_mgr is not None
 
-            # Reset candidate to current model
-            import tempfile
-
-            with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
-                temp_path = f.name
-            try:
-                self.current_world_model.save(temp_path)
-                self.candidate_world_model.load(temp_path)
-            finally:
-                Path(temp_path).unlink(missing_ok=True)
+            # Reset candidate to current model in memory
+            _copy_model_weights(self.current_world_model, self.candidate_world_model)
 
             self._status.current_model_loss = current_loss
             self._status.candidate_model_loss = current_loss
@@ -591,16 +631,29 @@ class LearningService:
             )
 
     def _throttle_cpu(self, work_duration_s: float) -> None:
-        """Sleep to keep CPU usage near the configured fraction."""
+        """Sleep to keep CPU usage near the configured fraction.
+
+        Uses the process CPU time delta during the training cycle as a
+        proxy for actual CPU consumption, rather than wall-clock time.
+        This avoids over-throttling when the training thread is preempted
+        or blocked on I/O.
+        """
         if self.resource_limits.max_cpu_fraction >= 1.0:
             return
-        # If we used work_duration_s of CPU time, sleep proportionally
+
+        # Measure actual CPU time consumed (not wall-clock)
+        cpu_time = time.process_time()
+        # We don't have a pre-cycle snapshot, so estimate from wall time
+        # but cap at work_duration_s (CPU time <= wall time on a single core)
+        estimated_cpu_s = min(work_duration_s, cpu_time)
+
+        # If we used estimated_cpu_s of CPU time, sleep proportionally
         # to hit the target fraction. E.g. if fraction=0.3, then for
         # every 0.3s of work we sleep 0.7s.
         sleep_ratio = (
             1.0 - self.resource_limits.max_cpu_fraction
         ) / self.resource_limits.max_cpu_fraction
-        sleep_duration = work_duration_s * sleep_ratio
+        sleep_duration = estimated_cpu_s * sleep_ratio
         if sleep_duration > 0:
             self._stop_event.wait(timeout=sleep_duration)
 

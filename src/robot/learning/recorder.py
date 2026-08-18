@@ -283,11 +283,18 @@ class ExperienceRecorder:
 
     async def _on_emotion_changed(self, event: EmotionChanged) -> None:
         """Handle emotion changes."""
+        # Snapshot state BEFORE applying the action so the experience
+        # captures the transition (previous_state -> action -> next_state).
+        state = self.encoder.encode()
         self.encoder.update_emotion(event.current, event.intensity)
         action = _action_vector_from_event("EmotionChanged", event)
-        self.record_with_encoder(
+        self.encoder.push_reward(self.default_reward)
+        next_state = self.encoder.encode()
+        self.record(
+            state=state,
             action=action,
             reward=self.default_reward,
+            next_state=next_state,
             metadata={
                 "event_type": "EmotionChanged",
                 "previous": event.previous.value,
@@ -302,6 +309,8 @@ class ExperienceRecorder:
 
     async def _on_face_detected(self, event: FaceDetected) -> None:
         """Handle face detection events."""
+        # Snapshot state BEFORE applying the action.
+        state = self.encoder.encode()
         self.encoder.update_vision(
             face_detected=True,
             face_x=event.x,
@@ -310,9 +319,13 @@ class ExperienceRecorder:
             face_count=1,
         )
         action = _action_vector_from_event("FaceDetected", event)
-        self.record_with_encoder(
+        self.encoder.push_reward(0.1)  # small positive reward for seeing a face
+        next_state = self.encoder.encode()
+        self.record(
+            state=state,
             action=action,
             reward=0.1,  # small positive reward for seeing a face
+            next_state=next_state,
             metadata={
                 "event_type": "FaceDetected",
                 "x": event.x,
@@ -323,10 +336,16 @@ class ExperienceRecorder:
 
     async def _on_speech_recognized(self, event: SpeechRecognized) -> None:
         """Handle speech recognition events."""
+        # Snapshot state BEFORE applying the action.
+        state = self.encoder.encode()
         action = _action_vector_from_event("SpeechRecognized", event)
-        self.record_with_encoder(
+        self.encoder.push_reward(0.05)  # small reward for interaction
+        next_state = self.encoder.encode()
+        self.record(
+            state=state,
             action=action,
             reward=0.05,  # small reward for interaction
+            next_state=next_state,
             metadata={
                 "event_type": "SpeechRecognized",
                 "text": event.text,
@@ -336,11 +355,17 @@ class ExperienceRecorder:
 
     async def _on_idle_timeout(self, event: IdleTimeout) -> None:
         """Handle idle timeout events."""
+        # Snapshot state BEFORE applying the action.
+        state = self.encoder.encode()
         self.encoder.update_idle(event.seconds_idle)
         action = _action_vector_from_event("IdleTimeout", event)
-        self.record_with_encoder(
+        self.encoder.push_reward(-0.1)  # small negative reward for idling
+        next_state = self.encoder.encode()
+        self.record(
+            state=state,
             action=action,
             reward=-0.1,  # small negative reward for idling
+            next_state=next_state,
             metadata={
                 "event_type": "IdleTimeout",
                 "seconds_idle": event.seconds_idle,

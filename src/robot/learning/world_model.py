@@ -491,7 +491,7 @@ class SimpleEnvironment:
     _face_y: float = field(default=0.5, init=False)
     _face_detected: float = field(default=1.0, init=False)
     _idle_time: float = field(default=0.0, init=False)
-    _rng: np.random.Generator = field(default_factory=lambda: np.random.default_rng(42), init=False)
+    _rng: np.random.Generator | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self._rng = np.random.default_rng(self.seed)
@@ -533,6 +533,7 @@ class SimpleEnvironment:
         tuple[np.ndarray, float]
             (next_state, reward)
         """
+        assert self._rng is not None
         if action == 0:
             # look left: decrease x
             self._face_x = max(
@@ -564,6 +565,7 @@ class SimpleEnvironment:
     def collect_experiences(
         self, n_steps: int = 200, max_state_size: int = STATE_SIZE
     ) -> list[Experience]:
+        assert self._rng is not None
         """Collect experiences by randomly interacting with the environment.
 
         Returns a list of :class:`Experience` tuples suitable for

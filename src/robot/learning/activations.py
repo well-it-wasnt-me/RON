@@ -76,11 +76,20 @@ def softmax(x: Tensor) -> Tensor:
 
 
 def softmax_derivative(softmax_output: Tensor) -> Tensor:
-    """Derivative of softmax (Jacobian diagonal approximation for cross-entropy).
+    """Identity passthrough for softmax used with cross-entropy loss.
 
-    When used with cross-entropy loss, the combined derivative simplifies
-    to ``softmax_output - target``, so this returns the softmax output
-    itself for the caller to combine.
+    .. caution::
+        This function intentionally returns its input unchanged. It is
+        **not** a standalone derivative of softmax. It only works because
+        :class:`~robot.learning.layers.DenseLayer.backward` special-cases
+        softmax by skipping the activation derivative when
+        ``activation_name == "softmax"`` and relying on the
+        cross-entropy derivative already being the combined gradient
+        ``(softmax_output - target)``.
+
+        Do **not** use this function as a generic softmax derivative.
+        If you need the actual Jacobian, implement a proper
+        ``softmax_jacobian`` function.
     """
     return softmax_output
 

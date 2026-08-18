@@ -26,8 +26,6 @@ def demo_xor() -> dict[str, object]:
 
     Returns a dict with training metrics.
     """
-    np.random.default_rng(42)
-
     # XOR dataset with targets mapped to [-1, 1] for tanh
     x = Tensor(np.array([[0, 0], [0, 1], [1, 0], [1, 1]], dtype=np.float64))
     y = Tensor(np.array([[-1], [1], [1], [-1]], dtype=np.float64))

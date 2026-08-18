@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from collections import deque
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -282,6 +283,7 @@ class SqliteExperienceStore:
         if str(self._db_path) != ":memory:":
             self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn: sqlite3.Connection | None = None
+        self._lock = threading.Lock()
 
     def _ensure_conn(self) -> sqlite3.Connection:
         if self._conn is None:
@@ -293,86 +295,99 @@ class SqliteExperienceStore:
             _log.info("experience_sqlite.opened", db=str(self._db_path))
         return self._conn
 
+    def _execute(self, sql: str, params: tuple[Any, ...] = ()) -> Any:
+        """Execute SQL under the thread lock for safe cross-thread access."""
+        with self._lock:
+            conn = self._ensure_conn()
+            return conn.execute(sql, params)
+
     def save(self, experience: Experience) -> int:
         """Persist an experience and return its row id."""
-        conn = self._ensure_conn()
-        cursor = conn.execute(
-            """INSERT INTO experiences (timestamp, state, action, reward, next_state, metadata)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (
-                experience.timestamp.isoformat(),
-                json.dumps(experience.state),
-                json.dumps(experience.action),
-                experience.reward,
-                json.dumps(experience.next_state),
-                json.dumps(experience.metadata),
-            ),
-        )
-        conn.commit()
-        return cursor.lastrowid  # type: ignore[return-value]
-
-    def save_batch(self, experiences: list[Experience]) -> list[int]:
-        """Persist a batch of experiences. Returns row ids."""
-        conn = self._ensure_conn()
-        ids: list[int] = []
-        for exp in experiences:
+        with self._lock:
+            conn = self._ensure_conn()
             cursor = conn.execute(
                 """INSERT INTO experiences (timestamp, state, action, reward, next_state, metadata)
                    VALUES (?, ?, ?, ?, ?, ?)""",
                 (
-                    exp.timestamp.isoformat(),
-                    json.dumps(exp.state),
-                    json.dumps(exp.action),
-                    exp.reward,
-                    json.dumps(exp.next_state),
-                    json.dumps(exp.metadata),
+                    experience.timestamp.isoformat(),
+                    json.dumps(experience.state),
+                    json.dumps(experience.action),
+                    experience.reward,
+                    json.dumps(experience.next_state),
+                    json.dumps(experience.metadata),
                 ),
             )
-            assert cursor.lastrowid is not None
-            ids.append(cursor.lastrowid)
-        conn.commit()
-        return ids
+            conn.commit()
+            return cursor.lastrowid  # type: ignore[return-value]
+
+    def save_batch(self, experiences: list[Experience]) -> list[int]:
+        """Persist a batch of experiences. Returns row ids."""
+        with self._lock:
+            conn = self._ensure_conn()
+            ids: list[int] = []
+            for exp in experiences:
+                cursor = conn.execute(
+                    """INSERT INTO experiences (timestamp, state, action, reward, next_state, metadata)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (
+                        exp.timestamp.isoformat(),
+                        json.dumps(exp.state),
+                        json.dumps(exp.action),
+                        exp.reward,
+                        json.dumps(exp.next_state),
+                        json.dumps(exp.metadata),
+                    ),
+                )
+                assert cursor.lastrowid is not None
+                ids.append(cursor.lastrowid)
+            conn.commit()
+            return ids
 
     def load_recent(self, limit: int = 100) -> list[Experience]:
         """Load the most recent ``limit`` experiences."""
-        conn = self._ensure_conn()
-        rows = conn.execute(
-            """SELECT timestamp, state, action, reward, next_state, metadata
-               FROM experiences ORDER BY id DESC LIMIT ?""",
-            (limit,),
-        ).fetchall()
+        with self._lock:
+            conn = self._ensure_conn()
+            rows = conn.execute(
+                """SELECT timestamp, state, action, reward, next_state, metadata
+                   FROM experiences ORDER BY id DESC LIMIT ?""",
+                (limit,),
+            ).fetchall()
         return [self._row_to_experience(row) for row in rows]
 
     def load_all(self) -> list[Experience]:
         """Load all stored experiences."""
-        conn = self._ensure_conn()
-        rows = conn.execute(
-            """SELECT timestamp, state, action, reward, next_state, metadata
-               FROM experiences ORDER BY id ASC"""
-        ).fetchall()
+        with self._lock:
+            conn = self._ensure_conn()
+            rows = conn.execute(
+                """SELECT timestamp, state, action, reward, next_state, metadata
+                   FROM experiences ORDER BY id ASC"""
+            ).fetchall()
         return [self._row_to_experience(row) for row in rows]
 
     def delete_before(self, timestamp: datetime) -> int:
         """Delete experiences older than ``timestamp``. Returns count."""
-        conn = self._ensure_conn()
-        cursor = conn.execute(
-            "DELETE FROM experiences WHERE timestamp < ?",
-            (timestamp.isoformat(),),
-        )
-        conn.commit()
-        return cursor.rowcount
+        with self._lock:
+            conn = self._ensure_conn()
+            cursor = conn.execute(
+                "DELETE FROM experiences WHERE timestamp < ?",
+                (timestamp.isoformat(),),
+            )
+            conn.commit()
+            return cursor.rowcount
 
     def count(self) -> int:
         """Return total number of stored experiences."""
-        conn = self._ensure_conn()
-        row = conn.execute("SELECT COUNT(*) FROM experiences").fetchone()
+        with self._lock:
+            conn = self._ensure_conn()
+            row = conn.execute("SELECT COUNT(*) FROM experiences").fetchone()
         return int(row[0])
 
     def close(self) -> None:
-        if self._conn is not None:
-            self._conn.close()
-            self._conn = None
-            _log.info("experience_sqlite.closed")
+        with self._lock:
+            if self._conn is not None:
+                self._conn.close()
+                self._conn = None
+                _log.info("experience_sqlite.closed")
 
     @staticmethod
     def _row_to_experience(row: tuple[Any, ...]) -> Experience:

@@ -69,10 +69,11 @@ class TestDenseLayerBackward:
 class TestDenseLayerNumericalGradient:
     """Numerical gradient checking for DenseLayer.
 
-    The backward pass divides weight/bias gradients by batch_size
-    (averaging over the batch).  To compare with numerical gradients,
-    we compute the numerical gradient of the total MSE loss and then
-    divide by batch_size to match the convention.
+    The backward pass computes weight/bias gradients directly from
+    the loss derivative (which already normalises by N = batch * features).
+    Numerical gradients are computed as the finite-difference of the
+    same scalar loss, so they should match the analytical gradients
+    directly without any additional normalisation.
     """
 
     def _numerical_gradient(
@@ -85,7 +86,6 @@ class TestDenseLayerNumericalGradient:
         """Compute numerical gradients using finite differences on MSE loss."""
         from robot.learning.losses import mse_loss
 
-        batch_size = x.shape[0]
         weight_grads = np.zeros_like(layer.weights.data)
         bias_grads = np.zeros_like(layer.biases.data)
 
@@ -103,7 +103,7 @@ class TestDenseLayerNumericalGradient:
                 loss_minus = mse_loss(pred_minus, target).item()
 
                 # Divide by batch_size to match backward's convention
-                weight_grads[i, j] = (loss_plus - loss_minus) / (2 * eps * batch_size)
+                weight_grads[i, j] = (loss_plus - loss_minus) / (2 * eps)
                 layer.weights.data[i, j] = original
 
         # Bias gradients
@@ -118,7 +118,7 @@ class TestDenseLayerNumericalGradient:
             pred_minus = layer.forward(x)
             loss_minus = mse_loss(pred_minus, target).item()
 
-            bias_grads[j] = (loss_plus - loss_minus) / (2 * eps * batch_size)
+            bias_grads[j] = (loss_plus - loss_minus) / (2 * eps)
             layer.biases.data[j] = original
 
         return weight_grads, bias_grads

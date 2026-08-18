@@ -1,5 +1,12 @@
 """Multimodal learning: unified representation from vision, audio, and robot state.
 
+.. note::
+    This module is **experimental / future-phase** code. It is tested in
+    isolation but is not yet wired into :class:`LearningService`. The
+    production learning path currently uses :class:`StateEncoder` and
+    :class:`WorldModel` directly. Integration is planned for a future
+    phase once the base world model demonstrates reliable improvement.
+
 This module extends the Phase 3 state encoder with **trainable** sub-encoders
 for each sensory channel and a **temporal history window** that provides
 recent context.  The result is a single fixed-size vector that combines:
