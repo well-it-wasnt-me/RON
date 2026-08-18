@@ -21,6 +21,13 @@ from robot.learning.action_learning import (
     RewardFunction,
     deskbot_action_space,
 )
+from robot.learning.dataset import (
+    DatasetSplit,
+    DatasetStats,
+    TransitionDataset,
+    WorldModelBaseline,
+    validate_transition,
+)
 from robot.learning.deterministic_encoder import (
     DEFAULT_HISTORY_LENGTH as DETERMINISTIC_HISTORY_LENGTH,
     DETERMINISTIC_ENCODER_VERSION,
@@ -134,6 +141,8 @@ __all__ = [
     "AudioObservation",
     "CheckpointConfig",
     "CheckpointManager",
+    "DatasetSplit",
+    "DatasetStats",
     "DefaultValidator",
     "DeterministicMultimodalEncoder",
     "EpisodicMemory",
@@ -173,6 +182,7 @@ __all__ = [
     "TrainingResult",
     "TrainingStatus",
     "Transition",
+    "TransitionDataset",
     "TransitionError",
     "TransitionStore",
     "VisionEncoder",
@@ -180,10 +190,12 @@ __all__ = [
     "VisionObservation",
     "WorkingMemory",
     "WorldModel",
+    "WorldModelBaseline",
     "deskbot_action_space",
     "deterministic_encoding_size",
     "event_to_observation_update",
     "multimodal_size",
     "state_layout",
     "state_size",
+    "validate_transition",
 ]
