@@ -100,6 +100,12 @@ from robot.learning.safety import (
     LearningSafetyManager,
     ModelEvaluator,
 )
+from robot.learning.safety_gate import (
+    SafeActionExecutor,
+    SafetyGate,
+    SafetyResult,
+    SafetyResultType,
+)
 from robot.learning.shadow_policy import (
     PolicyMode,
     ShadowLogEntry,
@@ -194,6 +200,10 @@ __all__ = [
     "RewardFunction",
     "RewardModel",
     "RobotObservation",
+    "SafeActionExecutor",
+    "SafetyGate",
+    "SafetyResult",
+    "SafetyResultType",
     "ShadowLogEntry",
     "ShadowMetrics",
     "ShadowPolicyController",
