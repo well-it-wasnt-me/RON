@@ -33,6 +33,7 @@ nav:
 - Architecture:
   - Overview: architecture/overview.md
   - Learning Architecture: architecture/learning.md
+  - Production Learning System: architecture/production-learning.md
   - Audio Architecture: architecture/audio.md
   - Lifecycle & Degradation: architecture/lifecycle.md
 - Modules:

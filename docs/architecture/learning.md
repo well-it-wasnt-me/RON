@@ -7,6 +7,13 @@ record experience, learn measurable relationships from that experience, retain
 what it learned, and safely use the learned knowledge to improve behaviour —
 all running on-device with no external inference APIs or pretrained models.
 
+> **Production hardening:** The learning system has been re-architected with
+> transition lifecycle semantics, typed observations, deterministic encoding,
+> frozen evaluation datasets, shadow-mode policy inference, safety-gated
+> actions, canary model deployment, and controlled online learning.
+> See [Production Learning System](production-learning.md) for the full
+> phased rollout documentation.
+
 ## Data Flow
 
 ```mermaid

@@ -9,7 +9,9 @@ on the Raspberry Pi with **no external inference APIs, no pretrained models,
 and no cloud calls**.
 
 > See also the high-level [Learning Architecture](../architecture/learning.md)
-> overview. This document is the detailed reference for the module itself.
+> overview and the [Production Learning System](../architecture/production-learning.md)
+> for the safety, deployment, and online learning hardening layers.
+> This document is the detailed reference for the module itself.
 
 ---
 
@@ -55,7 +57,19 @@ robot/learning/
 ├── preference_learner.py# Confidence-scored preference learning with decay
 ├── safety.py            # ModelEvaluator, ActionSafetyValidator, LearningSafetyManager
 ├── observation_adapter.py # Event-bus -> PreferenceLearner bridge (user-preference signals)
-└── learning_service.py  # Background continual-learning service (the orchestrator)
+├── learning_service.py  # Background continual-learning service (the orchestrator)
+│
+│   ── Production hardening (Phases 1-9) ──
+├── transition.py            # Phase 1: TransitionStore lifecycle + validation
+├── observation.py           # Phase 2: Typed Observation / RobotObservation / VisionObservation
+├── reward.py                # Phase 2: RewardModel with pluggable components
+├── deterministic_encoder.py # Phase 3: Stateless DeterministicMultimodalEncoder
+├── dataset.py               # Phase 4: TransitionDataset + WorldModelBaseline
+├── evaluation.py            # Phase 5: EvaluationDataset (frozen, versioned) + PromotionRule
+├── shadow_policy.py         # Phase 6: ShadowPolicyController (off/shadow/assist/active)
+├── safety_gate.py           # Phase 7: SafetyGate (3-layer) + SafeActionExecutor
+├── model_registry.py        # Phase 8: ModelRegistry (atomic deploy, rollback) + CanaryDeploymentManager
+└── online_learning.py       # Phase 9: OnlineLearningMonitor + ConstrainedExploration + ReplayWarmer
 ```
 
 The module is layered in ten Parts, each building on the previous one:
