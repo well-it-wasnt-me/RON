@@ -1,10 +1,10 @@
 """Integration test: simulation produces experiences that survive restart.
 
-This test satisfies the Phase 2 acceptance criteria:
+Integration test proving the transition lifecycle acceptance criteria:
   observe -> act -> observe result -> store experience -> restart -> load experience
 
-It uses DeskBot's SimulationDriver to produce real events, records them
-as experiences, and verifies persistence across a simulated restart.
+Observation events update the encoder; real actions selected from the
+ActionSpace produce transitions through the lifecycle.
 """
 
 from __future__ import annotations
@@ -12,6 +12,8 @@ from __future__ import annotations
 import asyncio
 import math
 from pathlib import Path
+
+import pytest
 
 from robot.behavior.state_machine import RobotState, StateMachine
 from robot.events.bus import InMemoryEventBus
@@ -28,16 +30,17 @@ from robot.learning.experience import (
     SqliteExperienceStore,
 )
 from robot.learning.recorder import ExperienceRecorder
+from robot.learning.state_encoder import STATE_SIZE
 
 
 class TestSimulationExperienceRecording:
-    """Integration test using simulation events to produce experiences."""
+    """Integration test using simulation events + transition lifecycle."""
 
-    async def test_simulation_produces_and_persists_experiences(self, tmp_path: Path) -> None:
+    async def test_transition_lifecycle_persists_experiences(self, tmp_path: Path) -> None:
         """Full acceptance test: observe -> act -> store -> restart -> load."""
         db_path = tmp_path / "simulation_experiences.db"
 
-        # --- Phase 1: Run simulation and record experiences ---
+        # --- Run simulation and record experiences ---
         bus = InMemoryEventBus()
         sm = StateMachine(bus=bus)
 
@@ -46,152 +49,140 @@ class TestSimulationExperienceRecording:
         recorder = ExperienceRecorder(bus=bus, episodic_memory=episodic)
         recorder.attach()
 
-        # Update context with initial state
+        # Observe: BOOT -> IDLE transition (updates encoder)
         recorder.update_context(state=RobotState.BOOT)
-
-        # Simulate: BOOT -> IDLE transition
         await sm.transition(RobotState.IDLE)
 
-        # Simulate: face detected (perception event)
+        # Observe: face detected (updates encoder only — no transition)
         await bus.publish(FaceDetected(x=0.5, y=0.3, confidence=0.85))
+        await asyncio.sleep(0.01)
 
-        # Simulate: emotion change (reaction to face)
+        # --- Act: select action look_center (index 2) from ActionSpace ---
+        pending = recorder.begin_transition(action_index=2)
+
+        # Observe: outcome after action — encoder state reflects the new state
         await bus.publish(
-            EmotionChanged(previous=EmotionName.NEUTRAL, current=EmotionName.CURIOUS, intensity=0.7)
+            EmotionChanged(previous=EmotionName.NEUTRAL, current=EmotionName.HAPPY, intensity=0.7)
         )
+        await asyncio.sleep(0.01)
 
-        # Simulate: IDLE -> CURIOUS transition
-        await sm.transition(RobotState.CURIOUS)
+        # Complete the transition with the post-execution observation
+        transition = recorder.complete_transition(pending, reward=0.5)
+        assert transition.action_name == "look_center"
+        assert transition.execution_success is True
 
-        # Simulate: speech recognized
-        await bus.publish(SpeechRecognized(text="hello deskbot", confidence=0.92))
+        # Verify experience was recorded and persisted
+        assert len(recorder.working_memory) == 1
+        assert store.count() == 1
 
-        # Simulate: servo movement
-        await bus.publish(ServoMoved(name="pan", angle=60.0))
-
-        # Simulate: idle timeout
-        await bus.publish(IdleTimeout(seconds_idle=45.0))
-
-        # Allow async handlers to process
-        await asyncio.sleep(0.05)
-
-        # Verify experiences were recorded
-        assert len(recorder.working_memory) > 0, "Should have recorded experiences from events"
-        assert store.count() > 0, "Experiences should be persisted to SQLite"
-
-        recorded_count = store.count()
-        assert recorded_count >= 3, f"Expected at least 3 experiences, got {recorded_count}"
-
-        # Verify experience content
         experiences = store.load_all()
-        # Check that at least one experience has a face detection
-        face_experiences = [
-            e for e in experiences if e.metadata.get("event_type") == "FaceDetected"
-        ]
-        assert len(face_experiences) >= 1, "Should have at least one face detection experience"
-
-        # Verify the experience has proper vectors
-        face_exp = face_experiences[0]
-        assert len(face_exp.state) > 0, "State vector should not be empty"
-        assert len(face_exp.action) > 0, "Action vector should not be empty"
-        assert face_exp.reward > 0, "Face detection should have positive reward"
+        assert len(experiences) == 1
+        exp = experiences[0]
+        assert exp.metadata["action_name"] == "look_center"
+        assert exp.metadata["action_index"] == 2
+        assert exp.reward == 0.5
+        assert len(exp.state) == STATE_SIZE
+        assert len(exp.next_state) == STATE_SIZE
+        assert exp.metadata["execution_success"] is True
+        assert exp.metadata["transition_id"] != ""
 
         store.close()
 
-        # --- Phase 2: Simulate restart and verify persistence ---
+        # --- Simulate restart and verify persistence ---
         store2 = SqliteExperienceStore(db_path=db_path)
         episodic2 = EpisodicMemory(store=store2, capacity=100, max_load=100)
         episodic2.load_from_store()
 
-        # Experiences must survive application restart
-        assert len(episodic2) == recorded_count, (
-            f"Should have loaded {recorded_count} experiences after restart, got {len(episodic2)}"
-        )
+        assert len(episodic2) == 1, "Should have loaded 1 experience after restart"
 
-        # Verify data integrity
         loaded = store2.load_all()
-        face_loaded = [e for e in loaded if e.metadata.get("event_type") == "FaceDetected"]
-        assert len(face_loaded) >= 1
-        face_loaded_exp = face_loaded[0]
-        assert face_loaded_exp.state == face_exp.state, "State vectors should match after restart"
-        assert face_loaded_exp.action == face_exp.action, "Action vectors should match"
-        assert face_loaded_exp.next_state == face_exp.next_state, "Next state vectors should match"
-        assert face_loaded_exp.reward == face_exp.reward, "Reward should match"
+        assert len(loaded) == 1
+        loaded_exp = loaded[0]
+        assert loaded_exp.state == exp.state, "State vectors should match after restart"
+        assert loaded_exp.action == exp.action, "Action vectors should match"
+        assert loaded_exp.next_state == exp.next_state, "Next state vectors should match"
+        assert loaded_exp.reward == exp.reward, "Reward should match"
+        assert loaded_exp.metadata["action_name"] == "look_center"
 
         store2.close()
+
+    async def test_multiple_transitions_persisted(self, tmp_path: Path) -> None:
+        """Multiple transitions through the lifecycle are all persisted."""
+        db_path = tmp_path / "multi_transitions.db"
+
+        bus = InMemoryEventBus()
+        store = SqliteExperienceStore(db_path=db_path)
+        episodic = EpisodicMemory(store=store, capacity=100)
+        recorder = ExperienceRecorder(bus=bus, episodic_memory=episodic)
+
+        # Record 5 transitions with different actions
+        for action_idx in range(5):
+            pending = recorder.begin_transition(action_index=action_idx)
+            recorder.complete_transition(pending, reward=float(action_idx) * 0.1)
+
+        assert store.count() == 5
+        loaded = store.load_all()
+        assert len(loaded) == 5
+
+        # Each transition should have the correct action identity
+        for i, exp in enumerate(loaded):
+            assert exp.metadata["action_index"] == i
+            assert exp.reward == pytest.approx(float(i) * 0.1)
+
+        store.close()
+
+    async def test_observation_events_do_not_produce_experiences(self, tmp_path: Path) -> None:
+        """Observation events alone produce zero experiences."""
+        bus = InMemoryEventBus()
+        sm = StateMachine(bus=bus)
+
+        store = SqliteExperienceStore(db_path=":memory:")
+        episodic = EpisodicMemory(store=store, capacity=100)
+        recorder = ExperienceRecorder(bus=bus, episodic_memory=episodic)
+        recorder.attach()
+
+        recorder.update_context(state=RobotState.BOOT)
+        await sm.transition(RobotState.IDLE)
+        await bus.publish(FaceDetected(x=0.5, y=0.3, confidence=0.85))
+        await bus.publish(SpeechRecognized(text="hello", confidence=0.9))
+        await bus.publish(ServoMoved(name="pan", angle=60.0))
+        await bus.publish(IdleTimeout(seconds_idle=45.0))
+        await asyncio.sleep(0.05)
+
+        # No transitions created — only encoder updated
+        assert len(recorder.working_memory) == 0
+        assert store.count() == 0
+        assert recorder.transition_store.pending_count == 0
 
     async def test_working_memory_and_replay_buffer_integration(self) -> None:
         """Experiences flow through all memory layers."""
         bus = InMemoryEventBus()
-
         recorder = ExperienceRecorder(bus=bus)
-        recorder.attach()
 
-        # Produce experiences manually
-        recorder.record(
-            state=[0.0] * 10,
-            action=[1.0] * 5,
-            reward=0.5,
-            next_state=[0.1] * 10,
-            metadata={"source": "manual"},
-        )
-        recorder.record(
-            state=[0.1] * 10,
-            action=[0.9] * 5,
-            reward=0.3,
-            next_state=[0.2] * 10,
-            metadata={"source": "manual"},
-        )
+        # Record 3 transitions
+        for i in range(3):
+            pending = recorder.begin_transition(action_index=i)
+            recorder.complete_transition(pending, reward=float(i) * 0.1)
 
-        # Working memory has both
-        assert len(recorder.working_memory) == 2
-        # Replay buffer has both
-        assert len(recorder.replay_buffer) == 2
-        # Can sample from replay buffer
+        assert len(recorder.working_memory) == 3
+        assert len(recorder.replay_buffer) == 3
         batch = recorder.replay_buffer.sample(2)
         assert len(batch) == 2
 
-    async def test_experience_recorder_with_state_machine(self) -> None:
-        """Recording experiences during state machine transitions."""
-        bus = InMemoryEventBus()
-        sm = StateMachine(bus=bus)
-
-        recorder = ExperienceRecorder(bus=bus)
-        recorder.attach()
-
-        # Update context
-        recorder.update_context(state=RobotState.BOOT)
-
-        # Transition through states
-        await sm.transition(RobotState.IDLE)
-        await sm.transition(RobotState.CURIOUS)
-
-        # Give handlers time
-        await asyncio.sleep(0.02)
-
-        # Should have recorded experiences
-        assert len(recorder.working_memory) > 0
-
     async def test_experience_vectors_are_consistent(self) -> None:
-        """State vectors produced from context should be consistent."""
+        """State vectors produced from the lifecycle are consistent."""
         bus = InMemoryEventBus()
-
         recorder = ExperienceRecorder(bus=bus)
-        recorder.attach()
 
-        # Set up context
         recorder.update_context(state=RobotState.IDLE)
-        recorder.update_context(emotions={"happy": 0.8, "curious": 0.5})
+        recorder.update_context(emotions={"happy": 0.8})
 
-        # Fire an event that produces an experience
-        await bus.publish(FaceDetected(x=0.5, y=0.5, confidence=0.9))
-        await asyncio.sleep(0.02)
+        pending = recorder.begin_transition(action_index=0)
+        recorder.complete_transition(pending, reward=0.1)
 
         exp = recorder.working_memory.recent(1)[0]
-        # State vector should have consistent size
-        assert len(exp.state) > 0
-        assert len(exp.state) == len(exp.next_state), "State and next_state should have same size"
-        # All values should be finite floats
+        assert len(exp.state) == STATE_SIZE
+        assert len(exp.state) == len(exp.next_state)
         for v in exp.state:
             assert isinstance(v, float)
-            assert not math.isnan(v)  # not NaN
+            assert not math.isnan(v)

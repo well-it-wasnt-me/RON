@@ -217,7 +217,7 @@ class TestRecorderStateOrdering:
     """Verify recorder captures pre-action state as 'state' and post-action as 'next_state'."""
 
     def test_emotion_change_captures_pre_post_state(self) -> None:
-        """When an emotion changes, state should be BEFORE and next_state AFTER."""
+        """EmotionChanged updates the encoder; transitions use begin/complete."""
         from robot.events.bus import InMemoryEventBus
         from robot.events.events import EmotionChanged, EmotionName
 
@@ -231,10 +231,7 @@ class TestRecorderStateOrdering:
         )
         recorder.attach()
 
-        # Set an initial emotion
-        encoder.update_emotion(EmotionName.NEUTRAL, 1.0)
-
-        # Publish an EmotionChanged event
+        # Observation event updates encoder but produces no transition
         import anyio
 
         async def run() -> None:
@@ -248,23 +245,14 @@ class TestRecorderStateOrdering:
 
         anyio.run(run)
 
-        # Check the recorded experience
+        # No experience should be recorded from an observation event
         experiences = list(recorder.working_memory)
-        assert len(experiences) == 1
-        exp = experiences[0]
-
-        # State should NOT have HAPPY emotion (before the change)
-        # EmotionName enum: NEUTRAL=0, HAPPY=1, so index 1 = happy
-        state_happy = exp.state[1]  # happy emotion intensity
-        next_state_happy = exp.next_state[1]
-
-        assert state_happy == 0.0, f"State should have happy=0.0 (before change), got {state_happy}"
-        assert next_state_happy == 0.9, (
-            f"Next state should have happy=0.9 (after change), got {next_state_happy}"
-        )
+        assert len(experiences) == 0
+        # Encoder should have the updated emotion
+        assert encoder.emotions.get("happy") == 0.9
 
     def test_face_detected_captures_pre_post_state(self) -> None:
-        """When a face is detected, state should be BEFORE and next_state AFTER."""
+        """FaceDetected updates the encoder; transitions use begin/complete."""
         from robot.events.bus import InMemoryEventBus
         from robot.events.events import FaceDetected
 
@@ -285,25 +273,12 @@ class TestRecorderStateOrdering:
 
         anyio.run(run)
 
+        # No experience should be recorded from an observation event
         experiences = list(recorder.working_memory)
-        assert len(experiences) == 1
-        exp = experiences[0]
-
-        # Vision section starts at index 33
-        # [33] = face_detected, [34] = face_x, [35] = face_y
-        state_face_detected = exp.state[33]
-        next_state_face_detected = exp.next_state[33]
-        next_state_x = exp.next_state[34]
-
-        assert state_face_detected == 0.0, (
-            f"State should have face_detected=0.0 (before), got {state_face_detected}"
-        )
-        assert next_state_face_detected == 1.0, (
-            f"Next state should have face_detected=1.0 (after), got {next_state_face_detected}"
-        )
-        assert abs(next_state_x - 0.3) < 0.01, (
-            f"Next state face_x should be ~0.3, got {next_state_x}"
-        )
+        assert len(experiences) == 0
+        # Encoder should reflect the detected face
+        assert encoder.vision.face_detected == 1.0
+        assert encoder.vision.face_x == 0.3
 
 
 # ---------------------------------------------------------------------------
