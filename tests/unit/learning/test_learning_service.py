@@ -321,15 +321,21 @@ class TestLearningService:
     async def test_event_driven_experience_recording(
         self, bus: InMemoryEventBus, service: LearningService
     ) -> None:
-        """Events on the bus should produce experiences."""
+        """Observation events update the encoder; transitions produce experiences."""
         service.start()
         try:
-            # Fire events
+            # Observation events update the encoder but do not produce experiences
             await bus.publish(FaceDetected(x=0.5, y=0.3, confidence=0.9))
             await asyncio.sleep(0.05)
 
+            assert len(service.working_memory) == 0  # observations are not transitions
+
+            # A real action through the transition lifecycle produces an experience
+            service.record_transition(action_index=2, reward=0.5)  # look_center
+            await asyncio.sleep(0.05)
+
             assert len(service.working_memory) > 0
-            assert service.status.total_experiences >= 0  # Counter only tracks manual records
+            assert service.status.total_experiences >= 1
         finally:
             service.stop()
 
@@ -546,12 +552,12 @@ class TestLearningServicePromotionRollback:
 
 
 # ========================================================================
-# Acceptance tests (Phase 6 spec)
+# Acceptance tests
 # ========================================================================
 
 
 class TestLearningServiceAcceptance:
-    """Acceptance tests matching the Phase 6 spec criteria.
+    """Acceptance tests matching the learning service criteria.
 
     Verify:
     1. DeskBot remains responsive while training occurs.
@@ -606,18 +612,18 @@ class TestLearningServiceAcceptance:
             )
             await asyncio.sleep(0.05)
 
-            # Events should have been processed
-            assert len(service.working_memory) > 0
+            # Observation events update encoder but don't produce experiences
+            assert len(service.working_memory) == 0
 
             # Force a training cycle (in background thread)
             service.force_training()
 
-            # The bus should still be responsive during training
-            await bus.publish(SpeechRecognized(text="hello", confidence=0.95))
+            # The bus should still be responsive during training — produce a transition
+            service.record_transition(action_index=0, reward=0.1)
             await asyncio.sleep(0.05)
 
-            # Verify the event was processed
-            assert len(service.working_memory) > 1
+            # Verify the transition was processed
+            assert len(service.working_memory) > 0
 
         finally:
             service.stop()
@@ -653,7 +659,14 @@ class TestLearningServiceAcceptance:
 
             await asyncio.sleep(0.05)
 
-            # Experiences should have accumulated
+            # Observation events update the encoder but do not produce experiences
+            assert len(service.working_memory) == 0
+
+            # Real actions through the transition lifecycle produce experiences
+            service.record_transition(action_index=2, reward=0.5)  # look_center
+            service.record_transition(action_index=5, reward=0.1)  # blink
+
+            # Experiences should have accumulated from transitions
             assert len(service.working_memory) > 0
             assert len(service.replay_buffer) > 0
 
@@ -748,7 +761,7 @@ class TestLearningServiceAcceptance:
         """Full simulation test: robot running + experiences accumulating +
         background training + model improvement.
 
-        This is the key acceptance test that verifies all Phase 6
+        This is the key acceptance test that verifies all learning service
         criteria working together.
         """
         bus = InMemoryEventBus()

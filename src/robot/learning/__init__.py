@@ -21,6 +21,28 @@ from robot.learning.action_learning import (
     RewardFunction,
     deskbot_action_space,
 )
+from robot.learning.dataset import (
+    DatasetSplit,
+    DatasetStats,
+    TransitionDataset,
+    WorldModelBaseline,
+    validate_transition,
+)
+from robot.learning.deterministic_encoder import (
+    DEFAULT_HISTORY_LENGTH as DETERMINISTIC_HISTORY_LENGTH,
+    DETERMINISTIC_ENCODER_VERSION,
+    DeterministicMultimodalEncoder,
+    ObservationContext,
+    deterministic_encoding_size,
+)
+from robot.learning.evaluation import (
+    EVALUATION_DATASET_VERSION,
+    EvaluationDataset,
+    EvaluationMetrics,
+    EvaluationScenario,
+    PromotionRule,
+    create_standard_evaluation_dataset,
+)
 from robot.learning.experience import (
     EpisodicMemory,
     Experience,
@@ -38,6 +60,12 @@ from robot.learning.learning_service import (
     ResourceLimits,
     TrainingStatus,
 )
+from robot.learning.model_registry import (
+    CanaryDeploymentManager,
+    CanaryStage,
+    ModelMetadata,
+    ModelRegistry,
+)
 from robot.learning.multimodal import (
     AUDIO_ENCODER_INPUT,
     AUDIO_ENCODER_OUTPUT,
@@ -54,10 +82,27 @@ from robot.learning.multimodal import (
     multimodal_size,
 )
 from robot.learning.network import MLP, Network
+from robot.learning.observation import (
+    AudioObservation,
+    Observation,
+    RobotObservation,
+    VisionObservation,
+    event_to_observation_update,
+)
+from robot.learning.online_learning import (
+    ConstrainedExploration,
+    OnlineLearningMonitor,
+    ReplayWarmer,
+)
 from robot.learning.preference_learner import (
     LearnedPreference,
     PatternObservation,
     PreferenceLearner,
+)
+from robot.learning.reward import (
+    RewardComponent,
+    RewardContext,
+    RewardModel,
 )
 from robot.learning.safety import (
     ActionSafetyValidator,
@@ -65,6 +110,18 @@ from robot.learning.safety import (
     EvaluationThresholds,
     LearningSafetyManager,
     ModelEvaluator,
+)
+from robot.learning.safety_gate import (
+    SafeActionExecutor,
+    SafetyGate,
+    SafetyResult,
+    SafetyResultType,
+)
+from robot.learning.shadow_policy import (
+    PolicyMode,
+    ShadowLogEntry,
+    ShadowMetrics,
+    ShadowPolicyController,
 )
 from robot.learning.state_encoder import (
     ENCODER_VERSION,
@@ -76,6 +133,12 @@ from robot.learning.state_encoder import (
     state_size,
 )
 from robot.learning.tensor import Tensor
+from robot.learning.transition import (
+    PendingTransition,
+    Transition,
+    TransitionError,
+    TransitionStore,
+)
 from robot.learning.world_model import (
     DEFAULT_ACTION_SIZE,
     SimpleEnvironment,
@@ -89,7 +152,10 @@ __all__ = [
     "AUDIO_ENCODER_OUTPUT",
     "DEFAULT_ACTION_SIZE",
     "DEFAULT_HISTORY_LENGTH",
+    "DETERMINISTIC_ENCODER_VERSION",
+    "DETERMINISTIC_HISTORY_LENGTH",
     "ENCODER_VERSION",
+    "EVALUATION_DATASET_VERSION",
     "MLP",
     "MULTIMODAL_BASE_SIZE",
     "MULTIMODAL_VERSION",
@@ -104,11 +170,21 @@ __all__ = [
     "ActionValidator",
     "AudioEncoder",
     "AudioFeatures",
+    "AudioObservation",
+    "CanaryDeploymentManager",
+    "CanaryStage",
     "CheckpointConfig",
     "CheckpointManager",
+    "ConstrainedExploration",
+    "DatasetSplit",
+    "DatasetStats",
     "DefaultValidator",
+    "DeterministicMultimodalEncoder",
     "EpisodicMemory",
+    "EvaluationDataset",
+    "EvaluationMetrics",
     "EvaluationResult",
+    "EvaluationScenario",
     "EvaluationThresholds",
     "Experience",
     "ExperienceStore",
@@ -120,15 +196,35 @@ __all__ = [
     "LearningSchedule",
     "LearningService",
     "ModelEvaluator",
+    "ModelMetadata",
+    "ModelRegistry",
     "MultimodalEncoder",
     "MultimodalEnvironment",
     "Network",
+    "Observation",
+    "ObservationContext",
+    "OnlineLearningMonitor",
     "PatternObservation",
+    "PendingTransition",
+    "PolicyMode",
     "PreferenceLearner",
+    "PromotionRule",
     "ReplayBuffer",
+    "ReplayWarmer",
     "ResourceLimits",
     "Reward",
+    "RewardComponent",
+    "RewardContext",
     "RewardFunction",
+    "RewardModel",
+    "RobotObservation",
+    "SafeActionExecutor",
+    "SafetyGate",
+    "SafetyResult",
+    "SafetyResultType",
+    "ShadowLogEntry",
+    "ShadowMetrics",
+    "ShadowPolicyController",
     "SimpleEnvironment",
     "SqliteExperienceStore",
     "StateEncoder",
@@ -136,12 +232,22 @@ __all__ = [
     "TrainingMetrics",
     "TrainingResult",
     "TrainingStatus",
+    "Transition",
+    "TransitionDataset",
+    "TransitionError",
+    "TransitionStore",
     "VisionEncoder",
     "VisionFeatures",
+    "VisionObservation",
     "WorkingMemory",
     "WorldModel",
+    "WorldModelBaseline",
+    "create_standard_evaluation_dataset",
     "deskbot_action_space",
+    "deterministic_encoding_size",
+    "event_to_observation_update",
     "multimodal_size",
     "state_layout",
     "state_size",
+    "validate_transition",
 ]

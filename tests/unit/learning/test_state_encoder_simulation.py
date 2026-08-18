@@ -80,7 +80,7 @@ class TestStateEncoderSimulation:
         assert vec_loud[40] > 0.0  # peak_amplitude should be > 0
 
     async def test_encoder_with_recorder_and_events(self) -> None:
-        """StateEncoder should produce consistent vectors through the recorder."""
+        """Observation events update the encoder; transitions use begin/complete."""
         bus = InMemoryEventBus()
         sm = StateMachine(bus=bus)
 
@@ -90,7 +90,7 @@ class TestStateEncoderSimulation:
         recorder = ExperienceRecorder(bus=bus, encoder=encoder)
         recorder.attach()
 
-        # Simulate events
+        # Observation events update the encoder but produce no experiences
         await sm.transition(RobotState.IDLE)
         await bus.publish(FaceDetected(x=0.5, y=0.3, confidence=0.85))
         await bus.publish(
@@ -103,8 +103,18 @@ class TestStateEncoderSimulation:
 
         await asyncio.sleep(0.05)
 
-        # Verify experiences were recorded with correct state size
-        assert len(recorder.working_memory) > 0
+        # No experiences from observation events alone
+        assert len(recorder.working_memory) == 0
+        # Encoder should reflect the observed state
+        assert encoder.state == RobotState.IDLE
+        assert encoder.vision.face_detected == 1.0
+        assert encoder.emotions.get("curious") == 0.7
+
+        # Now produce a transition through the lifecycle
+        pending = recorder.begin_transition(action_index=2)
+        recorder.complete_transition(pending, reward=0.5)
+
+        # The transition should have the correct state size
         for exp in recorder.working_memory:
             assert len(exp.state) == STATE_SIZE, (
                 f"State vector should be {STATE_SIZE} elements, got {len(exp.state)}"
