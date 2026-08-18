@@ -228,7 +228,7 @@ class TelegramBridge:
     async def _handle_command(self, chat_id: int, text: str, user_id: int) -> None:
         """Parse and execute a slash command."""
         parts = text.split(maxsplit=1)
-        command = parts[0].lower().rstrip("@")
+        command = parts[0].lower().removeprefix("/").split("@")[0]
         args_str = parts[1] if len(parts) > 1 else ""
         args = args_str.split()
 
