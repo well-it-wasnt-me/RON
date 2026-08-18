@@ -60,6 +60,12 @@ from robot.learning.learning_service import (
     ResourceLimits,
     TrainingStatus,
 )
+from robot.learning.model_registry import (
+    CanaryDeploymentManager,
+    CanaryStage,
+    ModelMetadata,
+    ModelRegistry,
+)
 from robot.learning.multimodal import (
     AUDIO_ENCODER_INPUT,
     AUDIO_ENCODER_OUTPUT,
@@ -160,6 +166,8 @@ __all__ = [
     "AudioEncoder",
     "AudioFeatures",
     "AudioObservation",
+    "CanaryDeploymentManager",
+    "CanaryStage",
     "CheckpointConfig",
     "CheckpointManager",
     "DatasetSplit",
@@ -182,6 +190,8 @@ __all__ = [
     "LearningSchedule",
     "LearningService",
     "ModelEvaluator",
+    "ModelMetadata",
+    "ModelRegistry",
     "MultimodalEncoder",
     "MultimodalEnvironment",
     "Network",
