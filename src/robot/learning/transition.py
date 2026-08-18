@@ -59,6 +59,7 @@ from typing import Any
 
 from robot.learning.action_learning import ActionSpace
 from robot.learning.experience import Experience
+from robot.learning.observation import Observation
 from robot.logging import get_logger
 
 _log = get_logger("learning.transition")
@@ -138,6 +139,8 @@ class Transition:
     execution_failure_reason: str
     latency_ms: float
     policy_version: str
+    observation: Observation | None = None
+    next_observation: Observation | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     # ------------------------------------------------------------------ helpers
@@ -188,6 +191,8 @@ class Transition:
             "execution_failure_reason": self.execution_failure_reason,
             "latency_ms": self.latency_ms,
             "policy_version": self.policy_version,
+            "observation": self.observation.to_dict() if self.observation else None,
+            "next_observation": self.next_observation.to_dict() if self.next_observation else None,
             "metadata": dict(self.metadata),
         }
 
@@ -214,7 +219,8 @@ class PendingTransition:
     action_vector: list[float]
     start_timestamp_ns: int
     policy_version: str
-    _store: TransitionStore = field(repr=False)
+    observation: Observation | None = None
+    _store: TransitionStore | None = field(default=None, repr=False)
     _completed: bool = field(default=False, init=False, repr=False)
 
     @property
@@ -229,6 +235,7 @@ class PendingTransition:
         execution_success: bool = True,
         execution_failure_reason: str = "",
         metadata: dict[str, Any] | None = None,
+        next_observation: Observation | None = None,
     ) -> Transition:
         """Close this transition and store the completed experience.
 
@@ -258,6 +265,7 @@ class PendingTransition:
             If the transition is already completed or the payload is
             malformed.
         """
+        assert self._store is not None
         return self._store._complete(
             self,
             next_state=next_state,
@@ -266,6 +274,7 @@ class PendingTransition:
             execution_success=execution_success,
             execution_failure_reason=execution_failure_reason,
             metadata=metadata,
+            next_observation=next_observation,
         )
 
 
@@ -369,6 +378,47 @@ class TransitionStore:
         self._pending[transition_id] = pending
         return pending
 
+    def begin_observation(
+        self,
+        observation: Observation,
+        action_index: int,
+        execution_id: str | None = None,
+        policy_version: str = "deterministic",
+    ) -> PendingTransition:
+        """Open a transition from a typed :class:`Observation`.
+
+        Like :meth:`begin` but takes an :class:`Observation` instead
+        of a raw float vector.  The observation is encoded to a vector
+        for the ``state`` field and also stored directly for later
+        inspection.
+
+        Parameters
+        ----------
+        observation:
+            The observation before the action is executed.
+        action_index:
+            Index of the selected action in :attr:`action_space`.
+        execution_id:
+            Optional identifier for the hardware execution.
+        policy_version:
+            Version string of the policy that selected the action.
+
+        Returns
+        -------
+        PendingTransition
+            The open transition with ``observation`` populated.
+        """
+        state = observation.to_vector()
+        pending = self.begin(
+            state=state,
+            action_index=action_index,
+            execution_id=execution_id,
+            policy_version=policy_version,
+        )
+        # Attach the typed observation
+        object.__setattr__(pending, "observation", observation)
+        return pending
+
     # ------------------------------------------------------------------ complete
     def _complete(
         self,
@@ -379,6 +429,7 @@ class TransitionStore:
         execution_success: bool,
         execution_failure_reason: str,
         metadata: dict[str, Any] | None,
+        next_observation: Observation | None = None,
     ) -> Transition:
         """Internal: close a pending transition and store it."""
         if pending._completed:
@@ -414,6 +465,8 @@ class TransitionStore:
             execution_failure_reason=execution_failure_reason or "",
             latency_ms=latency_ms,
             policy_version=pending.policy_version,
+            observation=pending.observation,
+            next_observation=next_observation,
             metadata=dict(metadata) if metadata else {},
         )
 
@@ -452,6 +505,8 @@ class TransitionStore:
         execution_id: str | None = None,
         policy_version: str = "deterministic",
         metadata: dict[str, Any] | None = None,
+        observation: Observation | None = None,
+        next_observation: Observation | None = None,
     ) -> Transition:
         """Begin and immediately complete a transition in one call.
 
@@ -465,6 +520,8 @@ class TransitionStore:
             execution_id=execution_id,
             policy_version=policy_version,
         )
+        if observation is not None:
+            object.__setattr__(pending, "observation", observation)
         return pending.complete(
             next_state=next_state,
             reward=reward,
@@ -472,6 +529,7 @@ class TransitionStore:
             execution_success=execution_success,
             execution_failure_reason=execution_failure_reason,
             metadata=metadata,
+            next_observation=next_observation,
         )
 
 

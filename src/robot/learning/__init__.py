@@ -54,10 +54,22 @@ from robot.learning.multimodal import (
     multimodal_size,
 )
 from robot.learning.network import MLP, Network
+from robot.learning.observation import (
+    AudioObservation,
+    Observation,
+    RobotObservation,
+    VisionObservation,
+    event_to_observation_update,
+)
 from robot.learning.preference_learner import (
     LearnedPreference,
     PatternObservation,
     PreferenceLearner,
+)
+from robot.learning.reward import (
+    RewardComponent,
+    RewardContext,
+    RewardModel,
 )
 from robot.learning.safety import (
     ActionSafetyValidator,
@@ -110,6 +122,7 @@ __all__ = [
     "ActionValidator",
     "AudioEncoder",
     "AudioFeatures",
+    "AudioObservation",
     "CheckpointConfig",
     "CheckpointManager",
     "DefaultValidator",
@@ -129,13 +142,18 @@ __all__ = [
     "MultimodalEncoder",
     "MultimodalEnvironment",
     "Network",
+    "Observation",
     "PatternObservation",
     "PendingTransition",
     "PreferenceLearner",
     "ReplayBuffer",
     "ResourceLimits",
     "Reward",
+    "RewardComponent",
+    "RewardContext",
     "RewardFunction",
+    "RewardModel",
+    "RobotObservation",
     "SimpleEnvironment",
     "SqliteExperienceStore",
     "StateEncoder",
@@ -148,9 +166,11 @@ __all__ = [
     "TransitionStore",
     "VisionEncoder",
     "VisionFeatures",
+    "VisionObservation",
     "WorkingMemory",
     "WorldModel",
     "deskbot_action_space",
+    "event_to_observation_update",
     "multimodal_size",
     "state_layout",
     "state_size",

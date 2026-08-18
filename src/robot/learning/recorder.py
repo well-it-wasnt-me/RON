@@ -44,6 +44,8 @@ from robot.events.events import (
 )
 from robot.learning.action_learning import ActionSpace, deskbot_action_space
 from robot.learning.experience import EpisodicMemory, Experience, ReplayBuffer, WorkingMemory
+from robot.learning.observation import Observation
+from robot.learning.reward import RewardModel
 from robot.learning.state_encoder import StateEncoder
 from robot.learning.transition import PendingTransition, Transition, TransitionStore
 from robot.logging import get_logger
@@ -91,6 +93,7 @@ class ExperienceRecorder:
     replay_buffer: ReplayBuffer = field(default_factory=ReplayBuffer)
     episodic_memory: EpisodicMemory | None = None
     default_reward: float = 0.0
+    reward_model: RewardModel = field(default_factory=RewardModel)
     on_experience_recorded: Callable[[Experience], None] | None = field(default=None, repr=False)
 
     # Transition store (created in __post_init__)
@@ -183,6 +186,41 @@ class ExperienceRecorder:
             policy_version=policy_version,
         )
 
+    def begin_observation_transition(
+        self,
+        action_index: int,
+        execution_id: str | None = None,
+        policy_version: str = "deterministic",
+    ) -> PendingTransition:
+        """Open a transition from a typed :class:`Observation`.
+
+        Captures the current encoder state as an :class:`Observation`
+        snapshot, encodes it to a vector, and opens a transition.
+        The typed observation is stored alongside the vector for later
+        inspection.
+
+        Parameters
+        ----------
+        action_index:
+            Index of the selected action in the configured action space.
+        execution_id:
+            Optional identifier for the hardware execution.
+        policy_version:
+            Version string of the policy that selected the action.
+
+        Returns
+        -------
+        PendingTransition
+            The open transition with ``observation`` populated.
+        """
+        observation = Observation.from_encoder(self.encoder)
+        return self.transition_store.begin_observation(
+            observation=observation,
+            action_index=action_index,
+            execution_id=execution_id,
+            policy_version=policy_version,
+        )
+
     def complete_transition(
         self,
         pending: PendingTransition,
@@ -191,6 +229,7 @@ class ExperienceRecorder:
         execution_success: bool = True,
         execution_failure_reason: str = "",
         metadata: dict[str, Any] | None = None,
+        use_reward_model: bool = False,
     ) -> Transition:
         """Close a pending transition after the action has been executed.
 
@@ -202,10 +241,13 @@ class ExperienceRecorder:
         Parameters
         ----------
         pending:
-            The open transition returned by :meth:`begin_transition`.
+            The open transition returned by :meth:`begin_transition`
+            or :meth:`begin_observation_transition`.
         reward:
-            Scalar reward.  Defaults to :attr:`default_reward` when
-            not provided.
+            Scalar reward.  When ``None`` and ``use_reward_model`` is
+            False, :attr:`default_reward` is used.  When ``None`` and
+            ``use_reward_model`` is True, the :class:`RewardModel`
+            computes the reward from the observation/action/outcome.
         done:
             Whether the episode terminated.
         execution_success:
@@ -214,9 +256,30 @@ class ExperienceRecorder:
             Human-readable reason on failure.
         metadata:
             Additional metadata forwarded into the stored transition.
+        use_reward_model:
+            When True and ``reward`` is None, compute the reward using
+            the :class:`RewardModel` instead of the default.
         """
         next_state = self.encoder.encode()
-        r = self.default_reward if reward is None else reward
+
+        # Capture typed observation if the transition has one
+        next_observation = None
+        if pending.observation is not None:
+            next_observation = Observation.from_encoder(self.encoder)
+
+        # Compute reward
+        if reward is not None:
+            r = reward
+        elif use_reward_model and pending.observation is not None and next_observation is not None:
+            r = self.reward_model.compute_for_action_index(
+                observation=pending.observation,
+                action_index=pending.action_index,
+                next_observation=next_observation,
+                action_space=self.action_space,
+            )
+        else:
+            r = self.default_reward
+
         return pending.complete(
             next_state=next_state,
             reward=r,
@@ -224,6 +287,7 @@ class ExperienceRecorder:
             execution_success=execution_success,
             execution_failure_reason=execution_failure_reason,
             metadata=metadata,
+            next_observation=next_observation,
         )
 
     # ------------------------------------------------------------------ manual record (legacy / validated)
