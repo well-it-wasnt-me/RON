@@ -1,8 +1,4 @@
-"""Production checklist verification.
-
-Each test corresponds to one item in plan/10_PRODUCTION_CHECKLIST.md.
-A test passing means the checklist item is satisfied.
-"""
+"""Production checklist verification."""
 
 from __future__ import annotations
 
