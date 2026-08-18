@@ -154,6 +154,9 @@ class TestSimulationExperienceRecording:
         assert store.count() == 0
         assert recorder.transition_store.pending_count == 0
 
+        recorder.detach()
+        store.close()
+
     async def test_working_memory_and_replay_buffer_integration(self) -> None:
         """Experiences flow through all memory layers."""
         bus = InMemoryEventBus()
