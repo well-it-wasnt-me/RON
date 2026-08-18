@@ -29,6 +29,7 @@ from robot.ai.preferences import (
 from robot.ai.prompts import system_prompt
 from robot.ai.tools.executor import ToolExecutor
 from robot.ai.tools.registry import BUILTIN_TOOLS, ToolRegistry
+from robot.api.calibration import set_calibration_state
 from robot.api.state_bridge import StateBridge
 from robot.behavior.idle import IdleBehavior
 from robot.behavior.perception_behavior import PerceptionBehavior
@@ -58,6 +59,7 @@ from robot.hardware.displays.factory import DisplayFactory
 from robot.hardware.displays.mock_display import MockDisplay
 from robot.hardware.sensors.mock_camera import MockCamera
 from robot.hardware.sensors.mock_microphone import MockMicrophone
+from robot.hardware.sensors.rtsp_camera import RtspCamera
 from robot.hardware.sensors.usb_camera import UsbCamera
 from robot.hardware.sensors.usb_microphone import UsbMicrophone
 from robot.hardware.servos.factory import ServoControllerFactory
@@ -262,32 +264,68 @@ class DeskBotApp:
                 original_backend="usb",
                 fallback_backend="mock",
             )
-            camera = safe_init(
-                factory=lambda: UsbCamera(  # type: ignore[assignment]
-                    device=settings.camera.device,
-                    width=settings.camera.width,
-                    height=settings.camera.height,
-                    fps=settings.camera.fps,
-                ),
-                component="camera",
-                fallback=lambda: MockCamera(
-                    width=settings.camera.width,
-                    height=settings.camera.height,
-                ),
-                registry=degradation,
-                original_backend="usb",
-                fallback_backend="mock",
-            )
+            if settings.camera.backend == "rtsp" and settings.camera.rtsp_url:
+                camera = safe_init(
+                    factory=lambda: RtspCamera(  # type: ignore[assignment]
+                        url=settings.camera.rtsp_url,
+                        width=settings.camera.width,
+                        height=settings.camera.height,
+                        fps=settings.camera.fps,
+                    ),
+                    component="camera",
+                    fallback=lambda: MockCamera(
+                        width=settings.camera.width,
+                        height=settings.camera.height,
+                    ),
+                    registry=degradation,
+                    original_backend="rtsp",
+                    fallback_backend="mock",
+                )
+            else:
+                camera = safe_init(
+                    factory=lambda: UsbCamera(  # type: ignore[assignment]
+                        device=settings.camera.device,
+                        width=settings.camera.width,
+                        height=settings.camera.height,
+                        fps=settings.camera.fps,
+                    ),
+                    component="camera",
+                    fallback=lambda: MockCamera(
+                        width=settings.camera.width,
+                        height=settings.camera.height,
+                    ),
+                    registry=degradation,
+                    original_backend="usb",
+                    fallback_backend="mock",
+                )
         else:
             microphone = MockMicrophone(
                 sample_rate=settings.microphone.sample_rate,
                 channels=settings.microphone.channels,
                 frame_ms=settings.microphone.frame_ms,
             )
-            camera = MockCamera(
-                width=settings.camera.width,
-                height=settings.camera.height,
-            )
+            if settings.camera.backend == "rtsp" and settings.camera.rtsp_url:
+                camera = safe_init(
+                    factory=lambda: RtspCamera(  # type: ignore[assignment]
+                        url=settings.camera.rtsp_url,
+                        width=settings.camera.width,
+                        height=settings.camera.height,
+                        fps=settings.camera.fps,
+                    ),
+                    component="camera",
+                    fallback=lambda: MockCamera(
+                        width=settings.camera.width,
+                        height=settings.camera.height,
+                    ),
+                    registry=degradation,
+                    original_backend="rtsp",
+                    fallback_backend="mock",
+                )
+            else:
+                camera = MockCamera(
+                    width=settings.camera.width,
+                    height=settings.camera.height,
+                )
 
         # Face engine (the new, complete face renderer)
         face_renderer = FaceRenderer(width=settings.displays.width, height=settings.displays.height)
@@ -747,6 +785,14 @@ class DeskBotApp:
         app.state.learning_service = self._learning_service
         app.state.safety_manager = self._safety_manager
 
+        # Wire calibration routes to the real servo controller, display,
+        # and settings so the web panel's calibration page works.
+        set_calibration_state(
+            servo_controller=self.servo_controller,
+            display=self.display,
+            settings=self.settings,
+        )
+
         host = self.settings.api.host
         port = self.settings.api.port
 
@@ -765,6 +811,9 @@ class DeskBotApp:
 
     async def _stop_api(self) -> None:
         """Stop the REST API server if running."""
+        # Unwire calibration routes so a stale module-level reference
+        # doesn't point at freed hardware after shutdown.
+        set_calibration_state()
         if self._api_server is not None:
             _log.info("api.stopping")
             self._api_server.should_exit = True  # type: ignore[attr-defined]

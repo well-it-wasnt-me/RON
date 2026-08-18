@@ -28,6 +28,7 @@
 <body>
 <h1>DeskBot Calibration</h1>
 <p class="muted"><span id="connection-status" class="status disconnected"></span><span id="connection-text">Connecting...</span></p>
+<p class="muted" style="margin-bottom:1rem"><a href="/" style="color:var(--accent);text-decoration:none">&#8592; Dashboard</a> &middot; <a href="/settings" style="color:var(--accent);text-decoration:none">Hardware Test</a> &middot; <a href="/learning" style="color:var(--accent);text-decoration:none">Local Brain</a></p>
 <h2>Servo Calibration</h2>
 <div class="card">
   <p class="muted">Move a servo with its configured safe angle range. Calibration moves to the configured centre only unless endpoint testing is explicitly enabled.</p>
@@ -36,7 +37,7 @@
   <div id="error" class="error"></div>
 </div>
 <script>
-const API = window.location.pathname.startsWith('/api/v1/') ? '/api/v1/calibration' : '/calibration';
+const API = '/api/v1/calibration';
 const LABELS={pan:'Pan',tilt:'Tilt',left_arm:'Left Arm',right_arm:'Right Arm'};
 const state={};
 const sc=document.getElementById('servo-controls');

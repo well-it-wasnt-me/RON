@@ -667,12 +667,15 @@ class AudioInfoResponse(BaseModel):
 class AudioDevice(BaseModel):
     """A single sounddevice entry."""
 
-    model_config = _ex({"name": "hw:1,0", "index": 2, "channels": 2, "default": True})
+    model_config = _ex(
+        {"name": "hw:1,0", "index": 2, "channels": 2, "default": True, "default_sample_rate": 48000}
+    )
 
     name: str | None = None
     index: int | None = None
     channels: int | None = None
     default: bool | None = None
+    default_sample_rate: float | None = None
 
 
 class AudioDevicesResponse(BaseModel):
@@ -680,14 +683,24 @@ class AudioDevicesResponse(BaseModel):
 
     model_config = _ex(
         {
-            "devices": [{"name": "hw:1,0", "index": 2, "channels": 2, "default": True}],
+            "devices": [
+                {
+                    "name": "hw:1,0",
+                    "index": 2,
+                    "channels": 2,
+                    "default": True,
+                    "default_sample_rate": 48000,
+                }
+            ],
             "available": True,
+            "default_index": 2,
         },
         {"devices": [], "available": False, "error": "sounddevice not installed"},
     )
 
     devices: list[AudioDevice] = []
     available: bool = True
+    default_index: int | None = None
     error: str | None = None
 
 

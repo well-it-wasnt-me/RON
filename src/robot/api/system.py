@@ -8,6 +8,7 @@ import time
 
 from fastapi import APIRouter, Query, Request
 
+from robot import __version__
 from robot.api.schemas import BluetoothResponse, LogsResponse, OkResponse, SystemInfoResponse
 from robot.logging import get_ring_buffer
 
@@ -38,7 +39,7 @@ async def system_info(request: Request) -> SystemInfoResponse:
         uptime_s=round(uptime_s, 1),
         uptime_human=_format_uptime(uptime_s),
         pid=os.getpid(),
-        app_version="0.1.0",
+        app_version=__version__,
         env=getattr(settings, "env", "production") if settings else "production",
         health=health,
     )
