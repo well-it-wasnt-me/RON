@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v2.0.1 (2026-08-18)
+
+### Bug Fixes
+
+- **telegram**: Small telegram fix in is command parsing
+  ([`c6dfadd`](https://github.com/well-it-wasnt-me/RON/commit/c6dfaddfee349b85f9d9933657e21a7e282f0a89))
+
+- **web**: Calibration and more
+  ([`1bd92a9`](https://github.com/well-it-wasnt-me/RON/commit/1bd92a97edffc02f3fade9904ca83b8fe82ede96))
+
+### Chores
+
+- **camera**: Re-instating rtsp camera bridge
+  ([`ef07354`](https://github.com/well-it-wasnt-me/RON/commit/ef0735411e1f23d4ca4eece60910396652c4fcf6))
+
+
 ## v2.0.0 (2026-08-18)
 
 ### Bug Fixes
