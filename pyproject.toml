@@ -316,3 +316,7 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "\\.\\.\\.",
 ]
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+tag_format = "v{version}"
