@@ -89,6 +89,11 @@ from robot.learning.observation import (
     VisionObservation,
     event_to_observation_update,
 )
+from robot.learning.online_learning import (
+    ConstrainedExploration,
+    OnlineLearningMonitor,
+    ReplayWarmer,
+)
 from robot.learning.preference_learner import (
     LearnedPreference,
     PatternObservation,
@@ -170,6 +175,7 @@ __all__ = [
     "CanaryStage",
     "CheckpointConfig",
     "CheckpointManager",
+    "ConstrainedExploration",
     "DatasetSplit",
     "DatasetStats",
     "DefaultValidator",
@@ -197,12 +203,14 @@ __all__ = [
     "Network",
     "Observation",
     "ObservationContext",
+    "OnlineLearningMonitor",
     "PatternObservation",
     "PendingTransition",
     "PolicyMode",
     "PreferenceLearner",
     "PromotionRule",
     "ReplayBuffer",
+    "ReplayWarmer",
     "ResourceLimits",
     "Reward",
     "RewardComponent",
