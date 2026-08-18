@@ -1,6 +1,6 @@
 """Tests for the deterministic multimodal encoder.
 
-Phase 3: Make multimodal encoding deterministic.
+Make multimodal encoding deterministic.
 
 Tests prove:
 - same input => identical output
@@ -79,7 +79,7 @@ class TestDeterminism:
     ) -> None:
         """Encoding a frozen fixture 10,000 times produces exactly the same result.
 
-        This is the Definition of Done for Phase 3.
+        This is the determinism standard.
         """
         first = encoder.encode(context)
         for _ in range(9999):
@@ -281,7 +281,7 @@ class TestVersion:
 
 
 class TestIntegrationWithObservation:
-    """The encoder works with Observation objects from the Phase 2 types."""
+    """The encoder works with Observation objects."""
 
     def test_encode_from_state_encoder(self, encoder: DeterministicMultimodalEncoder) -> None:
         """Encoding an observation captured from a StateEncoder works."""

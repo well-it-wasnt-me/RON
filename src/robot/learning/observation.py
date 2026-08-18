@@ -1,8 +1,7 @@
 """Typed observations that cleanly separate what the robot *sees* from what it *does*.
 
-Phase 2 of the production learning plan requires explicit types for
-observations, actions, and rewards so that a single transition can be
-inspected and clearly answer:
+Explicit types for observations, actions, and rewards so that a single
+transition can be inspected and clearly answer:
 
 1. What did the robot know?   → :class:`Observation`
 2. What did it do?            → :class:`LearningAction` (from ActionSpace)

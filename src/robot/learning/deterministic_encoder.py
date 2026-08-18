@@ -1,11 +1,10 @@
 """Deterministic multimodal encoder: same input → identical output, every time.
 
-Phase 3 of the production learning plan requires the multimodal encoder to
-be a **reproducible representation function**.  The previous
-:class:`MultimodalEncoder` mutated its internal history buffer on every
-``encode()`` call, which means calling ``encode()`` twice on the same
-observation could produce different outputs — fatal for replay, debugging,
-and evaluation.
+The multimodal encoder is a **reproducible representation function**.
+The previous :class:`MultimodalEncoder` mutated its internal history
+buffer on every ``encode()`` call, which means calling ``encode()`` twice
+on the same observation could produce different outputs — fatal for replay,
+debugging, and evaluation.
 
 This module provides:
 

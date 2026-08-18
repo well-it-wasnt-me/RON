@@ -1,6 +1,6 @@
 """Tests for the transition dataset and world model baseline.
 
-Phase 4: Train the World Model on Real Transitions.
+Train the World Model on Real Transitions.
 
 Tests prove:
 - invalid transitions are rejected (missing next state, NaN, invalid action, etc.)

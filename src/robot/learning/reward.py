@@ -1,8 +1,8 @@
 """Reward model: compute reward from a transition, separate from the recorder.
 
-Phase 2 of the production learning plan requires reward calculation to
-be moved out of the recorder.  The :class:`RewardModel` computes the
-scalar reward for a transition after the outcome has been observed.
+Reward calculation is separated from the recorder.  The :class:`RewardModel`
+computes the scalar reward for a transition after the outcome has been
+observed.
 
 The reward policy is configurable: different reward components can be
 added or removed without touching the recorder or the transition store.

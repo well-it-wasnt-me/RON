@@ -1,8 +1,8 @@
 """Frozen evaluation dataset for benchmarking candidate models.
 
-Phase 5 of the production learning plan requires a permanent benchmark
-that every candidate model must pass.  If the evaluation data changes
-every run, you cannot tell whether the model improved.
+A permanent benchmark that every candidate model must pass.  If the
+evaluation data changes every run, you cannot tell whether the model
+improved.
 
 This module provides:
 
@@ -383,7 +383,7 @@ def create_standard_evaluation_dataset(
 ) -> EvaluationDataset:
     """Create the standard DeskBot evaluation dataset (v1).
 
-    Includes the minimum scenarios from the Phase 5 plan:
+    Includes the minimum standard scenarios:
     face+silence, face+speech, no face+speech, no face+silence,
     moving face, multiple faces, low confidence, high/low audio,
     camera/mic dropout, malformed sensor, idle, interaction.

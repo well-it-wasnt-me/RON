@@ -1,6 +1,6 @@
 """Tests for the shadow-mode policy controller.
 
-Phase 6: Shadow-Mode Policy.
+Shadow-Mode Policy.
 
 Tests prove:
 - in shadow mode, the model predicts but the deterministic controller executes

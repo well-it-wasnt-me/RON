@@ -1,6 +1,6 @@
 """Tests for the canary model deployment system.
 
-Phase 8: Canary Model Deployment.
+Canary Model Deployment.
 
 Tests prove:
 - models are atomically deployed

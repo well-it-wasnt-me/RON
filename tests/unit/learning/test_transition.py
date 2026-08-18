@@ -1,6 +1,6 @@
 """Tests for the TransitionStore transition lifecycle.
 
-These tests prove the Phase 1 acceptance criteria:
+Tests proving the transition lifecycle acceptance criteria:
 
 - no action means no completed transition
 - failed action execution is recorded correctly

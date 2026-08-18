@@ -1,7 +1,7 @@
 """Shadow-mode policy: run the learned policy alongside the deterministic controller.
 
-Phase 6 of the production learning plan.  Until this phase is complete,
-the learned policy must not control the robot.
+Until shadow mode is proven safe, the learned policy must not control
+the robot.
 
 Modes
 -----

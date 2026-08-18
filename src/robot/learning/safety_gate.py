@@ -1,6 +1,6 @@
 """Safety-gated actions: make it impossible for a learned policy to bypass safety.
 
-Phase 7 of the production learning plan.  Three layers:
+Three safety layers:
 
 1. **Static validation** — action exists, parameters valid, servo/timing/rate limits.
 2. **Runtime safety** — calibrated servo range, cooldown, conflicting actions,

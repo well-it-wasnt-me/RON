@@ -1,6 +1,6 @@
 """Dataset construction and validation for world model training.
 
-Phase 4 of the production learning plan requires:
+Dataset construction and validation for world model training:
 
 * Only train from **completed** transitions with valid physical
   semantics.

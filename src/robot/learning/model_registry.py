@@ -1,7 +1,6 @@
 """Canary model deployment with atomic loading and rollback.
 
-Phase 8 of the production learning plan.  Deploy learned models
-gradually and reversibly.
+Deploy learned models gradually and reversibly.
 
 Features:
 * **Model registry** — every model has metadata (version, schema,

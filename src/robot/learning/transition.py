@@ -1,7 +1,6 @@
 """Transition lifecycle: open/close real state-action-outcome transitions.
 
-This module implements the *transition store* described in the Phase 1
-plan.  A transition is not a single synchronous call — it is a lifecycle:
+A transition is not a single synchronous call — it is a lifecycle:
 
 ::
 

@@ -1,6 +1,6 @@
 """Tests for typed observations and the reward model.
 
-Phase 2: Separate Observation, Action and Reward.
+Separate Observation, Action and Reward.
 
 Tests prove:
 - every action is valid (comes from ActionSpace)

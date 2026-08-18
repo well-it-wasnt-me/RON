@@ -1,8 +1,8 @@
 """Tests for the ExperienceRecorder that bridges events to memory.
 
-Phase 1 semantics: observation events update the encoder only;
-only the transition lifecycle (begin/complete with a real action
-from ActionSpace) produces a stored experience.
+Observation events update the encoder only; only the transition
+lifecycle (begin/complete with a real action from ActionSpace) produces
+a stored experience.
 """
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
 """Integration test: simulation produces experiences that survive restart.
 
-This test satisfies the Phase 1 acceptance criteria:
+Integration test proving the transition lifecycle acceptance criteria:
   observe -> act -> observe result -> store experience -> restart -> load experience
 
 Observation events update the encoder; real actions selected from the
@@ -40,7 +40,7 @@ class TestSimulationExperienceRecording:
         """Full acceptance test: observe -> act -> store -> restart -> load."""
         db_path = tmp_path / "simulation_experiences.db"
 
-        # --- Phase 1: Run simulation and record experiences ---
+        # --- Run simulation and record experiences ---
         bus = InMemoryEventBus()
         sm = StateMachine(bus=bus)
 
@@ -88,7 +88,7 @@ class TestSimulationExperienceRecording:
 
         store.close()
 
-        # --- Phase 2: Simulate restart and verify persistence ---
+        # --- Simulate restart and verify persistence ---
         store2 = SqliteExperienceStore(db_path=db_path)
         episodic2 = EpisodicMemory(store=store2, capacity=100, max_load=100)
         episodic2.load_from_store()

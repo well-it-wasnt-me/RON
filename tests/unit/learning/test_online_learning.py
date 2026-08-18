@@ -1,6 +1,6 @@
 """Tests for controlled online learning.
 
-Phase 9: Controlled Online Learning.
+Controlled Online Learning.
 
 Tests prove:
 - the monitor tracks all required metrics

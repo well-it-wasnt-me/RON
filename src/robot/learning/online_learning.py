@@ -1,7 +1,7 @@
 """Controlled online learning with separate robot and learning processes.
 
-Phase 9 of the production learning plan.  Only now allow production
-data to update the learning system.
+Allow production data to update the learning system — but only after
+all prior safety gates are in place.
 
 Key requirements:
 * Separate processes: ``robot.service`` (perception, behavior, inference,
@@ -41,7 +41,7 @@ _log = get_logger("learning.online")
 class OnlineLearningMonitor:
     """Monitors the online learning system.
 
-    Tracks all the metrics from Phase 9:
+    Tracks all required online learning metrics:
     model version, replay size, training rate, training loss, validation
     loss, reward, action distribution, safety rejections, fallback rate,
     sensor dropout, inference latency, model load failures.

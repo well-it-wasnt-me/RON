@@ -552,12 +552,12 @@ class TestLearningServicePromotionRollback:
 
 
 # ========================================================================
-# Acceptance tests (Phase 6 spec)
+# Acceptance tests
 # ========================================================================
 
 
 class TestLearningServiceAcceptance:
-    """Acceptance tests matching the Phase 6 spec criteria.
+    """Acceptance tests matching the learning service criteria.
 
     Verify:
     1. DeskBot remains responsive while training occurs.
@@ -761,7 +761,7 @@ class TestLearningServiceAcceptance:
         """Full simulation test: robot running + experiences accumulating +
         background training + model improvement.
 
-        This is the key acceptance test that verifies all Phase 6
+        This is the key acceptance test that verifies all learning service
         criteria working together.
         """
         bus = InMemoryEventBus()

@@ -1,6 +1,6 @@
 """Tests for the frozen evaluation dataset.
 
-Phase 5: Build a Frozen Evaluation Dataset.
+Build a Frozen Evaluation Dataset.
 
 Tests prove:
 - the same candidate evaluated twice gets the same result

@@ -1,6 +1,6 @@
 """Tests for the safety-gated action system.
 
-Phase 7: Safety-Gated Actions.
+Safety-Gated Actions.
 
 Tests prove:
 - invalid actions are rejected
