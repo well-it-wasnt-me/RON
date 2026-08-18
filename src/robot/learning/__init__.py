@@ -76,6 +76,12 @@ from robot.learning.state_encoder import (
     state_size,
 )
 from robot.learning.tensor import Tensor
+from robot.learning.transition import (
+    PendingTransition,
+    Transition,
+    TransitionError,
+    TransitionStore,
+)
 from robot.learning.world_model import (
     DEFAULT_ACTION_SIZE,
     SimpleEnvironment,
@@ -124,6 +130,7 @@ __all__ = [
     "MultimodalEnvironment",
     "Network",
     "PatternObservation",
+    "PendingTransition",
     "PreferenceLearner",
     "ReplayBuffer",
     "ResourceLimits",
@@ -136,6 +143,9 @@ __all__ = [
     "TrainingMetrics",
     "TrainingResult",
     "TrainingStatus",
+    "Transition",
+    "TransitionError",
+    "TransitionStore",
     "VisionEncoder",
     "VisionFeatures",
     "WorkingMemory",

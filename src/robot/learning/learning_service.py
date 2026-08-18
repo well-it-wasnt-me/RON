@@ -358,8 +358,10 @@ class LearningService:
         )
 
         # Enforce model size limits.
-        for label, model in [("current_world_model", self.current_world_model),
-                             ("candidate_world_model", self.candidate_world_model)]:
+        for label, model in [
+            ("current_world_model", self.current_world_model),
+            ("candidate_world_model", self.candidate_world_model),
+        ]:
             param_count = model.param_count()
             if param_count > self.resource_limits.max_model_params:
                 raise ValueError(
@@ -384,6 +386,7 @@ class LearningService:
         # whether from events or manual recording, updates the learning counters.
         self.recorder = ExperienceRecorder(
             bus=self.bus,
+            action_space=self.action_space,
             encoder=self.encoder,
             working_memory=self.working_memory,
             replay_buffer=self.replay_buffer,
@@ -549,13 +552,9 @@ class LearningService:
                 promoted = self.checkpoint_mgr.should_promote(candidate_loss, current_loss)
 
             if promoted:
-                self._promote_model(
-                    evaluation.candidate_loss, evaluation.current_loss
-                )
+                self._promote_model(evaluation.candidate_loss, evaluation.current_loss)
             else:
-                self._rollback_model(
-                    evaluation.current_loss, evaluation.candidate_loss
-                )
+                self._rollback_model(evaluation.current_loss, evaluation.candidate_loss)
 
             # Update status
             duration = time.monotonic() - start_time
@@ -709,6 +708,45 @@ class LearningService:
         """
         assert self.recorder is not None
         return self.recorder.record(state, action, reward, next_state, metadata)
+
+    def record_transition(
+        self,
+        action_index: int,
+        reward: float | None = None,
+        done: bool = False,
+        execution_success: bool = True,
+        execution_failure_reason: str = "",
+        execution_id: str | None = None,
+        policy_version: str = "deterministic",
+        metadata: dict[str, Any] | None = None,
+    ) -> Any:
+        """Record a real transition through the transition lifecycle.
+
+        Opens a transition with the current encoder state and the given
+        action index, then immediately completes it with the current
+        encoder state as next_state.  This is the preferred way to
+        record experiences — it validates action identity and records
+        execution metadata.
+
+        For live use, prefer calling recorder.begin_transition()
+        before the action executes and recorder.complete_transition()
+        after the outcome is observed, so next_state reflects the
+        real post-execution observation.
+        """
+        assert self.recorder is not None
+        pending = self.recorder.begin_transition(
+            action_index=action_index,
+            execution_id=execution_id,
+            policy_version=policy_version,
+        )
+        return self.recorder.complete_transition(
+            pending,
+            reward=reward,
+            done=done,
+            execution_success=execution_success,
+            execution_failure_reason=execution_failure_reason,
+            metadata=metadata,
+        )
 
     def load_latest_checkpoint(self) -> bool:
         """Try to load the latest checkpoint for the current model.

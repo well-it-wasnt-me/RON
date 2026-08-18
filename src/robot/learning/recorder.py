@@ -1,17 +1,33 @@
 """Experience recorder that bridges DeskBot events to learning memory.
 
-:class:`ExperienceRecorder` subscribes to the event bus, observes
-state transitions and actions, and records them as :class:`Experience`
-tuples in the memory layers.
+The recorder subscribes to the event bus and keeps the :class:`StateEncoder`
+in sync with the robot's current observation.  Crucially, **observation
+events** (``FaceDetected``, ``SpeechRecognized``, ``EmotionChanged``,
+``IdleTimeout``, …) update the encoder state but do **not** create
+transitions.  Only a real action selected from the :class:`ActionSpace`
+and executed on the robot produces a transition via the
+:class:`TransitionStore` lifecycle:
 
-The recorder uses :class:`StateEncoder` to convert the current robot
-context into a fixed-size numerical vector suitable for neural-network
-training.
+::
+
+    OBSERVE state_t
+        |
+    transition_store.begin(state=state_t, action_index=Y)
+        |
+    EXECUTE action Y
+        |
+    OBSERVE state_t+1
+        |
+    pending.complete(next_state=state_t+1, reward=R, done=…)
+        |
+    STORE completed transition → Experience
+
+This prevents the class of fake transitions where two consecutive
+states are encoded without an intervening action.
 """
 
 from __future__ import annotations
 
-import contextlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -26,95 +42,31 @@ from robot.events.events import (
     SpeechRecognized,
     StateChanged,
 )
+from robot.learning.action_learning import ActionSpace, deskbot_action_space
 from robot.learning.experience import EpisodicMemory, Experience, ReplayBuffer, WorkingMemory
 from robot.learning.state_encoder import StateEncoder
+from robot.learning.transition import PendingTransition, Transition, TransitionStore
 from robot.logging import get_logger
 
 _log = get_logger("learning.recorder")
-
-
-# ---------------------------------------------------------------------------
-# Action encoding
-# ---------------------------------------------------------------------------
-
-# Map known event types to indices (must be stable across versions)
-_EVENT_TYPES = [
-    "StateChanged",
-    "EmotionChanged",
-    "ServoMoved",
-    "FaceDetected",
-    "SpeechRecognized",
-    "IdleTimeout",
-]
-
-
-def _action_vector_from_event(event_type: str, event: Any) -> list[float]:
-    """Build a flat float vector describing an action.
-
-    Current layout (v0):
-        [event_type_onehot(6), event_params...]
-
-    This is a minimal encoding; the full :class:`ActionEncoder` will
-    be built in Phase 5.
-    """
-    onehot = [0.0] * len(_EVENT_TYPES)
-    if event_type in _EVENT_TYPES:
-        onehot[_EVENT_TYPES.index(event_type)] = 1.0
-
-    # Encode key parameters
-    params: list[float] = []
-    if isinstance(event, EmotionChanged):
-        from robot.events.events import EmotionName
-
-        emo_onehot = [0.0] * len(EmotionName)
-        with contextlib.suppress(ValueError, IndexError):
-            emo_onehot[list(EmotionName).index(event.current)] = 1.0
-        params.extend(emo_onehot)
-        params.append(float(event.intensity))
-    elif isinstance(event, ServoMoved):
-        # Normalise angle to [-1, 1] range (assuming ±180 range)
-        params.append(event.angle / 180.0)
-    elif isinstance(event, FaceDetected):
-        params.extend([event.x, event.y, event.confidence])
-    elif isinstance(event, SpeechRecognized):
-        # Simple presence signal
-        params.append(1.0)
-        params.append(event.confidence)
-    elif isinstance(event, IdleTimeout):
-        params.append(event.seconds_idle / 60.0)  # normalise to minutes
-
-    return onehot + params
-
-
-# ---------------------------------------------------------------------------
-# Experience recorder
-# ---------------------------------------------------------------------------
 
 
 @dataclass(slots=True)
 class ExperienceRecorder:
     """Bridges DeskBot events to experience memory.
 
-    Subscribes to the event bus, observes state transitions and
-    actions, and records them as :class:`Experience` tuples in the
-    memory layers.
-
-    The recorder maintains a :class:`StateEncoder` that captures the
-    robot's current state.  When an event arrives, the encoder is
-    updated and the current state vector is recorded.
-
-    When ``on_experience_recorded`` is provided, the callback is
-    invoked after each experience is stored, allowing an external
-    system (e.g. :class:`LearningService`) to update its counters
-    and trigger downstream processing.  This ensures a single
-    authoritative ingestion path: every experience — whether
-    recorded from an event or manually — flows through the same
-    callback.
+    Subscribes to the event bus and keeps the encoder in sync with the
+    robot's current observation.  Observation events update the encoder
+    state; only real actions produce transitions through the
+    :class:`TransitionStore`.
 
     Parameters
     ----------
     bus:
         The event bus to subscribe to.
+    action_space:
+        The action space actions are selected from.  Defaults to
+        :func:`deskbot_action_space`.
     encoder:
         The state encoder. If None, a default one is created.
     working_memory:
@@ -125,25 +77,33 @@ class ExperienceRecorder:
         Persistent episodic memory (may be None if persistence is
         disabled).
     default_reward:
-        Default reward for experiences where no explicit reward
-        is provided.
+        Default reward for transitions where no explicit reward is
+        provided.
     on_experience_recorded:
         Optional callback invoked after each experience is stored.
         Receives the :class:`Experience` as its sole argument.
     """
 
     bus: InMemoryEventBus
+    action_space: ActionSpace = field(default_factory=deskbot_action_space)
     encoder: StateEncoder = field(default_factory=StateEncoder)
     working_memory: WorkingMemory = field(default_factory=WorkingMemory)
     replay_buffer: ReplayBuffer = field(default_factory=ReplayBuffer)
     episodic_memory: EpisodicMemory | None = None
     default_reward: float = 0.0
     on_experience_recorded: Callable[[Experience], None] | None = field(default=None, repr=False)
-    _pending_state: list[float] | None = field(default=None, init=False, repr=False)
-    _pending_action: list[float] | None = field(default=None, init=False, repr=False)
-    _pending_metadata: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
+
+    # Transition store (created in __post_init__)
+    transition_store: TransitionStore = field(default=None, init=False, repr=False)  # type: ignore[assignment]
     _subscribed: bool = field(default=False, init=False, repr=False)
 
+    def __post_init__(self) -> None:
+        self.transition_store = TransitionStore(
+            action_space=self.action_space,
+            on_transition_completed=self._on_transition_completed,
+        )
+
+    # ------------------------------------------------------------------ lifecycle
     def attach(self) -> None:
         """Subscribe to the event bus."""
         if self._subscribed:
@@ -167,13 +127,9 @@ class ExperienceRecorder:
         self.bus.unsubscribe(IdleTimeout, self._on_idle_timeout)
         self._subscribed = False
 
+    # ------------------------------------------------------------------ context
     def update_context(self, **kwargs: Any) -> None:
-        """Manually update the encoder context.
-
-        Accepts the same keyword arguments as :class:`StateEncoder`
-        attributes: ``state``, ``emotions``, ``servos``, ``personality``,
-        ``vision``, ``audio``, ``idle_seconds``, ``recent_rewards``.
-        """
+        """Manually update the encoder context."""
         for key, value in kwargs.items():
             if key == "state":
                 self.encoder.update_state(value)
@@ -190,10 +146,87 @@ class ExperienceRecorder:
             elif key == "idle_seconds":
                 self.encoder.idle_seconds = value
             else:
-                # Store anything else in the encoder's internal dict
-                # for backward compatibility
                 pass
 
+    # ------------------------------------------------------------------ transition lifecycle
+    def begin_transition(
+        self,
+        action_index: int,
+        execution_id: str | None = None,
+        policy_version: str = "deterministic",
+    ) -> PendingTransition:
+        """Open a transition by snapshotting the current state and action.
+
+        The current encoder state is captured as ``state_t``.  After the
+        action is executed on the robot and the outcome is observed, call
+        :meth:`complete_transition` to close the transition.
+
+        Parameters
+        ----------
+        action_index:
+            Index of the selected action in the configured action space.
+        execution_id:
+            Optional identifier for the hardware execution.
+        policy_version:
+            Version string of the policy that selected the action.
+
+        Returns
+        -------
+        PendingTransition
+            The open transition.
+        """
+        state = self.encoder.encode()
+        return self.transition_store.begin(
+            state=state,
+            action_index=action_index,
+            execution_id=execution_id,
+            policy_version=policy_version,
+        )
+
+    def complete_transition(
+        self,
+        pending: PendingTransition,
+        reward: float | None = None,
+        done: bool = False,
+        execution_success: bool = True,
+        execution_failure_reason: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> Transition:
+        """Close a pending transition after the action has been executed.
+
+        Captures the current encoder state as ``state_t+1`` (the
+        observation after the outcome).  The completed transition is
+        stored as an :class:`Experience` in all configured memory layers
+        and the ``on_experience_recorded`` callback is invoked.
+
+        Parameters
+        ----------
+        pending:
+            The open transition returned by :meth:`begin_transition`.
+        reward:
+            Scalar reward.  Defaults to :attr:`default_reward` when
+            not provided.
+        done:
+            Whether the episode terminated.
+        execution_success:
+            Whether the action executed successfully on hardware.
+        execution_failure_reason:
+            Human-readable reason on failure.
+        metadata:
+            Additional metadata forwarded into the stored transition.
+        """
+        next_state = self.encoder.encode()
+        r = self.default_reward if reward is None else reward
+        return pending.complete(
+            next_state=next_state,
+            reward=r,
+            done=done,
+            execution_success=execution_success,
+            execution_failure_reason=execution_failure_reason,
+            metadata=metadata,
+        )
+
+    # ------------------------------------------------------------------ manual record (legacy / validated)
     def record(
         self,
         state: list[float],
@@ -204,8 +237,14 @@ class ExperienceRecorder:
     ) -> Experience:
         """Manually record an experience tuple.
 
-        This is the primary API for recording experiences.  It stores
-        the experience in all configured memory layers.
+        This bypasses the transition lifecycle and stores an experience
+        directly.  It is retained for backward compatibility and for
+        loading pre-collected data.  The action vector is stored as-is.
+
+        .. deprecated::
+            Prefer the transition lifecycle (:meth:`begin_transition` /
+            :meth:`complete_transition`) which validates action
+            identity.
         """
         exp = Experience(
             timestamp=datetime.now(tz=UTC),
@@ -218,30 +257,11 @@ class ExperienceRecorder:
         self._store(exp)
         return exp
 
-    def record_with_encoder(
-        self,
-        action: list[float],
-        reward: float,
-        metadata: dict[str, Any] | None = None,
-    ) -> Experience:
-        """Record an experience using the current encoder state.
-
-        Snapshots the current encoder state as ``state``, applies the
-        action, then snapshots the updated encoder state as
-        ``next_state``.  This is the preferred way to record during
-        event processing.
-        """
-        state = self.encoder.encode()
-        # Store the reward for the encoder's reward history
-        self.encoder.push_reward(reward)
-        next_state = self.encoder.encode()
-        return self.record(
-            state=state,
-            action=action,
-            reward=reward,
-            next_state=next_state,
-            metadata=metadata or {},
-        )
+    # ------------------------------------------------------------------ storage
+    def _on_transition_completed(self, transition: Transition) -> None:
+        """Store a completed transition as an Experience in all memory layers."""
+        exp = transition.to_experience()
+        self._store(exp)
 
     def _store(self, experience: Experience) -> None:
         """Store an experience in all memory layers and notify the callback."""
@@ -252,65 +272,21 @@ class ExperienceRecorder:
         if self.on_experience_recorded is not None:
             self.on_experience_recorded(experience)
 
-    # ------------------------------------------------------------------ handlers
+    # ------------------------------------------------------------------ handlers (observations only)
     async def _on_state_changed(self, event: StateChanged) -> None:
-        """Handle robot state transitions."""
+        """Observe robot state transitions — updates encoder only."""
         self.encoder.update_state(event.current)
 
-        # If we have a pending action, complete the experience
-        if self._pending_state is not None and self._pending_action is not None:
-            next_state = self.encoder.encode()
-            self.record(
-                state=self._pending_state,
-                action=self._pending_action,
-                reward=self.default_reward,
-                next_state=next_state,
-                metadata=self._pending_metadata,
-            )
-            self._pending_state = None
-            self._pending_action = None
-            self._pending_metadata = {}
-
-        # Record state change as an action
-        action = _action_vector_from_event("StateChanged", event)
-        self._pending_state = self.encoder.encode()
-        self._pending_action = action
-        self._pending_metadata = {
-            "event_type": "StateChanged",
-            "previous_state": event.previous.value,
-            "current_state": event.current.value,
-        }
-
     async def _on_emotion_changed(self, event: EmotionChanged) -> None:
-        """Handle emotion changes."""
-        # Snapshot state BEFORE applying the action so the experience
-        # captures the transition (previous_state -> action -> next_state).
-        state = self.encoder.encode()
+        """Observe emotion changes — updates encoder only."""
         self.encoder.update_emotion(event.current, event.intensity)
-        action = _action_vector_from_event("EmotionChanged", event)
-        self.encoder.push_reward(self.default_reward)
-        next_state = self.encoder.encode()
-        self.record(
-            state=state,
-            action=action,
-            reward=self.default_reward,
-            next_state=next_state,
-            metadata={
-                "event_type": "EmotionChanged",
-                "previous": event.previous.value,
-                "current": event.current.value,
-                "intensity": event.intensity,
-            },
-        )
 
     async def _on_servo_moved(self, event: ServoMoved) -> None:
-        """Handle servo movements."""
+        """Observe servo movements — updates encoder only."""
         self.encoder.update_servo(event.name, event.angle)
 
     async def _on_face_detected(self, event: FaceDetected) -> None:
-        """Handle face detection events."""
-        # Snapshot state BEFORE applying the action.
-        state = self.encoder.encode()
+        """Observe face detection — updates encoder only, no transition."""
         self.encoder.update_vision(
             face_detected=True,
             face_x=event.x,
@@ -318,59 +294,17 @@ class ExperienceRecorder:
             face_confidence=event.confidence,
             face_count=1,
         )
-        action = _action_vector_from_event("FaceDetected", event)
-        self.encoder.push_reward(0.1)  # small positive reward for seeing a face
-        next_state = self.encoder.encode()
-        self.record(
-            state=state,
-            action=action,
-            reward=0.1,  # small positive reward for seeing a face
-            next_state=next_state,
-            metadata={
-                "event_type": "FaceDetected",
-                "x": event.x,
-                "y": event.y,
-                "confidence": event.confidence,
-            },
-        )
 
     async def _on_speech_recognized(self, event: SpeechRecognized) -> None:
-        """Handle speech recognition events."""
-        # Snapshot state BEFORE applying the action.
-        state = self.encoder.encode()
-        action = _action_vector_from_event("SpeechRecognized", event)
-        self.encoder.push_reward(0.05)  # small reward for interaction
-        next_state = self.encoder.encode()
-        self.record(
-            state=state,
-            action=action,
-            reward=0.05,  # small reward for interaction
-            next_state=next_state,
-            metadata={
-                "event_type": "SpeechRecognized",
-                "text": event.text,
-                "confidence": event.confidence,
-            },
-        )
+        """Observe speech recognition — updates encoder only, no transition."""
+        # Speech recognition is an observation, not an action.
+        # The encoder does not have a direct speech field, but we can
+        # mark interaction state.  No transition is created.
+        pass
 
     async def _on_idle_timeout(self, event: IdleTimeout) -> None:
-        """Handle idle timeout events."""
-        # Snapshot state BEFORE applying the action.
-        state = self.encoder.encode()
+        """Observe idle timeout — updates encoder only, no transition."""
         self.encoder.update_idle(event.seconds_idle)
-        action = _action_vector_from_event("IdleTimeout", event)
-        self.encoder.push_reward(-0.1)  # small negative reward for idling
-        next_state = self.encoder.encode()
-        self.record(
-            state=state,
-            action=action,
-            reward=-0.1,  # small negative reward for idling
-            next_state=next_state,
-            metadata={
-                "event_type": "IdleTimeout",
-                "seconds_idle": event.seconds_idle,
-            },
-        )
 
 
 __all__ = ["ExperienceRecorder"]
