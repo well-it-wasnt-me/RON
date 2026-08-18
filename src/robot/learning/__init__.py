@@ -21,6 +21,13 @@ from robot.learning.action_learning import (
     RewardFunction,
     deskbot_action_space,
 )
+from robot.learning.deterministic_encoder import (
+    DEFAULT_HISTORY_LENGTH as DETERMINISTIC_HISTORY_LENGTH,
+    DETERMINISTIC_ENCODER_VERSION,
+    DeterministicMultimodalEncoder,
+    ObservationContext,
+    deterministic_encoding_size,
+)
 from robot.learning.experience import (
     EpisodicMemory,
     Experience,
@@ -107,6 +114,8 @@ __all__ = [
     "AUDIO_ENCODER_OUTPUT",
     "DEFAULT_ACTION_SIZE",
     "DEFAULT_HISTORY_LENGTH",
+    "DETERMINISTIC_ENCODER_VERSION",
+    "DETERMINISTIC_HISTORY_LENGTH",
     "ENCODER_VERSION",
     "MLP",
     "MULTIMODAL_BASE_SIZE",
@@ -126,6 +135,7 @@ __all__ = [
     "CheckpointConfig",
     "CheckpointManager",
     "DefaultValidator",
+    "DeterministicMultimodalEncoder",
     "EpisodicMemory",
     "EvaluationResult",
     "EvaluationThresholds",
@@ -143,6 +153,7 @@ __all__ = [
     "MultimodalEnvironment",
     "Network",
     "Observation",
+    "ObservationContext",
     "PatternObservation",
     "PendingTransition",
     "PreferenceLearner",
@@ -170,6 +181,7 @@ __all__ = [
     "WorkingMemory",
     "WorldModel",
     "deskbot_action_space",
+    "deterministic_encoding_size",
     "event_to_observation_update",
     "multimodal_size",
     "state_layout",
