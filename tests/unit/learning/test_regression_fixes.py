@@ -1,14 +1,17 @@
 """Regression tests for fixes from the comprehensive code review.
 
-Each test verifies a specific fix documented in to_fix.md:
+fix(learning): correct gradient normalization, recorder state ordering, and thread safety
 
-* BUG-1: Gradient normalization across batch sizes
-* BUG-2: Tensor hash stability after mutation
-* BUG-3: Network.predict() cache behavior
-* BUG-4: Correct ordering of state and next_state around encoder updates
-* DESIGN-1: Enforcement of max_model_params
-* THREAD-1: Concurrent SQLite access from multiple threads
-* DESIGN-5: Safety manager integration in training cycle
+- Removed double batch_size division in DenseLayer.backward
+- Tensor unhashable to avoid dict/set corruption
+- Fix Network.predict docstring
+- Snapshot state before encoder updates
+- Enforce max_model_params
+- Replace temp model promotion with in-memory weight copy
+- Use process_time for CPU throttling
+- Vectorize ActionLearner.train_batch
+- Integration of LearningSafetyManager
+- Adding threading.Lock to SqliteExperienceStore
 """
 
 from __future__ import annotations
@@ -131,8 +134,7 @@ class TestGradientNormalization:
 
             # Both batch sizes should converge (loss decreased)
             assert final_loss < initial_loss, (
-                f"batch={batch_size}: loss did not decrease "
-                f"({initial_loss} -> {final_loss})"
+                f"batch={batch_size}: loss did not decrease ({initial_loss} -> {final_loss})"
             )
 
 
@@ -256,9 +258,7 @@ class TestRecorderStateOrdering:
         state_happy = exp.state[1]  # happy emotion intensity
         next_state_happy = exp.next_state[1]
 
-        assert state_happy == 0.0, (
-            f"State should have happy=0.0 (before change), got {state_happy}"
-        )
+        assert state_happy == 0.0, f"State should have happy=0.0 (before change), got {state_happy}"
         assert next_state_happy == 0.9, (
             f"Next state should have happy=0.9 (after change), got {next_state_happy}"
         )
