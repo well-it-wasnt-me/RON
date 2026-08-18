@@ -100,6 +100,12 @@ from robot.learning.safety import (
     LearningSafetyManager,
     ModelEvaluator,
 )
+from robot.learning.shadow_policy import (
+    PolicyMode,
+    ShadowLogEntry,
+    ShadowMetrics,
+    ShadowPolicyController,
+)
 from robot.learning.state_encoder import (
     ENCODER_VERSION,
     STATE_SIZE,
@@ -177,6 +183,7 @@ __all__ = [
     "ObservationContext",
     "PatternObservation",
     "PendingTransition",
+    "PolicyMode",
     "PreferenceLearner",
     "PromotionRule",
     "ReplayBuffer",
@@ -187,6 +194,9 @@ __all__ = [
     "RewardFunction",
     "RewardModel",
     "RobotObservation",
+    "ShadowLogEntry",
+    "ShadowMetrics",
+    "ShadowPolicyController",
     "SimpleEnvironment",
     "SqliteExperienceStore",
     "StateEncoder",
