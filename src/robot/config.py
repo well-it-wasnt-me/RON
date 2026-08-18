@@ -331,14 +331,32 @@ class MicrophoneConfig(BaseSettings):
 
 
 class CameraConfig(BaseSettings):
-    """Camera capture configuration."""
+    """Camera capture configuration.
+
+    ``backend`` selects which camera driver to use:
+
+    * ``"mock"`` - in-memory camera for tests and headless dev.
+    * ``"usb"`` - :class:`~robot.hardware.sensors.usb_camera.UsbCamera`
+      over a local V4L2 device (e.g. USB webcam).
+    * ``"rtsp"`` - :class:`~robot.hardware.sensors.rtsp_camera.RtspCamera`
+      over an RTSP stream.  Requires ``rtsp_url``.
+
+    When ``backend`` is ``"rtsp"``, set ``rtsp_url`` to the full RTSP
+    stream URL (e.g. ``rtsp://admin:pass@192.168.1.50:554/stream``).
+    The ``device`` field is ignored in this mode.
+    """
 
     model_config = SettingsConfigDict(env_prefix="DESKBOT_CAMERA__", extra="ignore")
 
+    backend: Literal["mock", "usb", "rtsp"] = "mock"
     device: int = Field(default=0, ge=0)
     width: int = Field(default=640, gt=0)
     height: int = Field(default=480, gt=0)
     fps: int = Field(default=30, gt=0)
+    rtsp_url: str = Field(
+        default="",
+        description="RTSP stream URL (required when backend='rtsp').",
+    )
 
 
 class PerceptionConfig(BaseSettings):

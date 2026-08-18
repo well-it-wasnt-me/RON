@@ -133,10 +133,14 @@ microphone:
 
 # -- Camera ----------------------------------------------------------------
 camera:
+  # mock | usb | rtsp
+  backend: mock
   device: 0
   width: 640
   height: 480
   fps: 30
+  # RTSP stream URL (required when backend=rtsp)
+  # rtsp_url: rtsp://admin:pass@192.168.1.50:554/stream
 
 # -- Perception (face detection) -------------------------------------------
 perception:
