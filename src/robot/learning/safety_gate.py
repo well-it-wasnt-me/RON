@@ -124,6 +124,14 @@ class SafetyGate:
     _last_action_per_type: dict[str, float] = field(default_factory=dict, init=False, repr=False)
     _override_active: bool = field(default=False, init=False, repr=False)
 
+    def __post_init__(self) -> None:
+        """Validate safety-critical configuration."""
+        if not (0 <= self.fallback_action < self.action_space.size):
+            raise ValueError(
+                f"fallback_action {self.fallback_action} out of range "
+                f"for action space size {self.action_space.size}"
+            )
+
     @property
     def override_active(self) -> bool:
         """Whether the emergency override is active (disables learned control)."""
@@ -399,7 +407,18 @@ class SafeActionExecutor:
             self._fallback_count += 1
             actual = result.action_index
         elif self.fallback_policy is not None and state is not None:
-            actual = self.fallback_policy(state)
+            candidate = self.fallback_policy(state)
+            fallback_result = self.safety_gate.validate(candidate, state)
+
+            if fallback_result.allowed:
+                actual = candidate
+            else:
+                _log.warning(
+                    "safe_executor.invalid_fallback_policy_action",
+                    proposed=candidate,
+                    reason=fallback_result.reason,
+                )
+                actual = self.safety_gate.fallback_action
         else:
             actual = self.safety_gate.fallback_action
 

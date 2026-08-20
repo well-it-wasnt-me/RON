@@ -231,3 +231,49 @@ class TestCannotBypassSafety:
         # An invalid action is always rejected
         result = gate.validate(action_index=-1)
         assert not result.allowed
+
+
+class TestFallbackValidationRegression:
+    """Regression tests: fallback actions must not bypass the safety gate."""
+
+
+    def test_invalid_configured_fallback_never_reaches_hardware(
+        self,
+        action_space: ActionSpace,
+        executed_actions: list[int],
+        executor: Callable[[int], None],
+    ) -> None:
+        with pytest.raises(ValueError, match="fallback_action"):
+            SafetyGate(
+                action_space=action_space,
+                fallback_action=999,
+                cooldown_s=0.0,
+            )
+
+        assert executed_actions == []
+
+
+
+
+
+    def test_fallback_policy_cannot_bypass_gate(
+        self,
+        action_space: ActionSpace,
+        executed_actions: list[int],
+        executor: Callable[[int], None],
+    ) -> None:
+        gate = SafetyGate(
+            action_space=action_space,
+            fallback_action=0,
+            cooldown_s=0.0,
+        )
+
+        safe = SafeActionExecutor(
+            safety_gate=gate,
+            executor=executor,
+            fallback_policy=lambda state: 999,
+        )
+
+        safe.execute(action_index=999, state=[0.0])
+
+        assert executed_actions == [0]
