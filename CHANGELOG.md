@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v2.0.2 (2026-08-21)
+
+### Bug Fixes
+
+- Safety gate ([#7](https://github.com/well-it-wasnt-me/RON/pull/7),
+  [`2e518b5`](https://github.com/well-it-wasnt-me/RON/commit/2e518b54030ff53b50b0d5f9f6410da5082157c0))
+
+
 ## v2.0.1 (2026-08-18)
 
 ### Bug Fixes
