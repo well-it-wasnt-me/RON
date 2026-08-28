@@ -28,7 +28,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.12"
 
       - name: Install uv
         run: pip install uv
@@ -46,7 +46,7 @@ jobs:
 
       - name: Install OpenCV headless (for perception tests)
         if: matrix.check == 'test'
-        run: uv pip install opencv-python-headless || true
+        run: uv pip install opencv-python-headless
 
       - name: Run tests
         if: matrix.check == 'test'
