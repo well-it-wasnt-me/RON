@@ -26,7 +26,9 @@ import wave
 from collections.abc import AsyncIterator
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
+
+from robot.api.security import require_api_key
 from fastapi.responses import Response, StreamingResponse
 
 from robot.api.schemas import (
@@ -428,7 +430,7 @@ async def mic_level(request: Request) -> MicLevelResponse:
 
 
 @router.post("/mic/test", summary="Record and play back a mic test")
-async def mic_test(request: Request, body: MicTestRequest) -> Response:
+async def mic_test(request: Request, body: MicTestRequest, _: None = Depends(require_api_key)) -> Response:
     """Record *duration* seconds from a temporary microphone and return WAV.
 
     A **temporary** microphone instance is created with the same settings
@@ -647,7 +649,7 @@ async def _list_sd_devices(kind: str) -> AudioDevicesResponse:
 
 
 @router.post("/audio/tone", summary="Play a test tone", response_model=ToneResponse)
-async def audio_tone(request: Request, body: ToneRequest) -> ToneResponse:
+async def audio_tone(request: Request, body: ToneRequest, _: None = Depends(require_api_key)) -> ToneResponse:
     """Play a sine-wave test tone through the current audio output."""
     bridge = _bridge(request)
     audio = getattr(bridge, "audio", None) if bridge else None
@@ -676,7 +678,7 @@ async def audio_tone(request: Request, body: ToneRequest) -> ToneResponse:
 )
 async def audio_test_device(
     request: Request, body: AudioDeviceTestRequest
-) -> AudioTestDeviceResponse:
+, _: None = Depends(require_api_key)) -> AudioTestDeviceResponse:
     """Play a test tone through a specific output device (temporary).
 
     This creates a temporary :class:`UsbSpeaker` for the given device,
@@ -722,7 +724,7 @@ async def audio_test_device(
     summary="Switch the active audio output device",
     response_model=AudioSwitchResponse,
 )
-async def audio_switch(request: Request, body: AudioSwitchRequest) -> AudioSwitchResponse:
+async def audio_switch(request: Request, body: AudioSwitchRequest, _: None = Depends(require_api_key)) -> AudioSwitchResponse:
     """Switch the active audio output to a different device at runtime.
 
     Creates a new :class:`UsbSpeaker` for the requested device and swaps
@@ -777,7 +779,7 @@ async def audio_switch(request: Request, body: AudioSwitchRequest) -> AudioSwitc
 
 
 @router.post("/audio/stop", summary="Stop audio playback", response_model=ToneResponse)
-async def audio_stop(request: Request) -> ToneResponse:
+async def audio_stop(request: Request, _: None = Depends(require_api_key)) -> ToneResponse:
     """Stop whatever is currently playing on the audio output."""
     bridge = _bridge(request)
     audio = getattr(bridge, "audio", None) if bridge else None
@@ -794,7 +796,7 @@ async def audio_stop(request: Request) -> ToneResponse:
 # TTS
 # ---------------------------------------------------------------------------
 @router.post("/tts/test", summary="Speak a test phrase", response_model=TTSTestResponse)
-async def tts_test(request: Request, body: TTSTestRequest) -> TTSTestResponse:
+async def tts_test(request: Request, body: TTSTestRequest, _: None = Depends(require_api_key)) -> TTSTestResponse:
     """Speak a test phrase through the configured TTS engine."""
     bridge = _bridge(request)
     if bridge is None or not bridge.is_ready:
@@ -826,7 +828,7 @@ async def tts_test(request: Request, body: TTSTestRequest) -> TTSTestResponse:
 # LLM
 # ---------------------------------------------------------------------------
 @router.post("/llm/test", summary="Send a test prompt to the LLM", response_model=LLMTestResponse)
-async def llm_test(request: Request, body: LLMTestRequest) -> LLMTestResponse:
+async def llm_test(request: Request, body: LLMTestRequest, _: None = Depends(require_api_key)) -> LLMTestResponse:
     """Send a test prompt to the LLM and return the response text."""
     bridge = _bridge(request)
     conv = getattr(bridge, "conversation", None) if bridge else None
@@ -860,7 +862,7 @@ async def llm_test(request: Request, body: LLMTestRequest) -> LLMTestResponse:
 @router.post(
     "/sound-effect/{name}", summary="Play a sound effect", response_model=SoundEffectResponse
 )
-async def play_sound_effect(request: Request, name: str) -> SoundEffectResponse:
+async def play_sound_effect(request: Request, name: str, _: None = Depends(require_api_key)) -> SoundEffectResponse:
     """Play a named sound effect (e.g. ``talk``, ``thinking``, ``cute``)."""
     bridge = _bridge(request)
     sfx = getattr(bridge, "sound_effects", None) if bridge else None

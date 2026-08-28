@@ -33,15 +33,13 @@ async def get_config(request: Request) -> ConfigResponse:
 
     Sensitive fields (API keys) are masked.
     """
+    from robot.api.security import mask_secrets_in_dict
     from robot.config import AppSettings
 
     settings: AppSettings = getattr(request.app.state, "settings", None) or AppSettings()
     config_dict = settings.model_dump()
-    # Mask sensitive fields
-    if "llm" in config_dict and "api_key" in config_dict["llm"]:
-        key = config_dict["llm"]["api_key"]
-        if key:
-            config_dict["llm"]["api_key"] = key[:4] + "****" if len(key) > 4 else "****"
+    # Mask all secret fields (api_key, bot_token, password, access_key, …) centrally.
+    config_dict = mask_secrets_in_dict(config_dict)
     return ConfigResponse.model_validate(config_dict)
 
 

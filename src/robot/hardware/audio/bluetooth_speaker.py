@@ -227,6 +227,8 @@ class BluetoothSpeaker:
                 )
         except subprocess.TimeoutExpired:
             proc.kill()
+            with contextlib.suppress(Exception):
+                proc.wait(timeout=5)
             _log.warning("audio.playback.failed", reason="timeout")
             return
         except FileNotFoundError:

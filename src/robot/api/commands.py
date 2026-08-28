@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
+
+from robot.api.security import require_api_key
 
 from robot.api.schemas import (
     CommandResponse,
@@ -19,7 +21,7 @@ router = APIRouter()
 
 
 @router.post("/speak", summary="Speak text", response_model=CommandResponse)
-async def speak(request: Request, body: SpeakRequest) -> CommandResponse:
+async def speak(request: Request, body: SpeakRequest, _: None = Depends(require_api_key)) -> CommandResponse:
     """Send text through the conversation pipeline (LLM -> TTS).
 
     Uses :meth:`ConversationService.handle_user_text` so typed input
@@ -37,7 +39,7 @@ async def speak(request: Request, body: SpeakRequest) -> CommandResponse:
 
 
 @router.post("/speak-direct", summary="Speak text directly via TTS", response_model=CommandResponse)
-async def speak_direct(request: Request, body: SpeakRequest) -> CommandResponse:
+async def speak_direct(request: Request, body: SpeakRequest, _: None = Depends(require_api_key)) -> CommandResponse:
     """Speak text directly through TTS without going through the LLM pipeline.
 
     This bypasses STT and LLM entirely - just synthesizes the given text.
@@ -60,7 +62,7 @@ async def speak_direct(request: Request, body: SpeakRequest) -> CommandResponse:
 
 
 @router.post("/emotion", summary="Set emotion", response_model=CommandResponse)
-async def set_emotion(request: Request, body: EmotionRequest) -> CommandResponse:
+async def set_emotion(request: Request, body: EmotionRequest, _: None = Depends(require_api_key)) -> CommandResponse:
     """Set the robot's current emotion."""
     from robot.events.events import EmotionChanged, EmotionName
 
@@ -80,7 +82,7 @@ async def set_emotion(request: Request, body: EmotionRequest) -> CommandResponse
 
 
 @router.post("/state", summary="Transition state", response_model=CommandResponse)
-async def set_state(request: Request, body: StateRequest) -> CommandResponse:
+async def set_state(request: Request, body: StateRequest, _: None = Depends(require_api_key)) -> CommandResponse:
     """Transition the robot to a new state."""
     from robot.behavior.state_machine import RobotState
 

@@ -238,7 +238,10 @@ class HomeAssistantBridge:
                 )
                 self._pending_tasks.append(t)
                 t.add_done_callback(
-                    lambda _: self._pending_tasks.remove(t) if t in self._pending_tasks else None
+                    lambda _: (
+                    self._pending_tasks.remove(t) if t in self._pending_tasks else None,
+                    _log.warning("mqtt.task_exception", error=str(t.exception())) if t.exception() else None,
+                )
                 )
             except ValueError:
                 _log.warning("ha_bridge.invalid_emotion", emotion=data.get("emotion", payload))
@@ -253,7 +256,10 @@ class HomeAssistantBridge:
                 )
                 self._pending_tasks.append(t)
                 t.add_done_callback(
-                    lambda _: self._pending_tasks.remove(t) if t in self._pending_tasks else None
+                    lambda _: (
+                    self._pending_tasks.remove(t) if t in self._pending_tasks else None,
+                    _log.warning("mqtt.task_exception", error=str(t.exception())) if t.exception() else None,
+                )
                 )
             except ValueError:
                 _log.warning("ha_bridge.invalid_state", state=data.get("state", payload))

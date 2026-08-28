@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends
+
+from robot.api.security import require_api_key, HTTPException, Request
 
 from robot.api.schemas import (
     ForceTrainResponse,
@@ -61,6 +63,8 @@ async def learning_status(request: Request) -> LearningStatusResponse:
         promotions=status.promotions,
         rollbacks=status.rollbacks,
         model_version=status.model_version,
+        use_multimodal=status.use_multimodal,
+        multimodal_state_size=status.multimodal_state_size,
     )
 
 
@@ -114,11 +118,15 @@ async def learning_config(request: Request) -> LearningConfigResponse:
             "keep_last_n": svc.checkpoint_config.keep_last_n,
             "promote_threshold": svc.checkpoint_config.promote_threshold,
         },
+        multimodal={
+            "enabled": svc.multimodal_encoder is not None,
+            "state_size": svc.state_size,
+        },
     )
 
 
 @router.post("/train", summary="Force a training cycle", response_model=ForceTrainResponse)
-async def force_train(request: Request) -> ForceTrainResponse:
+async def force_train(request: Request, _: None = Depends(require_api_key)) -> ForceTrainResponse:
     """Force an immediate training cycle regardless of schedule."""
     svc = _get_learning_service(request)
     result = svc.force_training()

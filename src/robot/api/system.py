@@ -6,7 +6,9 @@ import os
 import platform
 import time
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
+
+from robot.api.security import require_api_key
 
 from robot import __version__
 from robot.api.schemas import BluetoothResponse, LogsResponse, OkResponse, SystemInfoResponse
@@ -72,7 +74,7 @@ async def system_logs(
 
 
 @router.delete("/logs", summary="Clear log buffer", response_model=OkResponse)
-async def clear_logs() -> OkResponse:
+async def clear_logs(_: None = Depends(require_api_key)) -> OkResponse:
     """Clear the in-memory log ring buffer."""
     get_ring_buffer().clear()
     return OkResponse(status="ok")

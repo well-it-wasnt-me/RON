@@ -342,7 +342,7 @@ class CameraConfig(BaseSettings):
       over an RTSP stream.  Requires ``rtsp_url``.
 
     When ``backend`` is ``"rtsp"``, set ``rtsp_url`` to the full RTSP
-    stream URL (e.g. ``rtsp://admin:pass@192.168.1.50:554/stream``).
+    stream URL (e.g. ``rtsp://192.168.1.50:554/stream``).
     The ``device`` field is ignored in this mode.
     """
 
@@ -553,13 +553,34 @@ class WakeWordConfig(BaseSettings):
 
 
 class ApiConfig(BaseSettings):
-    """REST API and WebSocket server configuration."""
+    """REST API and WebSocket server configuration.
+
+    By default the API binds to ``127.0.0.1`` so it is only reachable
+    from the local machine.  Set ``host`` to ``0.0.0.0`` to expose it
+    on the network — **only do this behind a reverse proxy or with
+    ``api_key`` set**, since the control endpoints can drive servos
+    and speakers.
+
+    When ``api_key`` is non-empty, all mutating/control endpoints
+    require an ``Authorization: Bearer <key>`` header (or
+    ``?api_key=<key>`` query parameter).  Read-only health endpoints
+    remain open.
+    """
 
     model_config = SettingsConfigDict(env_prefix="DESKBOT_API__", extra="ignore")
 
     enabled: bool = Field(default=True, description="Whether to start the REST API server.")
-    host: str = Field(default="0.0.0.0", description="Bind address for the API server.")
+    host: str = Field(default="127.0.0.1", description="Bind address for the API server.")
     port: int = Field(default=8000, ge=0, le=65535, description="Port for the API server.")
+    api_key: str = Field(
+        default="",
+        description="Shared secret for control endpoints. When empty, no auth is enforced "
+        "(only safe when bound to 127.0.0.1).",
+    )
+    cors_origins: list[str] = Field(
+        default_factory=lambda: ["http://localhost:8000"],
+        description="Allowed CORS origins. Default allows only the local dashboard.",
+    )
 
 
 class PerformanceConfig(BaseSettings):
@@ -934,6 +955,21 @@ class LearningConfig(BaseSettings):
         le=1.0,
         description="Candidate is promoted if its loss <= current_loss * this threshold. "
         "1.0 means promote if equal or better; 0.95 means require at least 5% improvement.",
+    )
+
+    # Multimodal encoding
+    use_multimodal: bool = Field(
+        default=False,
+        description="When True, use the MultimodalEncoder (trainable vision/audio sub-encoders "
+        "+ temporal history) instead of the plain StateEncoder. Produces a richer state "
+        "vector at the cost of more parameters and compute.",
+    )
+    multimodal_history_length: int = Field(
+        default=5,
+        ge=0,
+        le=20,
+        description="Number of recent state snapshots included in the multimodal vector "
+        "for temporal context. 0 disables history (uses only the base + sub-encoder outputs).",
     )
 
 

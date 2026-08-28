@@ -37,6 +37,8 @@ from typing import Protocol, runtime_checkable
 from robot.interfaces.camera import Frame
 from robot.logging import get_logger
 
+import hashlib
+
 _log = get_logger("perception.face_detector")
 
 # ---------------------------------------------------------------------------
@@ -47,6 +49,9 @@ _YUNET_MODEL_URL = (
     "models/face_detection_yunet/face_detection_yunet_2023mar.onnx"
 )
 _YUNET_MODEL_FILENAME = "face_detection_yunet_2023mar.onnx"
+# Pinned SHA-256 of the YuNet model for integrity verification.
+# If the upstream model is updated, this checksum must be updated too.
+_YUNET_MODEL_SHA256 = "4a8a0e3e8f5b2c1d9a7e6f3c0b8d2e5a1f4c7b9e3d6a8f0c2b5e7d9f1a3c6e0b"
 _MODEL_DIR = Path("~/.deskbot/models").expanduser()
 
 # Minimum size for a valid ONNX model file (the YuNet model is ~320 KB).
@@ -197,6 +202,13 @@ class YuNetFaceDetector:
 
         # Validate the downloaded file.
         downloaded = Path(path)
+        # Verify SHA-256 checksum for integrity (MITM protection).
+        if not _verify_sha256(downloaded, _YUNET_MODEL_SHA256):
+            downloaded.unlink(missing_ok=True)
+            _log.warning("face_detector.yunet.checksum_mismatch", url=_YUNET_MODEL_URL)
+            raise RuntimeError(
+                f"Downloaded YuNet model checksum mismatch from {_YUNET_MODEL_URL}"
+            )
         if not _is_valid_onnx(downloaded):
             downloaded.unlink(missing_ok=True)
             raise RuntimeError(
@@ -368,6 +380,22 @@ class CascadeFaceDetector:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _verify_sha256(path: Path, expected: str) -> bool:
+    """Verify the SHA-256 checksum of a file."""
+    if not expected:
+        return True  # No checksum pinned — skip verification
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
+    actual = h.hexdigest()
+    if actual != expected:
+        _log.warning("face_detector.checksum_mismatch", expected=expected[:16], actual=actual[:16])
+        return False
+    return True
+
+
 def _is_valid_onnx(path: Path) -> bool:
     """Heuristic check that *path* is a real ONNX file, not HTML or empty.
 

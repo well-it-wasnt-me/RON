@@ -36,6 +36,13 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
 from robot.interfaces.camera import Camera, Frame
+
+def _redact_url(url: str) -> str:
+    """Redact credentials from a URL for safe logging/error messages."""
+    import re
+    return re.sub(r"(://[^:@/]+):[^@/]+@", r"\1:****@", url)
+
+
 from robot.logging import get_logger
 
 _log = get_logger("hardware.sensors.camera.rtsp")
@@ -113,7 +120,7 @@ class RtspCamera(Camera):
         cap = cv2.VideoCapture(self.url, cv2.CAP_FFMPEG)
         if not cap.isOpened():
             raise RuntimeError(
-                f"could not open RTSP stream {self.url!r}; "
+                f"could not open RTSP stream {_redact_url(self.url)!r}; "
                 f"check the URL, credentials, and network connectivity."
             )
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)

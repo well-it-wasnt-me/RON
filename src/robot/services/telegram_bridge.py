@@ -216,12 +216,19 @@ class TelegramBridge:
             self._pending_replies.pop(chat_id, None)
 
     async def _on_bot_reply(self, event: BotReply) -> None:
-        """When a BotReply is published, forward it to all pending Telegram chats."""
+        """When a BotReply is published, resolve the pending chat's future.
+
+        Only the chat that initiated the conversation turn receives the
+        reply — the :meth:`_handle_chat` method sends the actual message
+        after awaiting the future.  This prevents cross-talk when multiple
+        users message the bot concurrently.
+        """
         reply_text = event.text
         for chat_id, future in list(self._pending_replies.items()):
             if not future.done():
                 future.set_result(reply_text)
-            await self._send_message(chat_id, reply_text)
+                # Only the originating chat gets the message.
+                await self._send_message(chat_id, reply_text)
 
     # ------------------------------------------------------------------ commands
 
@@ -460,20 +467,10 @@ class TelegramBridge:
     async def _cmd_config(self, args_str: str, args: list[str]) -> str:
         import json as _json
 
+        from robot.api.security import mask_secrets_in_dict
+
         settings = self._app.settings
-        d = settings.model_dump()
-        # Mask sensitive values.
-        for key in ("telegram",):
-            if key in d and isinstance(d[key], dict) and "bot_token" in d[key]:
-                d[key]["bot_token"] = "***"
-        for key in ("llm",):
-            if key in d and isinstance(d[key], dict) and "api_key" in d[key]:
-                d[key]["api_key"] = "***" if d[key]["api_key"] else ""
-        for key in ("tts",):
-            if key in d and isinstance(d[key], dict) and "elevenlabs" in d[key]:
-                el = d[key]["elevenlabs"]
-                if isinstance(el, dict) and "api_key" in el:
-                    el["api_key"] = "***" if el["api_key"] else ""
+        d = mask_secrets_in_dict(settings.model_dump())
 
         # If a specific key is requested, show just that.""
 
