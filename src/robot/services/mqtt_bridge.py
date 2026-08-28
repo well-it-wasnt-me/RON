@@ -1,6 +1,12 @@
 """MQTT bridge - publishes DeskBot events to an MQTT broker and receives commands.
 
 Requires the ``paho-mqtt`` package (v2.1+).
+
+.. warning::
+    Any MQTT client that can publish to the command topics can drive the
+    robot (change emotion, trigger speech, move servos). The broker must
+    be on a trusted/isolated network, or ACLs must restrict publish
+    access to the command topics to a single privileged client.
 """
 
 from __future__ import annotations
@@ -50,20 +56,39 @@ class MqttConfig:
 
 
 def _serialise_event(event: object) -> dict[str, Any]:
-    """Convert an event dataclass to a JSON-serialisable dict."""
+    """Convert an event dataclass to a JSON-serialisable dict.
+
+    Uses the same robust dataclass-field walker as the WebSocket streamer
+    so enums and datetimes are handled correctly.
+    """
+    from dataclasses import fields as _fields
+    from datetime import date, datetime
+    from enum import Enum
+
     result: dict[str, Any] = {"type": type(event).__name__}
-    for attr in dir(event):
-        if attr.startswith("_"):
-            continue
-        value = getattr(event, attr, None)
-        if callable(value):
-            continue
-        if isinstance(value, datetime):
-            result[attr] = value.isoformat()
-        elif value is not None and hasattr(value, "value"):
-            result[attr] = value.value
-        else:
-            result[attr] = value
+    try:
+        for f in _fields(event):  # type: ignore[arg-type]
+            value = getattr(event, f.name)
+            if isinstance(value, Enum):
+                result[f.name] = value.value
+            elif isinstance(value, (datetime, date)):
+                result[f.name] = value.isoformat()
+            else:
+                result[f.name] = value
+    except TypeError:
+        # Not a dataclass — fall back to dir()-walking with private attr filter.
+        for attr in dir(event):
+            if attr.startswith("_"):
+                continue
+            value = getattr(event, attr, None)
+            if callable(value):
+                continue
+            if isinstance(value, datetime):
+                result[attr] = value.isoformat()
+            elif value is not None and hasattr(value, "value"):
+                result[attr] = value.value
+            else:
+                result[attr] = value
     return result
 
 
@@ -214,7 +239,10 @@ class MqttBridge:
                 )
                 self._pending_tasks.append(t)
                 t.add_done_callback(
-                    lambda _: self._pending_tasks.remove(t) if t in self._pending_tasks else None
+                    lambda _: (
+                    self._pending_tasks.remove(t) if t in self._pending_tasks else None,
+                    _log.warning("mqtt.task_exception", error=str(t.exception())) if t.exception() else None,
+                )
                 )
             elif "state" in topic:
                 from robot.behavior.state_machine import RobotState
@@ -227,14 +255,20 @@ class MqttBridge:
                 )
                 self._pending_tasks.append(t)
                 t.add_done_callback(
-                    lambda _: self._pending_tasks.remove(t) if t in self._pending_tasks else None
+                    lambda _: (
+                    self._pending_tasks.remove(t) if t in self._pending_tasks else None,
+                    _log.warning("mqtt.task_exception", error=str(t.exception())) if t.exception() else None,
+                )
                 )
             elif "speak" in topic:
                 text = data.get("text", payload)
                 t = loop.create_task(self.bus.publish(SpeechRecognized(text=text, confidence=1.0)))
                 self._pending_tasks.append(t)
                 t.add_done_callback(
-                    lambda _: self._pending_tasks.remove(t) if t in self._pending_tasks else None
+                    lambda _: (
+                    self._pending_tasks.remove(t) if t in self._pending_tasks else None,
+                    _log.warning("mqtt.task_exception", error=str(t.exception())) if t.exception() else None,
+                )
                 )
             elif "servo" in topic:
                 name = data.get("name", "pan")
@@ -242,7 +276,10 @@ class MqttBridge:
                 t = loop.create_task(self.bus.publish(ServoMoved(name=name, angle=angle)))
                 self._pending_tasks.append(t)
                 t.add_done_callback(
-                    lambda _: self._pending_tasks.remove(t) if t in self._pending_tasks else None
+                    lambda _: (
+                    self._pending_tasks.remove(t) if t in self._pending_tasks else None,
+                    _log.warning("mqtt.task_exception", error=str(t.exception())) if t.exception() else None,
+                )
                 )
 
         except Exception:
