@@ -430,14 +430,20 @@ class ConversationService:
             if response.tool_calls:
                 # Dispatch tool calls and append results to messages.
                 tool_results = await self._execute_tool_calls(response.tool_calls)
-                # Add the assistant's tool-call message.
+                # Add the assistant's tool-call message with tool_calls attached
+                # so OpenAI-compatible endpoints can correlate tool results.
                 assistant_content = response.text or ""
-                messages.append(Message(role=Role.ASSISTANT, content=assistant_content))
-                # In OpenAI format, tool calls go in a separate field,
-                # but for our simplified protocol we add each result as
-                # a tool-role message.
-                for result in tool_results:
-                    messages.append(Message(role=Role.TOOL, content=result))
+                messages.append(
+                    Message(
+                        role=Role.ASSISTANT,
+                        content=assistant_content,
+                        tool_calls=response.tool_calls,
+                    )
+                )
+                for tc, result in zip(response.tool_calls, tool_results):
+                    messages.append(
+                        Message(role=Role.TOOL, content=result, tool_call_id=tc.id)
+                    )
                 _log.info(
                     "conversation.tool_round",
                     calls=len(response.tool_calls),
@@ -456,12 +462,12 @@ class ConversationService:
             return
 
         # If we exhausted the tool round limit, speak whatever text we have.
-        reply = response.text or "I'm having trouble with that."
-        self.conversation.current.add_assistant(reply)
+        final_reply = response.text or "I'm having trouble with that."
+        self.conversation.current.add_assistant(final_reply)
         await self.conversation.save()
-        _log.info("conversation.reply", text=reply)
-        await self.bus.publish(BotReply(text=reply, user_text=user_text))
-        await self._speak_reply(reply)
+        _log.info("conversation.reply", text=final_reply)
+        await self.bus.publish(BotReply(text=final_reply, user_text=user_text))
+        await self._speak_reply(final_reply)
 
     # ------------------------------------------------------------------ streaming LLM
     async def _handle_streaming(
@@ -491,9 +497,17 @@ class ConversationService:
                 # Dispatch tool calls and re-call the LLM with results.
                 tool_results = await self._execute_tool_calls(accumulated_tool_calls)
                 text_so_far = "".join(reply_parts)
-                messages.append(Message(role=Role.ASSISTANT, content=text_so_far))
-                for result in tool_results:
-                    messages.append(Message(role=Role.TOOL, content=result))
+                messages.append(
+                    Message(
+                        role=Role.ASSISTANT,
+                        content=text_so_far,
+                        tool_calls=tuple(accumulated_tool_calls),
+                    )
+                )
+                for tc, result in zip(accumulated_tool_calls, tool_results):
+                    messages.append(
+                        Message(role=Role.TOOL, content=result, tool_call_id=tc.id)
+                    )
                 _log.info(
                     "conversation.streaming_tool_round",
                     calls=len(accumulated_tool_calls),
@@ -513,12 +527,12 @@ class ConversationService:
             return
 
         # Exhausted tool rounds.
-        reply = "".join(reply_parts) or "I'm having trouble with that."
-        self.conversation.current.add_assistant(reply)
+        final_reply = "".join(reply_parts) or "I'm having trouble with that."
+        self.conversation.current.add_assistant(final_reply)
         await self.conversation.save()
-        _log.info("conversation.reply", text=reply)
-        await self.bus.publish(BotReply(text=reply, user_text=user_text))
-        await self._speak_reply(reply)
+        _log.info("conversation.reply", text=final_reply)
+        await self.bus.publish(BotReply(text=final_reply, user_text=user_text))
+        await self._speak_reply(final_reply)
 
     # ------------------------------------------------------------------ tool execution
     async def _execute_tool_calls(

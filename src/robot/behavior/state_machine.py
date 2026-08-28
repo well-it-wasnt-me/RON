@@ -130,6 +130,9 @@ class StateMachine:
                     raise
 
     def can_transition(self, target: RobotState) -> bool:
+        # Self-transitions are always allowed (no-op).
+        if target is self._state:
+            return True
         return target in _ALLOWED[self._state]
 
 

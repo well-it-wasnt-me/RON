@@ -283,7 +283,11 @@ class SafetyGate:
                 layer="static",
             )
 
-        # Validate servo parameters
+        # Validate servo parameters — checks params whose keys match
+        # configured servo_limits (e.g. "pan", "tilt"). The built-in action
+        # space uses param keys like "x", "y" which don't match servo names
+        # directly; callers that pass servo-named params (e.g. from the
+        # calibration API) are validated here.
         if params:
             for key, val in params.items():
                 if key in self.servo_limits and isinstance(val, (int, float)):
@@ -312,17 +316,6 @@ class SafetyGate:
         """Layer 2: runtime safety — rate limits, cooldown, state restrictions."""
         now = time.monotonic()
 
-        # Rate limit
-        self._action_timestamps.append(now)
-        self._action_timestamps = [t for t in self._action_timestamps if now - t < 1.0]
-        if len(self._action_timestamps) > self.max_action_rate:
-            return SafetyResult(
-                result_type=SafetyResultType.REJECT,
-                action_index=action_index,
-                reason=f"rate limit exceeded: {len(self._action_timestamps)} actions/s",
-                layer="runtime",
-            )
-
         # Cooldown per action type
         action_name = self.action_space.get(action_index).name
         last_time = self._last_action_per_type.get(action_name, 0.0)
@@ -331,6 +324,18 @@ class SafetyGate:
                 result_type=SafetyResultType.REJECT,
                 action_index=action_index,
                 reason=f"action {action_name} on cooldown",
+                layer="runtime",
+            )
+
+        # Rate limit — only count actions that pass cooldown so rejected
+        # attempts don't inflate the rate window.
+        self._action_timestamps.append(now)
+        self._action_timestamps = [t for t in self._action_timestamps if now - t < 1.0]
+        if len(self._action_timestamps) > self.max_action_rate:
+            return SafetyResult(
+                result_type=SafetyResultType.REJECT,
+                action_index=action_index,
+                reason=f"rate limit exceeded: {len(self._action_timestamps)} actions/s",
                 layer="runtime",
             )
 
@@ -422,6 +427,15 @@ class SafeActionExecutor:
         else:
             actual = self.safety_gate.fallback_action
 
+        # Re-validate the fallback through the safety gate before executing.
+        fallback_recheck = self.safety_gate.validate(actual, state)
+        if not fallback_recheck.allowed:
+            _log.warning(
+                "safe_executor.fallback_rejected",
+                fallback=actual,
+                reason=fallback_recheck.reason,
+            )
+            return action_index  # Don't execute anything if even the fallback fails.
         self.executor(actual)
         _log.warning(
             "safe_executor.fallback",

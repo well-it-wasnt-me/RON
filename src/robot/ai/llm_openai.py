@@ -64,7 +64,22 @@ class OpenAILLM:
 
     def _messages_to_dicts(self, messages: Sequence[Message]) -> list[dict[str, Any]]:
         """Convert internal Message objects to OpenAI wire format."""
-        return [{"role": m.role.value, "content": m.content} for m in messages]
+        result: list[dict[str, Any]] = []
+        for m in messages:
+            msg: dict[str, Any] = {"role": m.role.value, "content": m.content}
+            if m.tool_calls:
+                msg["tool_calls"] = [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {"name": tc.name, "arguments": json.dumps(tc.arguments)},
+                    }
+                    for tc in m.tool_calls
+                ]
+            if m.tool_call_id:
+                msg["tool_call_id"] = m.tool_call_id
+            result.append(msg)
+        return result
 
     async def complete(self, messages: Sequence[Message]) -> str:
         response = await self.complete_with_tools(messages, tools=None)

@@ -46,6 +46,9 @@ EMOTION_SOUNDS: Mapping[EmotionName, str] = {
 # Robot state -> sound effect name.
 STATE_SOUNDS: Mapping[RobotState, str] = {
     RobotState.THINKING: "thinking",
+    # SLEEPING has no dedicated WAV; only THINKING triggers a state sound.
+    # Other states (SPEAKING, SLEEPING, etc.) are intentionally silent
+    # because TTS plays during SPEAKING and silence is preferred for SLEEPING.
 }
 
 

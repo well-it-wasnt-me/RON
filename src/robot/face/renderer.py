@@ -401,7 +401,7 @@ class FaceRenderer:
             iris_cx = ex + ox
             iris_cy = ey + oy
             iris_rx = eye_radius * 0.55
-            iris_ry = eye_radius * 0.55 * min(1.0, ry / rx)
+            iris_ry = eye_radius * 0.55 * min(1.0, ry / rx) if rx > 0.0 else 0.0
             self._fill_ellipse(raster, iris_cx, iris_cy, iris_rx, iris_ry, model.palette.iris)
             self._draw_ellipse_outline(
                 raster,
@@ -672,7 +672,7 @@ class FaceRenderer:
                     continue
                 idx = row + x * 3
                 # Soft falloff at the edge
-                edge = 1.0 - (dx * dx + dy * dy) / r2
+                edge = 1.0 - (dx * dx + dy * dy) / r2 if r2 > 0.0 else 0.0
                 local_alpha = alpha * (0.4 + 0.6 * edge)
                 br = raster.pixels[idx]
                 bg = raster.pixels[idx + 1]
@@ -711,8 +711,8 @@ class FaceRenderer:
                         raster.pixels[idx + 1] = pg
                         raster.pixels[idx + 2] = pb
             return
-        inv_rx2 = 1.0 / (rx * rx)
-        inv_ry2 = 1.0 / (ry * ry)
+        inv_rx2 = 1.0 / (rx * rx) if rx > 0.0 else 0.0
+        inv_ry2 = 1.0 / (ry * ry) if ry > 0.0 else 0.0
         for y in range(y0, y1 + 1):
             dy = y - cy
             row = (y * w) * 3
@@ -895,6 +895,8 @@ class FaceRenderer:
         # Parametric arc: y = cy + curve * (1 - ((x-cx) / (width/2)) ** 2)
         steps: int = max(8, round(width))
         half: float = width / 2.0
+        if half <= 0.0:
+            return
         cx_f: float = float(cx)
         cy_f: float = float(cy)
         curve_f: float = float(curve)

@@ -428,6 +428,9 @@ class UsbMicrophone(Microphone):
         )
 
     def _close_stream(self, *, join_reader: bool) -> None:
+        # Signal the reader thread to stop before nulling the stream
+        # so it doesn't write into a None reference.
+        self._stop.set()
         stream = self._stream
         self._stream = None
         if stream is not None:

@@ -156,7 +156,7 @@ class VectorMemory:
             entries = list(reversed(self.entries))[:limit]
             _log.debug(
                 "vector_memory.noop_fallback",
-                message="NoOpEmbedding: returning recent entries in chronological order",
+                message="NoOpEmbedding: returning recent entries in reverse chronological order",
                 count=len(entries),
             )
             return [(e, 0.0) for e in entries]

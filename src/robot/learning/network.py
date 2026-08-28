@@ -9,6 +9,7 @@ multi-layer perceptron.
 from __future__ import annotations
 
 import json
+import numpy as np
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
@@ -102,7 +103,15 @@ class Network:
 
         self.backward(grad)
 
+        # Check for NaN/inf in gradients — skip the step if contaminated
+        # to prevent poisoning the weights.
         if optimizer is not None:
+            for layer in self.layers:
+                if not np.all(np.isfinite(layer.weight_grad.data)):
+                    _log_nan = __import__("robot.logging", fromlist=["get_logger"]).get_logger("learning.network")
+                    _log_nan.warning("network.nan_gradient_detected", loss=loss.item())
+                    return loss.item(), prediction
+
             optimizer.step(self.layers)
 
         return loss.item(), prediction
@@ -204,7 +213,7 @@ class MLP:
     ) -> None:
         # Use a seeded RNG to produce per-layer seeds so each layer
         # gets different but reproducible weights.
-        master_rng = __import__("numpy").random.default_rng(seed)
+        master_rng = np.random.default_rng(seed)
         layer_seeds = [int(master_rng.integers(0, 2**31)) for _ in range(len(hidden_sizes) + 1)]
 
         layers: list[DenseLayer] = []

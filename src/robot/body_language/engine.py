@@ -145,8 +145,9 @@ class BodyLanguageEngine:
     async def perform(self, request: BodyRequest) -> None:
         """Play a request on the servos."""
         if self._busy:
-            # Skip: another request is already in flight. A more
-            # sophisticated engine would queue or interrupt.
+            # Another request is already in flight — log the dropped request
+            # so it's visible rather than silently lost.
+            _log.warning("body_language.request_dropped", request=getattr(request, "name", "unknown"))
             return
         self._busy = True
         try:
@@ -192,15 +193,13 @@ class BodyLanguageEngine:
     def _play_frame_sync(self, frame: ServoFrame) -> None:
         if not frame.targets:
             return
-        # Apply every servo at this slice (the start_targets hint isn't needed
-        # in the current sync implementation; kept here for future interpolation).
+        # Apply each servo's calibrated target directly (sync mode jumps
+        # to the target without interpolation).
+        new_targets = dict(self._current.targets)
         for name, target in frame.targets.items():
-            self._apply_targets_sync({name: self._calibrate(name, target)})
-            self._current = Pose(
-                targets={**self._current.targets, name: self._calibrate(name, target)}
-            )
-        # Hint: we don't actually interpolate in sync mode; we jump to the
-        # target. The renderer/animator interpolates its own state.
+            calibrated = self._calibrate(name, target)
+            new_targets[name] = calibrated
+        self._current = Pose(targets=new_targets)
 
     async def _apply_targets(self, targets: dict[str, float]) -> None:
         for name, angle in targets.items():

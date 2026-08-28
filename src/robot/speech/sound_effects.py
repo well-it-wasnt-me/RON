@@ -66,9 +66,16 @@ def _apply_volume(pcm: bytes, volume: float) -> bytes:
     """Scale signed-16 PCM while preventing clipping."""
     if volume == 1.0 or not pcm:
         return pcm
-    samples = struct.unpack(f"<{len(pcm) // 2}h", pcm)
-    scaled = [max(-32768, min(32767, round(sample * volume))) for sample in samples]
-    return struct.pack(f"<{len(scaled)}h", *scaled)
+    try:
+        import numpy as np
+        arr = np.frombuffer(pcm, dtype="<i2").astype(np.float64)
+        scaled = np.clip(arr * volume, -32768, 32767).astype("<i2")
+        return scaled.tobytes()
+    except ImportError:
+        # Pure-Python fallback.
+        samples = struct.unpack(f"<{len(pcm) // 2}h", pcm)
+        scaled = [max(-32768, min(32767, round(sample * volume))) for sample in samples]
+        return struct.pack(f"<{len(scaled)}h", *scaled)
 
 
 def _wav_to_pcm(wav_bytes: bytes, target_sample_rate: int | None = None) -> tuple[bytes, int]:

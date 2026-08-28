@@ -13,6 +13,7 @@ default, SQLite-backed available).
 from __future__ import annotations
 
 import sqlite3
+import threading
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -143,9 +144,12 @@ class SqlitePreferenceStore:
             self._db_path.parent.mkdir(parents=True, exist_ok=True)
 
         self._conn: sqlite3.Connection | None = None
+        self._lock = threading.RLock()
 
     def _ensure_conn(self) -> sqlite3.Connection:
-        if self._conn is None:
+        with self._lock:
+            if self._conn is not None:
+                return self._conn
             db_path = ":memory:" if self._db_path is None else str(self._db_path)
 
             self._conn = sqlite3.connect(
@@ -215,7 +219,8 @@ class SqlitePreferenceStore:
 
     def save(self, preference: Preference) -> None:
         """Persist the complete preference state."""
-        conn = self._ensure_conn()
+        with self._lock:
+            conn = self._ensure_conn()
 
         updated_at = preference.updated_at
         first_observed = preference.first_observed or updated_at
@@ -263,7 +268,8 @@ class SqlitePreferenceStore:
         conn.commit()
 
     def load(self, key: str) -> Preference | None:
-        conn = self._ensure_conn()
+        with self._lock:
+            conn = self._ensure_conn()
         row = conn.execute(
             "SELECT key, value, confidence, source, updated_at FROM preferences WHERE key = ?",
             (key,),
@@ -279,7 +285,8 @@ class SqlitePreferenceStore:
         )
 
     def load_all(self) -> list[Preference]:
-        conn = self._ensure_conn()
+        with self._lock:
+            conn = self._ensure_conn()
         rows = conn.execute(
             "SELECT key, value, confidence, source, updated_at FROM preferences"
         ).fetchall()
@@ -295,10 +302,11 @@ class SqlitePreferenceStore:
         ]
 
     def delete(self, key: str) -> bool:
-        conn = self._ensure_conn()
-        cursor = conn.execute("DELETE FROM preferences WHERE key = ?", (key,))
-        conn.commit()
-        return cursor.rowcount > 0
+        with self._lock:
+            conn = self._ensure_conn()
+            cursor = conn.execute("DELETE FROM preferences WHERE key = ?", (key,))
+            conn.commit()
+            return cursor.rowcount > 0
 
     # ------------------------------------------------------------------ learned preference persistence
 
@@ -320,7 +328,8 @@ class SqlitePreferenceStore:
         :class:`PreferenceLearner` — it stores all fields needed to
         reconstruct the learner's internal state exactly.
         """
-        conn = self._ensure_conn()
+        with self._lock:
+            conn = self._ensure_conn()
 
         conn.execute(
             """
@@ -358,7 +367,8 @@ class SqlitePreferenceStore:
         Returns a list of dicts with all persisted fields,
         suitable for reconstructing :class:`LearnedPreference` objects.
         """
-        conn = self._ensure_conn()
+        with self._lock:
+            conn = self._ensure_conn()
 
         rows = conn.execute(
             """
@@ -398,9 +408,10 @@ class SqlitePreferenceStore:
         return result
 
     def close(self) -> None:
-        if self._conn is not None:
-            self._conn.close()
-            self._conn = None
+        with self._lock:
+            if self._conn is not None:
+                self._conn.close()
+                self._conn = None
 
 
 # ---------------------------------------------------------------------------

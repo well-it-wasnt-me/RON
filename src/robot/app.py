@@ -149,6 +149,7 @@ class DeskBotApp:
     )
     _api_bridge: StateBridge | None = field(default=None, init=False, repr=False)
     _api_server: object | None = field(default=None, init=False, repr=False)
+    _api_thread: object | None = field(default=None, init=False, repr=False)
     _plugin_registry: PluginRegistry | None = field(default=None, init=False, repr=False)
     _mqtt_bridge: object | None = field(default=None, init=False, repr=False)
     _ha_bridge: object | None = field(default=None, init=False, repr=False)
@@ -238,9 +239,9 @@ class DeskBotApp:
         learning_stack = _build_learning_service(settings, bus)
         learning_service: LearningService | None = None
         safety_manager: LearningSafetyManager | None = None
-        _observation_adapter: LearningObservationAdapter | None = None
+        observation_adapter: LearningObservationAdapter | None = None
         if learning_stack is not None:
-            learning_service, safety_manager, _observation_adapter = learning_stack
+            learning_service, safety_manager, observation_adapter = learning_stack
 
         # Sensors - use real USB hardware when running with
         # DESKBOT_HARDWARE=real, otherwise the in-memory mocks.
@@ -329,10 +330,10 @@ class DeskBotApp:
 
         # Face engine (the new, complete face renderer)
         face_renderer = FaceRenderer(width=settings.displays.width, height=settings.displays.height)
-        # Legacy eye engine (kept for the EyeDisplayAnimator back-compat shim only)
-        renderer = EyeRenderer(width=settings.displays.width, height=settings.displays.height)
-        blinker = BlinkController()
-        blinker.configure(clock=clock, rng=rng)
+        # Legacy eye engine — no longer constructed in the production path.
+        # The EyeDisplayAnimator field is kept as None for back-compat with
+        # tests that check ``app.eye_animator is not None``. Use ``face_animator``
+        # for all production rendering. See findings.md L25.
         # Theme selection: Vector 2.0 minimalist face is the new default
         face_theme = _resolve_face_theme(getattr(settings, "face", None))
         _log.info(
@@ -356,15 +357,7 @@ class DeskBotApp:
             width=settings.displays.width,
             height=settings.displays.height,
         )
-        eye_animator = EyeDisplayAnimator(
-            renderer=renderer,
-            display=display,
-            clock=clock,
-            fps=settings.displays.fps,
-            bus=bus,
-            width=settings.displays.width,
-            height=settings.displays.height,
-        )
+        eye_animator = None  # Legacy eye engine removed from production path
 
         # Behavior
         idle = IdleBehavior(
@@ -494,7 +487,7 @@ class DeskBotApp:
         app._sound_reactor = sound_reactor
         app._learning_service = learning_service
         app._safety_manager = safety_manager
-        app._observation_adapter = _observation_adapter
+        app._observation_adapter = observation_adapter
         app.conversation = conversation
         app._degradation = degradation
 
@@ -560,9 +553,6 @@ class DeskBotApp:
         lifecycle.add_startup(app._on_startup)
         lifecycle.add_shutdown(app._on_shutdown)
         return app
-
-    # Backwards-compatible alias: ``build_mock`` is still public.
-    build_mock = build
 
     # ------------------------------------------------------------------ lifecycle
     async def _on_startup(self) -> None:
@@ -761,6 +751,32 @@ class DeskBotApp:
                     with contextlib.suppress(Exception):
                         store.close()
 
+    async def _drain_behaviors(self) -> None:
+        """Periodically drain idle/reaction outboxes and execute the actions.
+
+        This closes the loop between :class:`IdleBehavior`/`ReactionEngine`
+        (which produce :class:`BehaviorAction` objects) and
+        :class:`ActionExecutor` (which translates them into bus events
+        and servo commands). Without this drainer the behavior layer
+        queues actions that are never executed.
+        """
+        import anyio
+
+        while True:
+            try:
+                await anyio.sleep(0.1)
+                actions: list = []
+                if self.idle is not None:
+                    actions.extend(self.idle.drain())
+                if self.reactions is not None:
+                    actions.extend(self.reactions.drain())
+                if actions and self.executor is not None:
+                    await self.executor.execute(actions)
+            except anyio.get_cancelled_exc_class():
+                raise
+            except Exception:
+                _log.exception("app.behavior_drain_failed")
+
     # ------------------------------------------------------------------ API
     def _start_api(self) -> None:
         """Start the REST API server in a background thread.
@@ -807,6 +823,7 @@ class DeskBotApp:
         api_thread = threading.Thread(target=_run_server, name="DeskBot-API", daemon=True)
         api_thread.start()
         self._api_server = server
+        self._api_thread = api_thread
         _log.info("api.started", host=host, port=port, url=f"http://{host}:{port}")
 
     async def _stop_api(self) -> None:
@@ -817,7 +834,13 @@ class DeskBotApp:
         if self._api_server is not None:
             _log.info("api.stopping")
             self._api_server.should_exit = True  # type: ignore[attr-defined]
+            # Join the API thread with a short timeout so in-flight requests
+            # can finish without hanging shutdown.
+            thread = getattr(self, "_api_thread", None)
+            if thread is not None:
+                thread.join(timeout=5.0)
             self._api_server = None
+            self._api_thread = None
 
     # ------------------------------------------------------------------ run
     @contextlib.asynccontextmanager
@@ -829,6 +852,11 @@ class DeskBotApp:
                 tg.start_soon(self.face_animator.run_forever)
             if self.idle is not None:
                 tg.start_soon(self.idle.run)
+            # Drain queued behavior actions from idle/reaction engines
+            # and execute them through the ActionExecutor. Without this,
+            # idle blinks/glances and event reactions are silently discarded.
+            if self.executor is not None:
+                tg.start_soon(self._drain_behaviors)
             if self.conversation is not None:
                 self.conversation.start_audio_loop()
             # Start perception (face detection) if available.
@@ -1408,6 +1436,8 @@ def _build_learning_service(
         preference_learner=preference_learner,
         working_memory=WorkingMemory(capacity=cfg.working_memory_capacity),
         replay_buffer=ReplayBuffer(capacity=cfg.replay_buffer_capacity, seed=cfg.replay_seed),
+        use_multimodal=cfg.use_multimodal,
+        multimodal_history_length=cfg.multimodal_history_length,
     )
     safety = LearningSafetyManager(checkpoint_manager=service.checkpoint_mgr)
     _log.info(
@@ -1415,6 +1445,8 @@ def _build_learning_service(
         store=cfg.store,
         episodic=episodic_memory is not None,
         preferences=preference_learner.total_patterns,
+        multimodal=cfg.use_multimodal,
+        multimodal_history=cfg.multimodal_history_length if cfg.use_multimodal else 0,
     )
     return service, safety, observation_adapter
 
@@ -1430,7 +1462,7 @@ def _build_container(
     microphone: Microphone,
     camera: Camera,
     face_animator: FaceAnimator,
-    eye_animator: EyeDisplayAnimator,
+    eye_animator: EyeDisplayAnimator | None,
     idle: IdleBehavior,
     reactions: ReactionEngine,
     executor: ActionExecutor,
@@ -1446,7 +1478,8 @@ def _build_container(
     container.register_instance(Microphone, microphone)  # type: ignore[type-abstract]
     container.register_instance(Camera, camera)  # type: ignore[type-abstract]
     container.register_instance(FaceAnimator, face_animator)
-    container.register_instance(EyeDisplayAnimator, eye_animator)
+    if eye_animator is not None:
+        container.register_instance(EyeDisplayAnimator, eye_animator)
     container.register_instance(IdleBehavior, idle)
     container.register_instance(ReactionEngine, reactions)
     container.register_instance(ActionExecutor, executor)
