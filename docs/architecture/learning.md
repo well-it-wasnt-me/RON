@@ -60,12 +60,14 @@ flowchart TD
 - **ResourceLimits** — Configurable: CPU fraction, batch size, epochs, model size
 - **CheckpointConfig** — Configurable: directory, keep_last_n, promote_threshold
 
-### Phase 7: Multimodal Learning
+### Phase 7: Multimodal Learning — **Production integrated**
 - **VisionEncoder** — Trainable MLP (6->32->16->16) encoding face detection features
 - **AudioEncoder** — Trainable MLP (3->16->8->8) encoding audio signal features
 - **HistoryBuffer** — Ring buffer of recent state vectors for temporal context
 - **MultimodalEncoder** — Concatenates robot_state(91) + vision_encoded(16) + audio_encoded(8) + history(91×5) = 570 elements
 - **MultimodalEnvironment** — Simulation where vision, audio, and both together give different reward signals
+- **Production wiring** — Enabled via `DESKBOT_LEARNING__USE_MULTIMODAL=true`; the `LearningService` creates a `MultimodalEncoder`, uses `multimodal_size()` for the world model and action learner state sizes, and trains the sub-encoders in each background training cycle via self-supervised reconstruction
+- **Sub-encoder training** — Each training cycle trains the vision and audio sub-encoders with a reconstruction objective (encode → reconstruct input), giving the world model richer features without end-to-end backprop
 
 ### Phase 8: Preference Learning
 - **PreferenceLearner** — Observes recurring patterns with confidence scores
@@ -105,6 +107,8 @@ All learning parameters are configurable via `DESKBOT_LEARNING__*` environment v
 | `DESKBOT_LEARNING__PROMOTE_THRESHOLD`         | `1.0`                    | Candidate must be this factor better    |
 | `DESKBOT_LEARNING__CHECKPOINT_DIR`            | `~/.deskbot/checkpoints` | Model checkpoint directory              |
 | `DESKBOT_LEARNING__KEEP_LAST_N_CHECKPOINTS`   | `5`                      | Checkpoints to keep on disk             |
+| `DESKBOT_LEARNING__USE_MULTIMODAL`            | `false`                  | Enable trainable multimodal encoder     |
+| `DESKBOT_LEARNING__MULTIMODAL_HISTORY_LENGTH` | `5`                      | Temporal history snapshots (0 = none)   |
 
 ## Design Principles
 
