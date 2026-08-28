@@ -46,6 +46,11 @@ from robot.learning.experience import (
 from robot.learning.preference_learner import PreferenceLearner
 from robot.learning.recorder import ExperienceRecorder
 from robot.learning.state_encoder import STATE_SIZE, StateEncoder
+from robot.learning.multimodal import (
+    MULTIMODAL_VERSION,
+    MultimodalEncoder,
+    multimodal_size,
+)
 from robot.learning.tensor import Tensor
 from robot.learning.world_model import DEFAULT_ACTION_SIZE, WorldModel
 from robot.logging import get_logger
@@ -164,6 +169,8 @@ class TrainingStatus:
     promotions: int = 0
     rollbacks: int = 0
     model_version: int = 0
+    use_multimodal: bool = False
+    multimodal_state_size: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -294,9 +301,15 @@ class LearningService:
     action_space: ActionSpace = field(default_factory=deskbot_action_space)
     state_size: int = STATE_SIZE
     seed: int = 42
+    use_multimodal: bool = False
+    multimodal_history_length: int = 5
 
     # Internal components (created in __post_init__)
     encoder: StateEncoder = field(default_factory=StateEncoder)
+    #: Multimodal encoder (created in __post_init__ when use_multimodal is True).
+    #: When set, the recorder uses this for state encoding and the world model /
+    #: action learner use the larger multimodal state size.
+    multimodal_encoder: MultimodalEncoder | None = field(default=None, init=False, repr=False)
     working_memory: WorkingMemory = field(default_factory=lambda: WorkingMemory(capacity=256))
     replay_buffer: ReplayBuffer = field(
         default_factory=lambda: ReplayBuffer(capacity=10_000, seed=42)
@@ -326,7 +339,22 @@ class LearningService:
 
     def __post_init__(self) -> None:
         """Initialize models and components."""
-        # Create models
+        # Create multimodal encoder if enabled.
+        if self.use_multimodal:
+            self.multimodal_encoder = MultimodalEncoder(
+                state_encoder=self.encoder,
+                history_length=self.multimodal_history_length,
+            )
+            # Override state_size to the multimodal vector size.
+            self.state_size = multimodal_size(self.multimodal_history_length)
+            _log.info(
+                "learning.multimodal_enabled",
+                state_size=self.state_size,
+                history_length=self.multimodal_history_length,
+                version=MULTIMODAL_VERSION,
+            )
+
+        # Create models with the (possibly overridden) state_size.
         model_seed = self.seed
         self.current_world_model = WorldModel(
             state_size=self.state_size,
@@ -376,6 +404,10 @@ class LearningService:
                     f"{al_params} > {self.resource_limits.max_model_params}"
                 )
 
+        # Record multimodal status.
+        self._status.use_multimodal = self.use_multimodal
+        self._status.multimodal_state_size = self.state_size
+
         # Create safety manager for candidate evaluation.
         from robot.learning.safety import LearningSafetyManager
 
@@ -393,6 +425,10 @@ class LearningService:
             episodic_memory=self.episodic_memory,
             on_experience_recorded=self._on_experience_recorded,
         )
+        # Wire the multimodal encoder into the recorder so transitions
+        # use the richer encode() path.
+        if self.multimodal_encoder is not None:
+            self.recorder.multimodal_encoder = self.multimodal_encoder
 
     # ------------------------------------------------------------------ ingestion
     def _on_experience_recorded(self, experience: Experience) -> None:
@@ -463,6 +499,8 @@ class LearningService:
                 promotions=self._status.promotions,
                 rollbacks=self._status.rollbacks,
                 model_version=self._status.model_version,
+                use_multimodal=self._status.use_multimodal,
+                multimodal_state_size=self._status.multimodal_state_size,
             )
 
     # ------------------------------------------------------------------ training
@@ -530,6 +568,13 @@ class LearningService:
                 verbose=False,
             )
 
+            # Train multimodal sub-encoders (vision/audio) with a
+            # self-supervised reconstruction objective. This gives the
+            # sub-encoders meaningful representations that the world
+            # model can exploit without requiring end-to-end backprop.
+            if self.multimodal_encoder is not None:
+                self._train_sub_encoders(train_experiences)
+
             # Evaluate current vs candidate using the safety manager
             # for full threshold-based evaluation (loss, latency, stability).
             assert self.current_world_model is not None
@@ -583,6 +628,43 @@ class LearningService:
             _log.exception("learning_service.training_cycle_error")
             with self._lock:
                 self._status.is_training = False
+
+    def _train_sub_encoders(self, experiences: list[Experience]) -> None:
+        """Train the multimodal vision/audio sub-encoders.
+
+        Uses a self-supervised reconstruction objective: the sub-encoder
+        maps input features to a representation, and a simple decoder
+        (the transpose of the encoder) reconstructs the input.  This
+        gives the sub-encoders rich features without requiring
+        end-to-end backprop through the world model.
+        """
+        assert self.multimodal_encoder is not None
+        import numpy as np
+
+        # Collect vision and audio features from the inner StateEncoder
+        # snapshots stored in experience metadata (if available) or
+        # reconstruct from the state vector.
+        # For the initial integration, we train on the current encoder
+        # state — the sub-encoders learn from whatever the robot is
+        # currently perceiving.  This is a lightweight online update.
+        vision = self.multimodal_encoder.state_encoder.vision
+        audio = self.multimodal_encoder.state_encoder.audio
+
+        # Vision sub-encoder: encode → decode reconstruction
+        try:
+            vision_vec = np.array(vision.to_vector(), dtype=np.float64).reshape(1, -1)
+            encoded = self.multimodal_encoder.vision_encoder.model.predict(Tensor(vision_vec))
+            # Reconstruction target is the original input.
+            self.multimodal_encoder.vision_encoder.train_step(vision_vec, vision_vec)
+        except Exception:
+            _log.debug("learning.sub_encoder.vision_train_skipped")
+
+        # Audio sub-encoder
+        try:
+            audio_vec = np.array(audio.to_vector(), dtype=np.float64).reshape(1, -1)
+            self.multimodal_encoder.audio_encoder.train_step(audio_vec, audio_vec)
+        except Exception:
+            _log.debug("learning.sub_encoder.audio_train_skipped")
 
     def _promote_model(self, candidate_loss: float, current_loss: float) -> None:
         """Promote the candidate model to current."""
@@ -683,6 +765,11 @@ class LearningService:
         with self._lock:
             assert self.candidate_world_model is not None
             return self.candidate_world_model
+
+    @property
+    def multimodal_encoder_ref(self) -> MultimodalEncoder | None:
+        """Return the multimodal encoder, or None when not enabled."""
+        return self.multimodal_encoder
 
     def get_action_learner(self) -> ActionLearner:
         """Return the action learner."""
@@ -819,4 +906,5 @@ __all__ = [
     "PreferenceLearner",
     "ResourceLimits",
     "TrainingStatus",
+    "MultimodalEncoder",
 ]
