@@ -440,10 +440,8 @@ class ConversationService:
                         tool_calls=response.tool_calls,
                     )
                 )
-                for tc, result in zip(response.tool_calls, tool_results):
-                    messages.append(
-                        Message(role=Role.TOOL, content=result, tool_call_id=tc.id)
-                    )
+                for tc, result in zip(response.tool_calls, tool_results, strict=False):
+                    messages.append(Message(role=Role.TOOL, content=result, tool_call_id=tc.id))
                 _log.info(
                     "conversation.tool_round",
                     calls=len(response.tool_calls),
@@ -504,10 +502,8 @@ class ConversationService:
                         tool_calls=tuple(accumulated_tool_calls),
                     )
                 )
-                for tc, result in zip(accumulated_tool_calls, tool_results):
-                    messages.append(
-                        Message(role=Role.TOOL, content=result, tool_call_id=tc.id)
-                    )
+                for tc, result in zip(accumulated_tool_calls, tool_results, strict=False):
+                    messages.append(Message(role=Role.TOOL, content=result, tool_call_id=tc.id))
                 _log.info(
                     "conversation.streaming_tool_round",
                     calls=len(accumulated_tool_calls),

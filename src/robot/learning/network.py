@@ -9,9 +9,10 @@ multi-layer perceptron.
 from __future__ import annotations
 
 import json
-import numpy as np
 from pathlib import Path
 from typing import Protocol, runtime_checkable
+
+import numpy as np
 
 from robot.learning.layers import DenseLayer
 from robot.learning.losses import (
@@ -108,7 +109,9 @@ class Network:
         if optimizer is not None:
             for layer in self.layers:
                 if not np.all(np.isfinite(layer.weight_grad.data)):
-                    _log_nan = __import__("robot.logging", fromlist=["get_logger"]).get_logger("learning.network")
+                    _log_nan = __import__("robot.logging", fromlist=["get_logger"]).get_logger(
+                        "learning.network"
+                    )
                     _log_nan.warning("network.nan_gradient_detected", loss=loss.item())
                     return loss.item(), prediction
 

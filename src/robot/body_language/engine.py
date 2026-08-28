@@ -147,7 +147,9 @@ class BodyLanguageEngine:
         if self._busy:
             # Another request is already in flight — log the dropped request
             # so it's visible rather than silently lost.
-            _log.warning("body_language.request_dropped", request=getattr(request, "name", "unknown"))
+            _log.warning(
+                "body_language.request_dropped", request=getattr(request, "name", "unknown")
+            )
             return
         self._busy = True
         try:

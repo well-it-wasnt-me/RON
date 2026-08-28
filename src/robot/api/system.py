@@ -8,10 +8,9 @@ import time
 
 from fastapi import APIRouter, Depends, Query, Request
 
-from robot.api.security import require_api_key
-
 from robot import __version__
 from robot.api.schemas import BluetoothResponse, LogsResponse, OkResponse, SystemInfoResponse
+from robot.api.security import require_api_key
 from robot.logging import get_ring_buffer
 
 router = APIRouter(prefix="/system", tags=["system"])

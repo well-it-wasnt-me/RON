@@ -9,9 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends
-
-from robot.api.security import require_api_key, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from robot.api.schemas import (
     ForceTrainResponse,
@@ -19,6 +17,7 @@ from robot.api.schemas import (
     LearningPreferencesResponse,
     LearningStatusResponse,
 )
+from robot.api.security import require_api_key
 
 router = APIRouter(prefix="/learning", tags=["learning"])
 

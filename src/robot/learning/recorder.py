@@ -31,7 +31,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from robot.events.bus import InMemoryEventBus
 from robot.events.events import (
@@ -48,8 +48,6 @@ from robot.learning.observation import Observation
 from robot.learning.reward import RewardModel
 from robot.learning.state_encoder import StateEncoder
 from robot.learning.transition import PendingTransition, Transition, TransitionStore
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from robot.learning.multimodal import MultimodalEncoder
@@ -114,7 +112,6 @@ class ExperienceRecorder:
             action_space=self.action_space,
             on_transition_completed=self._on_transition_completed,
         )
-
 
     def _encode_state(self) -> list[float]:
         """Produce the state vector for transition recording.

@@ -43,14 +43,14 @@ from robot.learning.experience import (
     ReplayBuffer,
     WorkingMemory,
 )
-from robot.learning.preference_learner import PreferenceLearner
-from robot.learning.recorder import ExperienceRecorder
-from robot.learning.state_encoder import STATE_SIZE, StateEncoder
 from robot.learning.multimodal import (
     MULTIMODAL_VERSION,
     MultimodalEncoder,
     multimodal_size,
 )
+from robot.learning.preference_learner import PreferenceLearner
+from robot.learning.recorder import ExperienceRecorder
+from robot.learning.state_encoder import STATE_SIZE, StateEncoder
 from robot.learning.tensor import Tensor
 from robot.learning.world_model import DEFAULT_ACTION_SIZE, WorldModel
 from robot.logging import get_logger
@@ -653,7 +653,6 @@ class LearningService:
         # Vision sub-encoder: encode → decode reconstruction
         try:
             vision_vec = np.array(vision.to_vector(), dtype=np.float64).reshape(1, -1)
-            encoded = self.multimodal_encoder.vision_encoder.model.predict(Tensor(vision_vec))
             # Reconstruction target is the original input.
             self.multimodal_encoder.vision_encoder.train_step(vision_vec, vision_vec)
         except Exception:
@@ -903,8 +902,8 @@ __all__ = [
     "CheckpointManager",
     "LearningSchedule",
     "LearningService",
+    "MultimodalEncoder",
     "PreferenceLearner",
     "ResourceLimits",
     "TrainingStatus",
-    "MultimodalEncoder",
 ]

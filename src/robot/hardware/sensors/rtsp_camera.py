@@ -36,16 +36,17 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
 from robot.interfaces.camera import Camera, Frame
+from robot.logging import get_logger
+
+_log = get_logger("hardware.sensors.camera.rtsp")
+
 
 def _redact_url(url: str) -> str:
     """Redact credentials from a URL for safe logging/error messages."""
     import re
+
     return re.sub(r"(://[^:@/]+):[^@/]+@", r"\1:****@", url)
 
-
-from robot.logging import get_logger
-
-_log = get_logger("hardware.sensors.camera.rtsp")
 
 # Environment variable override for FFmpeg RTSP open timeout (microseconds).
 _OPEN_TIMEOUT_ENV = "FF_OPEN_TIMEOUT"

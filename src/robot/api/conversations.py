@@ -5,11 +5,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-
-from robot.api.security import require_api_key
 from pydantic import BaseModel, Field
 
 from robot.api.schemas import OkResponse
+from robot.api.security import require_api_key
 
 router = APIRouter()
 
@@ -157,7 +156,9 @@ async def get_conversation(request: Request, conversation_id: str) -> Conversati
     summary="Delete conversation",
     response_model=OkResponse,
 )
-async def delete_conversation(request: Request, conversation_id: str, _: None = Depends(require_api_key)) -> OkResponse:
+async def delete_conversation(
+    request: Request, conversation_id: str, _: None = Depends(require_api_key)
+) -> OkResponse:
     """Delete a saved conversation; deleting the active one resets it."""
     manager = _manager(request)
     if conversation_id == manager.conversation_id:

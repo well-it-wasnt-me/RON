@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from robot.api.security import require_api_key
-
 from robot.ai.preferences import Preference, PreferenceTracker
 from robot.api.schemas import (
     PreferenceDeleteResponse,
     PreferenceItem,
     PreferenceListResponse,
 )
+from robot.api.security import require_api_key
 
 router = APIRouter()
 
@@ -61,7 +60,9 @@ async def get_preference(key: str, request: Request) -> PreferenceItem:
 @router.delete(
     "/preferences/{key}", summary="Delete a preference", response_model=PreferenceDeleteResponse
 )
-async def delete_preference(key: str, request: Request, _: None = Depends(require_api_key)) -> PreferenceDeleteResponse:
+async def delete_preference(
+    key: str, request: Request, _: None = Depends(require_api_key)
+) -> PreferenceDeleteResponse:
     """Delete a preference by key."""
     tracker = _get_tracker(request)
     store = tracker.store

@@ -371,7 +371,11 @@ class WorldModel:
         # Use validation loss for the improvement flag when available,
         # to avoid reporting success on overfit models.
         initial_val_loss = result.metrics[0].val_loss if result.metrics else initial_loss
-        result.improved = best_val_loss < initial_val_loss if best_val_loss < float("inf") else result.final_loss < initial_loss
+        result.improved = (
+            best_val_loss < initial_val_loss
+            if best_val_loss < float("inf")
+            else result.final_loss < initial_loss
+        )
 
         if result.improved:
             _log.info(

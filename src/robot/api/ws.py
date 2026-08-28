@@ -25,8 +25,8 @@ Example::
 from __future__ import annotations
 
 import contextlib
-import json
 import dataclasses
+import json
 from dataclasses import fields
 from datetime import date, datetime
 from enum import Enum
@@ -46,7 +46,7 @@ def _event_to_dict(event: object) -> dict[str, Any]:
     if not dataclasses.is_dataclass(event):
         return {"repr": repr(event)}
     result: dict[str, Any] = {}
-    for f in fields(event):  # type: ignore[arg-type]
+    for f in fields(event):
         value = getattr(event, f.name)
         if isinstance(value, Enum):
             result[f.name] = value.value

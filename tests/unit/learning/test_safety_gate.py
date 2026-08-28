@@ -236,7 +236,6 @@ class TestCannotBypassSafety:
 class TestFallbackValidationRegression:
     """Regression tests: fallback actions must not bypass the safety gate."""
 
-
     def test_invalid_configured_fallback_never_reaches_hardware(
         self,
         action_space: ActionSpace,

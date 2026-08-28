@@ -39,6 +39,19 @@ from robot.logging import get_logger
 _log = get_logger("services.mqtt_bridge")
 
 
+def _make_task_done_callback(tasks: list[Any], logger: object, log_prefix: str = "mqtt") -> Any:
+    """Create a done-callback that removes a task and logs exceptions."""
+
+    def _done(task: asyncio.Task[None]) -> None:
+        if task in tasks:
+            tasks.remove(task)
+        exc = task.exception()
+        if exc is not None:
+            _log.warning(f"{log_prefix}.task_exception", error=str(exc))
+
+    return _done
+
+
 @dataclass(slots=True)
 class MqttConfig:
     """MQTT connection configuration."""
@@ -62,7 +75,7 @@ def _serialise_event(event: object) -> dict[str, Any]:
     so enums and datetimes are handled correctly.
     """
     from dataclasses import fields as _fields
-    from datetime import date, datetime
+    from datetime import date
     from enum import Enum
 
     result: dict[str, Any] = {"type": type(event).__name__}
@@ -117,7 +130,7 @@ class MqttBridge:
             ) from exc
 
         self._client = mqtt.Client(
-            callback_api_version=mqtt.CallbackAPIVersion.VERSION2,  # type: ignore[attr-defined]
+            callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
             client_id="deskbot-bridge",
         )
 
@@ -238,12 +251,7 @@ class MqttBridge:
                     )
                 )
                 self._pending_tasks.append(t)
-                t.add_done_callback(
-                    lambda _: (
-                    self._pending_tasks.remove(t) if t in self._pending_tasks else None,
-                    _log.warning("mqtt.task_exception", error=str(t.exception())) if t.exception() else None,
-                )
-                )
+                t.add_done_callback(_make_task_done_callback(self._pending_tasks, _log, "mqtt"))
             elif "state" in topic:
                 from robot.behavior.state_machine import RobotState
 
@@ -254,33 +262,18 @@ class MqttBridge:
                     )
                 )
                 self._pending_tasks.append(t)
-                t.add_done_callback(
-                    lambda _: (
-                    self._pending_tasks.remove(t) if t in self._pending_tasks else None,
-                    _log.warning("mqtt.task_exception", error=str(t.exception())) if t.exception() else None,
-                )
-                )
+                t.add_done_callback(_make_task_done_callback(self._pending_tasks, _log, "mqtt"))
             elif "speak" in topic:
                 text = data.get("text", payload)
                 t = loop.create_task(self.bus.publish(SpeechRecognized(text=text, confidence=1.0)))
                 self._pending_tasks.append(t)
-                t.add_done_callback(
-                    lambda _: (
-                    self._pending_tasks.remove(t) if t in self._pending_tasks else None,
-                    _log.warning("mqtt.task_exception", error=str(t.exception())) if t.exception() else None,
-                )
-                )
+                t.add_done_callback(_make_task_done_callback(self._pending_tasks, _log, "mqtt"))
             elif "servo" in topic:
                 name = data.get("name", "pan")
                 angle = float(data.get("angle", 90.0))
                 t = loop.create_task(self.bus.publish(ServoMoved(name=name, angle=angle)))
                 self._pending_tasks.append(t)
-                t.add_done_callback(
-                    lambda _: (
-                    self._pending_tasks.remove(t) if t in self._pending_tasks else None,
-                    _log.warning("mqtt.task_exception", error=str(t.exception())) if t.exception() else None,
-                )
-                )
+                t.add_done_callback(_make_task_done_callback(self._pending_tasks, _log, "mqtt"))
 
         except Exception:
             _log.exception("mqtt.command_error")

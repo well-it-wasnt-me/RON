@@ -29,6 +29,7 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,8 +37,6 @@ from typing import Protocol, runtime_checkable
 
 from robot.interfaces.camera import Frame
 from robot.logging import get_logger
-
-import hashlib
 
 _log = get_logger("perception.face_detector")
 
@@ -206,9 +205,7 @@ class YuNetFaceDetector:
         if not _verify_sha256(downloaded, _YUNET_MODEL_SHA256):
             downloaded.unlink(missing_ok=True)
             _log.warning("face_detector.yunet.checksum_mismatch", url=_YUNET_MODEL_URL)
-            raise RuntimeError(
-                f"Downloaded YuNet model checksum mismatch from {_YUNET_MODEL_URL}"
-            )
+            raise RuntimeError(f"Downloaded YuNet model checksum mismatch from {_YUNET_MODEL_URL}")
         if not _is_valid_onnx(downloaded):
             downloaded.unlink(missing_ok=True)
             raise RuntimeError(
@@ -322,7 +319,7 @@ class CascadeFaceDetector:
         if cascade_path is not None:
             self._cascade = cv2.CascadeClassifier(str(cascade_path))
         else:
-            default = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"  # type: ignore[attr-defined]
+            default = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
             self._cascade = cv2.CascadeClassifier(default)
         if self._cascade.empty():
             raise RuntimeError(f"Failed to load cascade from {cascade_path!r}")
@@ -380,6 +377,7 @@ class CascadeFaceDetector:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _verify_sha256(path: Path, expected: str) -> bool:
     """Verify the SHA-256 checksum of a file."""

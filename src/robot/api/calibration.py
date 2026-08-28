@@ -8,8 +8,6 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from robot.api.security import require_api_key
-
 from robot.api.schemas import (
     CalibrateServoResponse,
     ClearDisplayResponse,
@@ -20,6 +18,7 @@ from robot.api.schemas import (
     ServoReleaseResponse,
     TestPatternResponse,
 )
+from robot.api.security import require_api_key
 
 router = APIRouter(prefix="/calibration", tags=["calibration"])
 
@@ -139,9 +138,11 @@ async def list_servos() -> ServoListResponse:
 @router.post(
     "/servos/{name}/move", summary="Move a servo to an angle", response_model=ServoMoveResponse
 )
-async def move_servo(name: str, angle: float, duration_s: float = 0.4, _: None = Depends(require_api_key)) -> ServoMoveResponse:
+async def move_servo(
+    name: str, angle: float, duration_s: float = 0.4, _: None = Depends(require_api_key)
+) -> ServoMoveResponse:
     servo = _get_servo(name)
-    minimum, maximum, _ = _servo_limits(name, servo)
+    minimum, maximum, _centre = _servo_limits(name, servo)
     if not minimum <= angle <= maximum:
         raise HTTPException(
             status_code=422, detail=f"Angle must be between {minimum} and {maximum} degrees"
@@ -235,7 +236,9 @@ async def get_display_config() -> DisplayConfigResponse:
 @router.post(
     "/display/test_pattern", summary="Show a test pattern", response_model=TestPatternResponse
 )
-async def show_test_pattern(pattern: str = "gradient", _: None = Depends(require_api_key)) -> TestPatternResponse:
+async def show_test_pattern(
+    pattern: str = "gradient", _: None = Depends(require_api_key)
+) -> TestPatternResponse:
     if _state.display is None:
         raise HTTPException(status_code=503, detail="No display available")
     w, h = _state.display.width, _state.display.height

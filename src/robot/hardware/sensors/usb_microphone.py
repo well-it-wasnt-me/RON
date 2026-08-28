@@ -56,6 +56,7 @@ class UsbMicrophone(Microphone):
     _stream_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
     _reader_thread: threading.Thread | None = field(default=None, init=False, repr=False)
     _closed: bool = field(default=False, init=False)
+    _stop: threading.Event = field(default_factory=threading.Event, init=False)
     _reader_error: str | None = field(default=None, init=False)
     _reader_started_at: float | None = field(default=None, init=False)
     _configured_sample_rate: int = field(default=16_000, init=False)

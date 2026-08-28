@@ -31,6 +31,7 @@ from robot.ai.tools.executor import ToolExecutor
 from robot.ai.tools.registry import BUILTIN_TOOLS, ToolRegistry
 from robot.api.calibration import set_calibration_state
 from robot.api.state_bridge import StateBridge
+from robot.behavior.actions import BehaviorAction
 from robot.behavior.idle import IdleBehavior
 from robot.behavior.perception_behavior import PerceptionBehavior
 from robot.behavior.personality import Personality
@@ -47,8 +48,6 @@ from robot.events.events import (
     RobotStopped,
 )
 from robot.eye_engine.animator import EyeDisplayAnimator
-from robot.eye_engine.blink import BlinkController
-from robot.eye_engine.renderer import EyeRenderer
 from robot.face.animator import FaceAnimator
 from robot.face.emotions import EmotionEngine
 from robot.face.face_orchestrator import FaceOrchestrator
@@ -155,6 +154,7 @@ class DeskBotApp:
     _ha_bridge: object | None = field(default=None, init=False, repr=False)
     _telegram_bridge: object | None = field(default=None, init=False, repr=False)
     _task_group: anyio.abc.TaskGroup | None = field(default=None, init=False, repr=False)
+    _drain_stop: bool = field(default=False, init=False, repr=False)
     _degradation: DegradationRegistry | None = field(default=None, init=False, repr=False)
     _frame_profiler: FrameProfiler | None = field(default=None, init=False, repr=False)
     _servo_profiler: ServoProfiler | None = field(default=None, init=False, repr=False)
@@ -760,12 +760,10 @@ class DeskBotApp:
         and servo commands). Without this drainer the behavior layer
         queues actions that are never executed.
         """
-        import anyio
-
-        while True:
+        while not self._drain_stop:
             try:
                 await anyio.sleep(0.1)
-                actions: list = []
+                actions: list[BehaviorAction] = []
                 if self.idle is not None:
                     actions.extend(self.idle.drain())
                 if self.reactions is not None:
@@ -878,6 +876,7 @@ class DeskBotApp:
             try:
                 yield
             finally:
+                self._drain_stop = True
                 if self.idle is not None:
                     self.idle.stop()
                 if self.face_animator is not None:

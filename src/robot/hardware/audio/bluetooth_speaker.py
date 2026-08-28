@@ -16,6 +16,7 @@ through a Bluetooth speaker.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import subprocess
 import time
 from dataclasses import dataclass

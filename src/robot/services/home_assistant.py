@@ -35,6 +35,21 @@ from robot.logging import get_logger
 _log = get_logger("services.home_assistant")
 
 
+def _make_task_done_callback(
+    tasks: list[Any], logger: object, log_prefix: str = "ha_bridge"
+) -> Any:
+    """Create a done-callback that removes a task and logs exceptions."""
+
+    def _done(task: asyncio.Task[None]) -> None:
+        if task in tasks:
+            tasks.remove(task)
+        exc = task.exception()
+        if exc is not None:
+            _log.warning(f"{log_prefix}.task_exception", error=str(exc))
+
+    return _done
+
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -135,7 +150,7 @@ class HomeAssistantBridge:
             ) from exc
 
         self._client = mqtt.Client(
-            callback_api_version=mqtt.CallbackAPIVersion.VERSION2,  # type: ignore[attr-defined]
+            callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
             client_id=f"{self.config.device_id}-ha-bridge",
         )
 
@@ -238,10 +253,7 @@ class HomeAssistantBridge:
                 )
                 self._pending_tasks.append(t)
                 t.add_done_callback(
-                    lambda _: (
-                    self._pending_tasks.remove(t) if t in self._pending_tasks else None,
-                    _log.warning("mqtt.task_exception", error=str(t.exception())) if t.exception() else None,
-                )
+                    _make_task_done_callback(self._pending_tasks, _log, "ha_bridge")
                 )
             except ValueError:
                 _log.warning("ha_bridge.invalid_emotion", emotion=data.get("emotion", payload))
@@ -256,10 +268,7 @@ class HomeAssistantBridge:
                 )
                 self._pending_tasks.append(t)
                 t.add_done_callback(
-                    lambda _: (
-                    self._pending_tasks.remove(t) if t in self._pending_tasks else None,
-                    _log.warning("mqtt.task_exception", error=str(t.exception())) if t.exception() else None,
-                )
+                    _make_task_done_callback(self._pending_tasks, _log, "ha_bridge")
                 )
             except ValueError:
                 _log.warning("ha_bridge.invalid_state", state=data.get("state", payload))
