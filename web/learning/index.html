@@ -87,6 +87,7 @@ td .chip.behavioral{background:rgba(139,143,163,.18);color:var(--muted)}
     <a href="/settings">Hardware Test</a>
     <a href="/calibration">Calibration</a>
     <a href="/config">Config</a>
+    <span style="color:var(--accent);font-weight:600">Learning</span>
   </nav>
   <div class="refresh">
     <label class="toggle-row"><input type="checkbox" id="auto-refresh" checked> Auto-refresh</label>
@@ -134,6 +135,10 @@ td .chip.behavioral{background:rgba(139,143,163,.18);color:var(--muted)}
       <button id="btn-refresh" class="secondary">Refresh Now</button>
       <span class="hint" id="train-hint"></span>
     </div>
+    <div class="btn-row" style="margin-top:.5rem">
+      <input type="password" id="api-key-input" placeholder="API key (optional)" style="background:var(--bg);border:1px solid var(--border);border-radius:.4rem;padding:.4rem .6rem;color:var(--text);font-size:.8rem;width:200px" title="Set when DESKBOT_API__API_KEY is configured">
+      <span class="hint">Required only when API key auth is enabled.</span>
+    </div>
     <div class="hint">Forcing a cycle trains the candidate model now, regardless of the schedule, then evaluates &amp; promotes/rolls back.</div>
   </div>
 
@@ -152,6 +157,10 @@ td .chip.behavioral{background:rgba(139,143,163,.18);color:var(--muted)}
       <div class="col">
         <strong style="font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Checkpoints</strong>
         <table class="config-table" id="cfg-checkpoints"><tbody></tbody></table>
+      </div>
+      <div class="col">
+        <strong style="font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Multimodal</strong>
+        <table class="config-table" id="cfg-multimodal"><tbody></tbody></table>
       </div>
     </div>
   </div>
@@ -203,7 +212,10 @@ async function apiGet(path) {
 }
 
 async function apiPost(path, body) {
-  const r = await fetch(API + path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {})});
+  const headers = {'Content-Type': 'application/json'};
+  const key = $('api-key-input') ? $('api-key-input').value.trim() : '';
+  if (key) headers['Authorization'] = 'Bearer ' + key;
+  const r = await fetch(API + path, {method: 'POST', headers, body: JSON.stringify(body || {})});
   if (!r.ok) {
     const err = new Error('HTTP ' + r.status);
     err.status = r.status;
@@ -303,7 +315,7 @@ function renderUnavailable(err) {
     showBanner(
       '<b>Learning service not available.</b> The local brain module is fully implemented but not yet wired into the live ' +
       'DeskBot app, or learning is disabled. Set <code>DESKBOT_LEARNING__ENABLED=true</code> and start the service to see live data. ' +
-      'See <a style="color:var(--orange)" href="https://github.com/well-it-wasnt-me/deskbot/blob/main/docs/modules/learning.md" target="_blank">Local Brain docs</a>.',
+      'See <a style="color:var(--orange)" href="https://github.com/well-it-wasnt-me/deskbot/blob/main/docs/modules/learning.md" target="_blank">Local Brain docs</a>.<br>Enable multimodal encoding with <code>DESKBOT_LEARNING__USE_MULTIMODAL=true</code> for richer state vectors.',
       'warn');
   } else {
     showBanner('<b>Could not reach the learning API.</b> ' + (err && err.message ? err.message : 'Is the DeskBot API running?'), 'err');
@@ -339,6 +351,7 @@ function renderStatus(s) {
     ['Model version', s.model_version || 0, ''],
     ['Last train', relTime(s.last_training_time), 'muted'],
     ['Last duration', s.last_training_duration_s != null ? fmtNum(s.last_training_duration_s, 3) + ' s' : '-', 'muted'],
+    ['Multimodal', s.use_multimodal ? 'ON (' + (s.multimodal_state_size || 0) + '-D)' : 'off', s.use_multimodal ? 'good' : 'muted'],
   ];
   for (const [label, val, cls] of items) {
     const div = document.createElement('div');
@@ -392,6 +405,11 @@ function renderConfig(c) {
   cfgRow($('cfg-checkpoints'), 'Directory', k.checkpoint_dir);
   cfgRow($('cfg-checkpoints'), 'Keep last N', k.keep_last_n);
   cfgRow($('cfg-checkpoints'), 'Promote threshold', k.promote_threshold);
+  // Multimodal
+  const mm = c.multimodal || {};
+  const mmBody = $('cfg-multimodal').querySelector('tbody'); mmBody.innerHTML = '';
+  cfgRow($('cfg-multimodal'), 'Enabled', mm.enabled ? 'Yes' : 'No');
+  cfgRow($('cfg-multimodal'), 'State size', mm.state_size || 91);
 }
 
 // ---------------------------------------------------------------------------

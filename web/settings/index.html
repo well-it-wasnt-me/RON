@@ -224,6 +224,8 @@ info-item{display:block}
 <div id="toast"></div>
 
 <script>
+function getApiKey() { const el = document.getElementById('api-key-input'); return el ? el.value.trim() : ''; }
+function authHeaders() { const h = {}; const k = getApiKey(); if (k) h['Authorization'] = 'Bearer ' + k; return h; }
 const API = window.location.origin + '/api/v1/settings';
 const $ = (id) => document.getElementById(id);
 const toastEl = $('toast');

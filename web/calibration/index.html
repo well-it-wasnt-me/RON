@@ -28,6 +28,7 @@
 <body>
 <h1>DeskBot Calibration</h1>
 <p class="muted"><span id="connection-status" class="status disconnected"></span><span id="connection-text">Connecting...</span></p>
+<div style="margin-bottom:1rem"><input type="password" id="api-key-input" placeholder="API key (optional)" style="background:#0f1117;border:1px solid #2a2d3a;border-radius:.4rem;padding:.4rem .6rem;color:#e4e6ed;font-size:.8rem;width:200px"></div>
 <p class="muted" style="margin-bottom:1rem"><a href="/" style="color:var(--accent);text-decoration:none">&#8592; Dashboard</a> &middot; <a href="/settings" style="color:var(--accent);text-decoration:none">Hardware Test</a> &middot; <a href="/learning" style="color:var(--accent);text-decoration:none">Local Brain</a></p>
 <h2>Servo Calibration</h2>
 <div class="card">
@@ -37,6 +38,8 @@
   <div id="error" class="error"></div>
 </div>
 <script>
+function getApiKey() { const el = document.getElementById('api-key-input'); return el ? el.value.trim() : ''; }
+function authHeaders() { const h = {}; const k = getApiKey(); if (k) h['Authorization'] = 'Bearer ' + k; return h; }
 const API = '/api/v1/calibration';
 const LABELS={pan:'Pan',tilt:'Tilt',left_arm:'Left Arm',right_arm:'Right Arm'};
 const state={};
