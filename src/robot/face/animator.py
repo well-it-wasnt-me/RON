@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, ClassVar
 from robot.animation.timelines import (
     Timeline,
 )
-from robot.eye_engine.animation import EyeAnimator
+from robot.eye_engine.animation import EyeAnimator, EyeSide
 from robot.face.animations import (
     SpeakingAnimation,
     ThinkingDotsAnimation,
@@ -112,7 +112,7 @@ class FaceAnimator:
         if self.width <= 0 or self.height <= 0:
             raise ValueError("width and height must be > 0")
         self._eye = EyeAnimator(
-            side=__import__("robot.eye_engine.animation", fromlist=["EyeSide"]).EyeSide.LEFT,
+            side=EyeSide.LEFT,
             width=self.width,
             height=self.height,
             fps=self.fps,
