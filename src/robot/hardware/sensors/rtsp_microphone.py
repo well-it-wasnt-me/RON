@@ -9,6 +9,11 @@ The camera currently provides:
 
 The backend decodes that audio with PyAV/FFmpeg, resamples it to the
 configured RON microphone rate, and emits fixed-size AudioChunk objects.
+
+The decoder is paced against the audio timeline so that RTSP audio is
+presented to RON in real time, just like a physical microphone. Without
+this pacing PyAV can decode buffered RTSP packets faster than real time,
+which causes the asyncio queue to fill and audio chunks to be dropped.
 """
 
 from __future__ import annotations
@@ -16,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import threading
+import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
@@ -85,6 +91,12 @@ class RtspMicrophone(Microphone):
     _reconnect_attempts: int = field(default=0)
 
     _timeline_s: float = field(default=0.0, init=False)
+    _playback_start_monotonic: float | None = field(
+        default=None,
+        init=False,
+        repr=False,
+    )
+
     _pcm_buffer: bytearray = field(
         default_factory=bytearray,
         init=False,
@@ -111,6 +123,12 @@ class RtspMicrophone(Microphone):
 
         if self.queue_maxsize <= 0:
             raise ValueError("queue_maxsize must be greater than zero")
+
+        if self.reconnect_initial_delay <= 0:
+            raise ValueError("reconnect_initial_delay must be greater than zero")
+
+        if self.reconnect_max_delay <= 0:
+            raise ValueError("reconnect_max_delay must be greater than zero")
 
         try:
             import av
@@ -204,6 +222,7 @@ class RtspMicrophone(Microphone):
             "chunks_dropped": self._chunks_dropped,
             "reconnect_attempts": self._reconnect_attempts,
             "reader_error": self._reader_error,
+            "timeline_s": round(self._timeline_s, 3),
         }
 
     async def _ensure_started(self) -> None:
@@ -239,6 +258,8 @@ class RtspMicrophone(Microphone):
             except Exception as exc:
                 if self._stop.is_set() or self._closed:
                     break
+
+                self._reader_error = str(exc)
 
                 _log.warning(
                     "rtsp_microphone.connection_failed",
@@ -297,7 +318,14 @@ class RtspMicrophone(Microphone):
 
         input_channels = int(audio_stream.codec_context.channels or 0)
 
-        codec_name = str(getattr(audio_stream.codec_context.codec, "name", "") or "")
+        codec_name = str(
+            getattr(
+                audio_stream.codec_context.codec,
+                "name",
+                "",
+            )
+            or ""
+        )
 
         self._container = container
         self._audio_stream = audio_stream
@@ -313,6 +341,7 @@ class RtspMicrophone(Microphone):
 
         self._pcm_buffer.clear()
         self._timeline_s = 0.0
+        self._playback_start_monotonic = time.monotonic()
 
         _log.info(
             "rtsp_microphone.opened",
@@ -340,7 +369,45 @@ class RtspMicrophone(Microphone):
         if resampler is None:
             raise RuntimeError("RTSP audio resampler is not initialized")
 
-        for frame in container.decode(audio=audio_stream.index):
+        # PyAV's Stream.index is the index in the complete container
+        # stream list. container.decode(audio=...) expects the index in
+        # the audio-stream collection.
+        #
+        # Example:
+        #
+        #   container streams:
+        #       #0 video
+        #       #1 audio
+        #
+        #   audio streams:
+        #       #0 audio
+        #
+        # So audio_stream.index == 1, while decode(audio=0) is required.
+        audio_stream_index = next(
+            (
+                i
+                for i, stream in enumerate(container.streams.audio)
+                if stream.index == audio_stream.index
+            ),
+            None,
+        )
+
+        if audio_stream_index is None:
+            raise RuntimeError(
+                "RTSP audio stream could not be mapped to the container audio-stream index"
+            )
+
+        _log.info(
+            "rtsp_microphone.decoder_started",
+            codec=self._input_codec,
+            input_sample_rate=self._input_sample_rate,
+            input_channels=self._input_channels,
+            audio_stream_index=audio_stream_index,
+        )
+
+        for frame in container.decode(
+            audio=audio_stream_index,
+        ):
             if self._stop.is_set() or self._closed:
                 return
 
@@ -348,34 +415,58 @@ class RtspMicrophone(Microphone):
 
             resampled_frames = resampler.resample(frame)
 
-            for resampled in resampled_frames:
+            for output_frame in resampled_frames:
                 if self._stop.is_set() or self._closed:
                     return
 
-                pcm = self._frame_to_pcm(resampled)
+                pcm = self._frame_to_pcm(output_frame)
 
                 if pcm:
                     self._pcm_buffer.extend(pcm)
                     self._emit_complete_chunks()
 
-        # Flush any audio buffered inside the resampler.
-        with contextlib.suppress(Exception):
-            for resampled in resampler.resample(None):
-                pcm = self._frame_to_pcm(resampled)
+        # Flush audio buffered inside the resampler.
+        flushed_frames = resampler.resample(None)
 
-                if pcm:
-                    self._pcm_buffer.extend(pcm)
+        for output_frame in flushed_frames:
+            if self._stop.is_set() or self._closed:
+                return
 
-            self._emit_complete_chunks()
+            pcm = self._frame_to_pcm(output_frame)
+
+            if pcm:
+                self._pcm_buffer.extend(pcm)
+
+        self._emit_complete_chunks()
 
     def _frame_to_pcm(self, frame: Any) -> bytes:
-        """Convert a resampled PyAV frame to packed s16 PCM."""
+        """Convert a resampled PyAV audio frame to packed s16 PCM."""
         array = frame.to_ndarray()
 
-        if getattr(array, "ndim", 1) > 1:
-            array = array.reshape(-1)
+        if array.ndim == 0:
+            raise RuntimeError("RTSP audio frame produced a scalar NumPy array")
 
-        return array.astype("<i2", copy=False).tobytes()
+        if array.ndim == 1:
+            samples = array
+
+        elif array.ndim == 2:
+            if array.shape[0] == 1:
+                samples = array[0]
+
+            elif array.shape[1] == 1:
+                samples = array[:, 0]
+
+            else:
+                raise RuntimeError(
+                    "RTSP microphone expected mono audio after "
+                    "resampling, got ndarray shape="
+                    f"{array.shape!r}"
+                )
+
+        else:
+            raise RuntimeError(f"unexpected RTSP audio ndarray shape: {array.shape!r}")
+
+        return samples.astype("<i2", copy=False).tobytes()
 
     def _frame_samples(self) -> int:
         """Return the number of output samples in each chunk."""
@@ -389,23 +480,45 @@ class RtspMicrophone(Microphone):
         return self._frame_samples() * 2 * self.channels
 
     def _emit_complete_chunks(self) -> None:
-        """Emit complete fixed-size AudioChunk objects."""
+        """Emit complete fixed-size AudioChunk objects in real time."""
         frame_bytes = self._frame_bytes()
 
         while len(self._pcm_buffer) >= frame_bytes:
+            if self._stop.is_set() or self._closed:
+                return
+
             pcm = bytes(self._pcm_buffer[:frame_bytes])
             del self._pcm_buffer[:frame_bytes]
 
             chunk_duration = self._frame_samples() / self.output_sample_rate
 
+            chunk_start_s = self._timeline_s
+            self._timeline_s += chunk_duration
+
+            # Pace the RTSP stream against wall-clock time.
+            #
+            # PyAV may have several seconds of RTSP data buffered and
+            # can decode that data considerably faster than real time.
+            # A physical microphone cannot do that, so don't let the
+            # RTSP producer outrun the consumer.
+            playback_start = self._playback_start_monotonic
+
+            if playback_start is not None:
+                target_time = playback_start + chunk_start_s
+                delay = target_time - time.monotonic()
+
+                if delay > 0:
+                    self._stop.wait(delay)
+
+                    if self._stop.is_set() or self._closed:
+                        return
+
             chunk = AudioChunk(
                 pcm=pcm,
                 sample_rate=self.output_sample_rate,
                 channels=self.channels,
-                timestamp=self._timeline_s,
+                timestamp=chunk_start_s,
             )
-
-            self._timeline_s += chunk_duration
 
             self._enqueue_threadsafe(chunk)
 
@@ -439,12 +552,16 @@ class RtspMicrophone(Microphone):
         except asyncio.QueueFull:
             self._chunks_dropped += 1
 
-            _log.warning(
-                "rtsp_microphone.queue_full",
-                chunks_dropped=self._chunks_dropped,
-                queue_size=queue.qsize(),
-                queue_maxsize=queue.maxsize,
-            )
+            # Queue-full logging is intentionally rate limited. A
+            # producer running faster than its consumer can otherwise
+            # generate thousands of log messages per second.
+            if self._chunks_dropped == 1 or self._chunks_dropped % 100 == 0:
+                _log.warning(
+                    "rtsp_microphone.queue_full",
+                    chunks_dropped=self._chunks_dropped,
+                    queue_size=queue.qsize(),
+                    queue_maxsize=queue.maxsize,
+                )
 
     async def _signal_queue_end(self) -> None:
         """Signal end of stream from asyncio context."""
@@ -453,8 +570,17 @@ class RtspMicrophone(Microphone):
         if queue is None:
             return
 
-        with contextlib.suppress(asyncio.QueueFull):
-            queue.put_nowait(None)
+        # The normal consumer should drain outstanding audio before
+        # seeing the sentinel. If the queue is full during shutdown,
+        # discard the oldest item to guarantee that the sentinel can
+        # be delivered.
+        while True:
+            try:
+                queue.put_nowait(None)
+                return
+            except asyncio.QueueFull:
+                with contextlib.suppress(asyncio.QueueEmpty):
+                    queue.get_nowait()
 
     def _signal_queue_end_threadsafe(self) -> None:
         """Signal end of stream from the decoder thread."""
@@ -477,8 +603,13 @@ class RtspMicrophone(Microphone):
         if queue is None:
             return
 
-        with contextlib.suppress(asyncio.QueueFull):
-            queue.put_nowait(None)
+        while True:
+            try:
+                queue.put_nowait(None)
+                return
+            except asyncio.QueueFull:
+                with contextlib.suppress(asyncio.QueueEmpty):
+                    queue.get_nowait()
 
     def _close_container(self) -> None:
         """Close the current PyAV container."""
@@ -487,6 +618,7 @@ class RtspMicrophone(Microphone):
         self._container = None
         self._audio_stream = None
         self._resampler = None
+        self._playback_start_monotonic = None
 
         if container is not None:
             with contextlib.suppress(Exception):
