@@ -59,6 +59,7 @@ from robot.hardware.displays.mock_display import MockDisplay
 from robot.hardware.sensors.mock_camera import MockCamera
 from robot.hardware.sensors.mock_microphone import MockMicrophone
 from robot.hardware.sensors.rtsp_camera import RtspCamera
+from robot.hardware.sensors.rtsp_microphone import RtspMicrophone
 from robot.hardware.sensors.usb_camera import UsbCamera
 from robot.hardware.sensors.usb_microphone import UsbMicrophone
 from robot.hardware.servos.factory import ServoControllerFactory
@@ -243,28 +244,63 @@ class DeskBotApp:
         if learning_stack is not None:
             learning_service, safety_manager, observation_adapter = learning_stack
 
-        # Sensors - use real USB hardware when running with
-        # DESKBOT_HARDWARE=real, otherwise the in-memory mocks.
+        # Sensors - the microphone may be a physical USB device or the
+        # audio track of the configured RTSP camera stream.
         microphone: Microphone
         camera: Camera
+
         if settings.hardware == "real":
-            microphone = safe_init(  # type: ignore[assignment]
-                factory=lambda: UsbMicrophone(
-                    input_device=settings.microphone.input_device,
-                    _sample_rate_field=settings.microphone.sample_rate,
-                    channels=settings.microphone.channels,
-                    frame_ms=settings.microphone.frame_ms,
-                ),
-                component="microphone",
-                fallback=lambda: MockMicrophone(
-                    sample_rate=settings.microphone.sample_rate,
-                    channels=settings.microphone.channels,
-                    frame_ms=settings.microphone.frame_ms,
-                ),
-                registry=degradation,
-                original_backend="usb",
-                fallback_backend="mock",
-            )
+            match settings.microphone.backend:
+                case "usb":
+                    microphone = safe_init(  # type: ignore[assignment]
+                        factory=lambda: UsbMicrophone(
+                            input_device=settings.microphone.input_device,
+                            _sample_rate_field=settings.microphone.sample_rate,
+                            channels=settings.microphone.channels,
+                            frame_ms=settings.microphone.frame_ms,
+                        ),
+                        component="microphone",
+                        fallback=lambda: MockMicrophone(
+                            sample_rate=settings.microphone.sample_rate,
+                            channels=settings.microphone.channels,
+                            frame_ms=settings.microphone.frame_ms,
+                        ),
+                        registry=degradation,
+                        original_backend="usb",
+                        fallback_backend="mock",
+                    )
+
+                case "rtsp":
+                    if settings.camera.backend != "rtsp" or not settings.camera.rtsp_url:
+                        raise ValueError(
+                            "microphone.backend='rtsp' requires "
+                            "camera.backend='rtsp' and camera.rtsp_url"
+                        )
+
+                    microphone = safe_init(  # type: ignore[assignment]
+                        factory=lambda: RtspMicrophone(
+                            url=settings.camera.rtsp_url,
+                            output_sample_rate=settings.microphone.sample_rate,
+                            channels=settings.microphone.channels,
+                            frame_ms=settings.microphone.frame_ms,
+                            transport=settings.microphone.rtsp_transport,
+                        ),
+                        component="microphone",
+                        fallback=lambda: MockMicrophone(
+                            sample_rate=settings.microphone.sample_rate,
+                            channels=settings.microphone.channels,
+                            frame_ms=settings.microphone.frame_ms,
+                        ),
+                        registry=degradation,
+                        original_backend="rtsp",
+                        fallback_backend="mock",
+                    )
+
+                case _:
+                    raise ValueError(
+                        f"unsupported microphone backend: {settings.microphone.backend!r}"
+                    )
+
             if settings.camera.backend == "rtsp" and settings.camera.rtsp_url:
                 camera = safe_init(
                     factory=lambda: RtspCamera(  # type: ignore[assignment]
@@ -299,12 +335,14 @@ class DeskBotApp:
                     original_backend="usb",
                     fallback_backend="mock",
                 )
+
         else:
             microphone = MockMicrophone(
                 sample_rate=settings.microphone.sample_rate,
                 channels=settings.microphone.channels,
                 frame_ms=settings.microphone.frame_ms,
             )
+
             if settings.camera.backend == "rtsp" and settings.camera.rtsp_url:
                 camera = safe_init(
                     factory=lambda: RtspCamera(  # type: ignore[assignment]

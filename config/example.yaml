@@ -125,23 +125,38 @@ audio:
 
 # -- Microphone ------------------------------------------------------------
 microphone:
+  # usb | rtsp
+  #
+  # rtsp uses the audio track from camera.rtsp_url.
+  backend: usb
+
+  # Used by backend=usb.
   input_device: default
+
+  # Format presented to RON's wake-word/STT pipeline.
+  # The RTSP camera's 8000 Hz A-law audio is automatically
+  # decoded and resampled to this format.
   sample_rate: 16000
   channels: 1
   frame_ms: 30
   dtype: int16
 
+  # Used by backend=rtsp.
+  # tcp is recommended for RTSP audio reliability.
+  rtsp_transport: tcp
+
 # -- Camera ----------------------------------------------------------------
 camera:
   # mock | usb | rtsp
-  backend: mock
+  backend: rtsp
   device: 0
-  width: 640
-  height: 480
-  fps: 30
-  # RTSP stream URL (required when backend=rtsp)
-  # rtsp_url: rtsp://admin:pass@192.168.1.50:554/stream
+  width: 1280
+  height: 720
+  fps: 15
 
+  # Same RTSP stream supplies both video and microphone audio.
+  rtsp_url: rtsp://admin:YOUR_PASSWORD@192.168.1.50:554/stream
+  
 # -- Perception (face detection) -------------------------------------------
 perception:
   enabled: true

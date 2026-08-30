@@ -321,13 +321,23 @@ class AudioConfig(BaseSettings):
 class MicrophoneConfig(BaseSettings):
     """Microphone capture configuration."""
 
-    model_config = SettingsConfigDict(env_prefix="DESKBOT_MICROPHONE__", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="DESKBOT_MICROPHONE__",
+        extra="ignore",
+    )
+
+    backend: Literal["usb", "rtsp"] = "usb"
 
     input_device: str = Field(default="default")
     sample_rate: int = Field(default=16_000, gt=0)
     channels: int = Field(default=1, ge=1, le=8)
     frame_ms: int = Field(default=30, gt=0)
     dtype: str = Field(default="int16")
+
+    rtsp_transport: Literal["tcp", "udp"] = Field(
+        default="tcp",
+        description="Transport used by the RTSP microphone backend.",
+    )
 
 
 class CameraConfig(BaseSettings):
