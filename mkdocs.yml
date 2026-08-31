@@ -2,113 +2,113 @@ site_name: DeskBot
 site_description: A modular desktop companion robot powered by Raspberry Pi
 repo_url: https://github.com/well-it-wasnt-me/RON
 theme:
-  name: material
+  name: readthedocs
   palette:
-  - scheme: default
-    primary: indigo
-    accent: indigo
-    toggle:
-      icon: material/brightness-7
-      name: Switch to dark mode
-  - scheme: slate
-    primary: indigo
-    accent: indigo
-    toggle:
-      icon: material/brightness-4
-      name: Switch to light mode
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
   features:
-  - navigation.tabs
-  - navigation.sections
-  - navigation.top
-  - navigation.indexes
-  - search.suggest
-  - search.highlight
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
 nav:
-- Home: index.md
-- Getting Started:
-  - Developer Setup: getting-started/developer-setup.md
-  - Wiring Guide: getting-started/wiring.md
-  - Deployment: getting-started/deployment.md
-  - Contributing: getting-started/contributing.md
-- Architecture:
-  - Overview: architecture/overview.md
-  - Learning Architecture: architecture/learning.md
-  - Production Learning System: architecture/production-learning.md
-  - Audio Architecture: architecture/audio.md
-  - Lifecycle & Degradation: architecture/lifecycle.md
-- Modules:
-  - Expression:
-    - Face Engine: modules/face.md
-    - Face Animations: modules/face-animations.md
-    - Eye Engine (Legacy): modules/eye-engine.md
-    - Body Language: modules/body-language.md
-    - Animation: modules/animation.md
-  - Behavior:
-    - Behavior Engine: modules/behavior.md
-    - Behavior Library: modules/behavior-library.md
-  - Perception:
-    - Perception: modules/perception.md
-  - Conversation & AI:
-    - Conversation & AI: modules/conversation.md
-    - Speech: modules/speech.md
-    - Tool Calling: modules/tools.md
-    - Preferences: modules/preferences.md
-    - Vector Memory: modules/vector-memory.md
-  - Learning:
-    - Local Brain: modules/learning.md
-    - Teaching Mode: modules/teaching_mode.md
-  - Infrastructure:
-    - Events: modules/events.md
-    - Interfaces: modules/interfaces.md
-    - Lifecycle & Degradation: modules/lifecycle.md
-    - Services: modules/services.md
-    - Simulation: modules/simulation.md
-    - Performance: modules/performance.md
-  - Hardware:
-    - Servos: modules/servos.md
-  - Integration:
-    - Plugins: modules/plugins.md
-    - MQTT Bridge: modules/mqtt.md
-    - Home Assistant: modules/home-assistant.md
-    - Telegram Bridge: modules/telegram.md
-- CLI:
-  - Overview: cli/index.md
-  - Interactive CLI: cli/interactive.md
-- Reference:
-  - Configuration: reference/config.md
-  - REST API: reference/api.md
-  - Errors: reference/errors.md
-  - Events: reference/events.md
-  - Face: reference/face.md
-  - Body Language: reference/body-language.md
-  - Servos: reference/servos.md
-  - Hardware: reference/hardware.md
-  - Simulation: reference/simulation.md
-  - Behavior Library: reference/behavior-library.md
-  - Performance: reference/performance.md
+  - Home: index.md
+  - Getting Started:
+      - Developer Setup: getting-started/developer-setup.md
+      - Wiring Guide: getting-started/wiring.md
+      - Deployment: getting-started/deployment.md
+      - Contributing: getting-started/contributing.md
+  - Architecture:
+      - Overview: architecture/overview.md
+      - Learning Architecture: architecture/learning.md
+      - Production Learning System: architecture/production-learning.md
+      - Audio Architecture: architecture/audio.md
+      - Lifecycle & Degradation: architecture/lifecycle.md
+  - Modules:
+      - Expression:
+          - Face Engine: modules/face.md
+          - Face Animations: modules/face-animations.md
+          - Eye Engine (Legacy): modules/eye-engine.md
+          - Body Language: modules/body-language.md
+          - Animation: modules/animation.md
+      - Behavior:
+          - Behavior Engine: modules/behavior.md
+          - Behavior Library: modules/behavior-library.md
+      - Perception:
+          - Perception: modules/perception.md
+      - Conversation & AI:
+          - Conversation & AI: modules/conversation.md
+          - Speech: modules/speech.md
+          - Tool Calling: modules/tools.md
+          - Preferences: modules/preferences.md
+          - Vector Memory: modules/vector-memory.md
+      - Learning:
+          - Local Brain: modules/learning.md
+          - Teaching Mode: modules/teaching_mode.md
+      - Infrastructure:
+          - Events: modules/events.md
+          - Interfaces: modules/interfaces.md
+          - Lifecycle & Degradation: modules/lifecycle.md
+          - Services: modules/services.md
+          - Simulation: modules/simulation.md
+          - Performance: modules/performance.md
+      - Hardware:
+          - Servos: modules/servos.md
+      - Integration:
+          - Plugins: modules/plugins.md
+          - MQTT Bridge: modules/mqtt.md
+          - Home Assistant: modules/home-assistant.md
+          - Telegram Bridge: modules/telegram.md
+  - CLI:
+      - Overview: cli/index.md
+      - Interactive CLI: cli/interactive.md
+  - Reference:
+      - Configuration: reference/config.md
+      - REST API: reference/api.md
+      - Errors: reference/errors.md
+      - Events: reference/events.md
+      - Face: reference/face.md
+      - Body Language: reference/body-language.md
+      - Servos: reference/servos.md
+      - Hardware: reference/hardware.md
+      - Simulation: reference/simulation.md
+      - Behavior Library: reference/behavior-library.md
+      - Performance: reference/performance.md
 plugins:
-- search
-- mkdocstrings:
-    handlers:
-      python:
-        paths:
-        - src
-        options:
-          show_source: true
-          show_root_heading: true
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths:
+            - src
+          options:
+            show_source: true
+            show_root_heading: true
 markdown_extensions:
-- pymdownx.highlight:
-    anchor_linenums: true
-- pymdownx.superfences:
-    custom_fences:
-    - name: mermaid
-      class: mermaid
-      format: !!python/name:pymdownx.superfences.fence_div_format
-- pymdownx.tabbed:
-    alternate_style: true
-- admonition
-- attr_list
-- md_in_html
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_div_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - attr_list
+  - md_in_html
 extra_javascript:
-- https://unpkg.com/mermaid@11/dist/mermaid.min.js
-- assets/js/mermaid-init.js
+  - https://unpkg.com/mermaid@11/dist/mermaid.min.js
+  - assets/js/mermaid-init.js

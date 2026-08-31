@@ -77,14 +77,14 @@ flowchart LR
 | `RequestBlinkAction` | Publishes `BlinkRequested` |
 | `RequestLookAction` | Publishes `LookRequested` |
 | `RequestServoMoveAction` | Calls `ServoController.move_to()` + publishes `ServoMoved` |
-| `RequestSleepAction` | Transitions state machine to `SLEEPING` |
-| `LookAroundAction` | Sequences multiple `LookRequested` events |
-| `CelebrateAction` | Emotion + servo celebration sequence |
+| `RequestSleepAction` | Logs the sleep request (`executor.sleep_requested`); no state transition or event is emitted |
+| `LookAroundAction` | Publishes a single `LookRequested` (gaze to centre) |
+| `CelebrateAction` | Publishes `EmotionChanged` (neutral→happy, with the action's intensity); no servo motion |
 | `WaveAction` | Drives the `right_arm` servo through a wave sequence |
 | `MoveArmAction` | Moves a named arm servo (`left_arm`/`right_arm`) to a validated angle |
 | `SpeakAction` | Synthesises + plays text via TTS (best-effort; no-op if TTS/audio missing, never a hardware failure) |
 | `ChangeEmotionAction` | Publishes `EmotionChanged` (validates the emotion first) |
-| `SetStateAction` | Publishes `StateChanged` directly (warns on illegal transitions) |
+| `SetStateAction` | Publishes `StateChanged` directly (previous hard-coded as `IDLE`); no illegal-transition warning is emitted |
 
 The executor depends on the `ServoController` protocol only; the concrete
 backend (mock, GPIO, PCA9685) is injected at construction time. This makes the

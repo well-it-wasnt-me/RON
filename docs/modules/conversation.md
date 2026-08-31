@@ -42,6 +42,22 @@ to the selected LLM.
 Messages are bounded by the conversation history limit and can be persisted
 through a `ConversationStore`.
 
+### Teaching & feedback hooks
+
+The service layer (`ConversationService`, which wraps the manager) optionally
+wires two learning hooks on the speech path:
+
+- a **`TeachingController`** — before the LLM turn, each utterance is offered to
+  `arm_from_instruction`; a matching `"when I {gesture}, {action}"` instruction
+  arms a teaching session, is acknowledged, and returns without an LLM turn;
+- a **`FeedbackService`** — spoken praise/correction (`"good"` / `"no"`) is
+  matched by a small static classifier and attributed to the most-recent
+  eligible real transition.
+
+Neither hook is active unless learning/teaching are enabled. See
+[Services](services.md#teaching-feedback-wiring) and
+[Teaching Mode](teaching_mode.md).
+
 ## Persistence
 
 The store abstraction supports:

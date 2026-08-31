@@ -1,7 +1,7 @@
 # Local Brain - Learning Module
 
 DeskBot's **local brain** is a self-contained, on-device learning system
-implemented in [`robot.learning`](https://github.com/well-it-wasnt-me/deskbot/tree/main/src/robot/learning).
+implemented in [`robot.learning`](https://github.com/well-it-wasnt-me/RON/tree/main/src/robot/learning).
 It lets the robot *observe* its environment, *record* experience, *learn*
 measurable relationships from that experience, *retain* what it learned, and
 *safely* use that knowledge to improve its behaviour - all running locally
@@ -282,7 +282,7 @@ A Q-learning policy with function approximation.
   `change_emotion`, `set_state`, `wave`, `move_left_arm`, `move_right_arm`
   (indices 10-15). A reverse `action_index -> BehaviorAction` mapping
   (`action_index_to_behavior_action`) resolves an index back to the
-  executable behaviour (see [Teaching Mode](#teaching--human-learning-loop)).
+  executable behaviour (see [Teaching Mode](teaching_mode.md)).
 - **`ActionLearner`** - an MLP mapping `[state, action_onehot] -> Q(s,a)`.
   Action selection is **epsilon-greedy** with exponential decay
   (`epsilon_start -> epsilon_end`, `epsilon_decay` per step) and a
@@ -290,7 +290,7 @@ A Q-learning policy with function approximation.
   apply the Bellman update `target = r + γ·maxₐ Q(s', a')` (or just `r`
   when `done`). The learner is trained in each background training cycle
   on feedback-amended rewards (`reward_for_transition`) — see the
-  [teaching loop](#teaching--human-learning-loop) below.
+  [teaching loop](teaching_mode.md).
 - **`ActionLearningEnv`** - a simulation with a shaped reward structure
   (e.g. `celebrate` with a face -> `+1.0`; `sleep` -> `-0.5`; `look_center`
   with a face -> `+0.5`).

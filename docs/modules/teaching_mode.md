@@ -36,8 +36,8 @@ All teaching parameters are environment-configurable via
 |---------------------------------------------|---------|-------------------------------------------------------------------|
 | `DESKBOT_TEACHING__ENABLED`                 | `false` | Enable the teaching loop                                          |
 | `DESKBOT_TEACHING__FEEDBACK_WINDOW_S`        | `5.0`   | Seconds after a transition during which feedback can attach to it |
-| `DESKBOT_TEACHING__STALENESS_S`             | `30.0`  | A recorded feedback is applied only while younger than this       |
-| `DESKBOT_TEACHING__PRACTICE_EPSILON`        | `0.2`   | Exploration used when the policy proposes in practice mode        |
+| `DESKBOT_TEACHING__STALENESS_S`             | `30.0`  | Stored on `FeedbackService` as a staleness bound; **not currently enforced** — `reward_for_transition` applies attributed feedback regardless of age |
+| `DESKBOT_TEACHING__PRACTICE_EPSILON`        | `0.2`   | Defined but **not currently wired** — the policy uses its own epsilon-greedy decay schedule. Reserved for future use |
 | `DESKBOT_TEACHING__COOLDOWN_S`              | `0.2`   | Minimum seconds between two executed actions (safety cooldown)   |
 | `DESKBOT_TEACHING__MIN_EXPERIENCES_FOR_PRACTICE` | `64` | Min total experiences before practice may let the policy propose  |
 
@@ -116,9 +116,12 @@ creates a transition. Building a real CV gesture detector is out of scope.
   fabricated, no reward is invented, no counter is bumped.
 - **Amended reward.** `LearningService.reward_for_transition(tid)` returns
   the immediate `RewardModel` reward **plus** the ledger's
-  praise/correction delta (within `staleness_s`). The action learner
-  trains on this amended reward — so sparse base rewards (mostly 0 without
-  face/audio) are dominated by the human feedback signal, by design.
+  praise/correction delta, clamped to `[-2, 2]` (and `0.0` when the
+  transition is no longer in `working_memory.recent(256)`). The
+  `staleness_s` bound is **not currently enforced** — attributed feedback
+  is applied regardless of age. The action learner trains on this amended
+  reward — so sparse base rewards (mostly 0 without face/audio) are
+  dominated by the human feedback signal, by design.
 - **Polarity / magnitude.** Praise is `polarity=+1`, correction `polarity=-1`,
   with a configurable `magnitude` (default `1.0`).
 
