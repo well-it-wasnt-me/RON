@@ -526,6 +526,14 @@ class DeskBotApp:
         app._learning_service = learning_service
         app._safety_manager = safety_manager
         app._observation_adapter = observation_adapter
+        # Wire the learning transition lifecycle into the real action-execution
+        # path.  When on-device learning is enabled, every mappable action
+        # executed through the ActionExecutor opens a transition before execution
+        # and completes it (with reward + outcome) after — so live robot actions
+        # produce real stored experiences.  Disabled learning leaves the
+        # recorder unset and the executor behaves exactly as before.
+        if learning_service is not None and executor is not None:
+            executor.experience_recorder = learning_service.recorder
         app.conversation = conversation
         app._degradation = degradation
 
