@@ -383,7 +383,6 @@ class ActionLearner:
     def q_values(self, state: np.ndarray) -> np.ndarray:
         """Compute Q-values for all actions in the given state."""
         state = np.asarray(state, dtype=np.float64)
-
         if state.ndim != 1:
             raise ValueError(f"state must be a 1-D vector, got shape {state.shape}")
 
@@ -400,8 +399,20 @@ class ActionLearner:
             (n_actions, self.state_size + n_actions),
             dtype=np.float64,
         )
-
+        # Put the same state into every action row.
         inputs[:, : self.state_size] = state
+
+        # my brain: "yes, you implemented that"
+        # reality hititng with a brick: no you didnt.
+
+        # Add one-hot action encoding.
+        for i in range(n_actions):
+            inputs[i, self.state_size + i] = 1.0
+
+        # Evaluate Q(s, a) for every action.
+        pred = self.model.predict(Tensor(inputs))
+
+        return pred.data.flatten()
 
     def q_value(self, state: np.ndarray, action_index: int) -> float:
         """Compute Q(s, a) for a single state-action pair."""
