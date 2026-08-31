@@ -903,7 +903,7 @@ class FaceRenderer:
         for i in range(steps + 1):
             x_f: float = cx_f - half + (i / steps) * width
             t_f: float = (x_f - cx_f) / half
-            y_f: float = cy_f + curve_f * (1 - t_f * t_f)
+            y_f: float = cy_f - curve_f * (1 - t_f * t_f)
             for k in range(-thickness // 2, thickness // 2 + 1):
                 px, py = round(x_f), round(y_f + k)
                 if 0 <= px < raster.width and 0 <= py < raster.height:
