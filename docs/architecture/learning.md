@@ -52,8 +52,12 @@ flowchart TD
 
 ### Phase 5: Action Learning
 
-- **ActionLearner** — Q-learning with function approximation; epsilon-greedy exploration. Trained each background training cycle on feedback-amended rewards (`reward_for_transition`), so Q-values move toward demonstrated and praised actions over repetitions.
-- **ActionSpace** — Registry of 16 valid DeskBot actions: the 10 original gaze/blink/celebrate/sleep actions plus learnable `speak`, `change_emotion`, `set_state`, `wave`, `move_left_arm`, `move_right_arm`. A reverse `action_index -> BehaviorAction` mapping resolves an index back to a concrete action for execution.
+- **ActionLearner** — Q-learning with function approximation; epsilon-greedy exploration. Trained each background
+  training cycle on feedback-amended rewards (`reward_for_transition`), so Q-values move toward demonstrated and praised
+  actions over repetitions.
+- **ActionSpace** — Registry of 16 valid DeskBot actions: the 10 original gaze/blink/celebrate/sleep actions plus
+  learnable `speak`, `change_emotion`, `set_state`, `wave`, `move_left_arm`, `move_right_arm`. A reverse
+  `action_index -> BehaviorAction` mapping resolves an index back to a concrete action for execution.
 - **ActionLearningEnv** — Simulation environment with reward structure
 
 ### Phase 6: Continual Learning
@@ -70,6 +74,7 @@ flowchart TD
 - **CheckpointConfig** — Configurable: directory, keep_last_n, promote_threshold
 
 ### Phase 7: Multimodal Learning — **Production integrated**
+
 - **VisionEncoder** — Trainable MLP (6->32->16->16) encoding face detection features
 - **AudioEncoder** — Trainable MLP (3->16->8->8) encoding audio signal features
 - **HistoryBuffer** — Ring buffer of recent state vectors for temporal context
@@ -113,30 +118,28 @@ flowchart TD
 
 ## Teaching & human feedback
 
-When `DESKBOT_TEACHING__ENABLED=true` (requires learning enabled), a
-human-in-the-loop teaching loop layers on top of the action learner so the
-robot learns by demonstration and real spoken feedback:
+When `DESKBOT_TEACHING__ENABLED=true` (requires learning enabled), a human-in-the-loop teaching loop layers on top of
+the action learner so the robot learns by demonstration and real spoken feedback:
 
-- **TeachingController** — arms a session from a constrained spoken
-  instruction (`"when I wave, wave back"`) via the `parse_teaching_instruction`
+- **TeachingController** — arms a session from a constrained spoken instruction (`"when I wave, wave back"`) via the
+  `parse_teaching_instruction`
   parser (no LLM), then on a matching `GestureDetected` event runs **demonstrate**
   (execute the human-specified action) or **practice** (let the policy propose)
   mode. Below `min_experiences_for_practice`, practice falls back to demonstration.
-- **FeedbackLedger / FeedbackService** — post-hoc, last-wins, recency-gated
-  human feedback (praise/correction) attributed to the most-recent eligible real
-  transition. Feedback is never invented.
+- **FeedbackLedger / FeedbackService** — post-hoc, last-wins, recency-gated human feedback (praise/correction)
+  attributed to the most-recent eligible real transition. Feedback is never invented.
 - **RewardModel** — a `human_feedback_reward` component plus
-  `LearningService.reward_for_transition` (recorded reward + post-hoc ledger
-  delta), so the action learner trains on the amended reward.
+  `LearningService.reward_for_transition` (recorded reward + post-hoc ledger delta), so the action learner trains on the
+  amended reward.
 - **SafetyGate** — a **non-mutating** `is_valid` check runs inside
-  `select_action`'s candidate loop; the single chosen action is re-validated
-  with the full mutating `validate` immediately before execution.
+  `select_action`'s candidate loop; the single chosen action is re-validated with the full mutating `validate`
+  immediately before execution.
 
 Teaching is a **context flag on the state vector, not a `RobotState`**, so
 `STATE_SIZE` stays 91 and the multimodal vector stays 570. Observability is via
 `/api/v1/teaching/*` and the `/teaching` dashboard. See
-[Teaching Mode](../modules/teaching_mode.md) for the full loop; teaching
-parameters use the `DESKBOT_TEACHING__*` prefix (see `.env.example`).
+[Teaching Mode](../modules/teaching_mode.md) for the full loop; teaching parameters use the `DESKBOT_TEACHING__*` prefix
+(see `.env.example`).
 
 ## Configuration
 

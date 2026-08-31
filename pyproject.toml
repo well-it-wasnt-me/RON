@@ -1,6 +1,6 @@
 [project]
 name = "deskbot"
-version = "2.2.0"
+version = "2.3.0"
 description = "A modular desktop companion robot powered by a Raspberry Pi 5"
 readme = "README.md"
 license = { text = "MIT" }
