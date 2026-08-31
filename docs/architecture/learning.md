@@ -70,7 +70,6 @@ flowchart TD
 - **CheckpointConfig** — Configurable: directory, keep_last_n, promote_threshold
 
 ### Phase 7: Multimodal Learning — **Production integrated**
-
 - **VisionEncoder** — Trainable MLP (6->32->16->16) encoding face detection features
 - **AudioEncoder** — Trainable MLP (3->16->8->8) encoding audio signal features
 - **HistoryBuffer** — Ring buffer of recent state vectors for temporal context
