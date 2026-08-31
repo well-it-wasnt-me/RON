@@ -275,15 +275,22 @@ predictable transitions that the world model should learn to forecast.
 A Q-learning policy with function approximation.
 
 - **`ActionSpace`** - registry of `LearningAction`s (index, name,
-  description, action_type, params). `deskbot_action_space()` registers the
-  10 standard DeskBot actions: `look_left/right/center/up/down`, `blink`,
-  `wink`, `celebrate`, `sleep`, `look_around`.
+  description, action_type, params). `deskbot_action_space()` registers
+  **16** actions: the 10 original gaze/blink/celebrate/sleep actions
+  (`look_left/right/center/up/down`, `blink`, `wink`, `celebrate`, `sleep`,
+  `look_around`) plus the learnable interaction actions `speak`,
+  `change_emotion`, `set_state`, `wave`, `move_left_arm`, `move_right_arm`
+  (indices 10-15). A reverse `action_index -> BehaviorAction` mapping
+  (`action_index_to_behavior_action`) resolves an index back to the
+  executable behaviour (see [Teaching Mode](#teaching--human-learning-loop)).
 - **`ActionLearner`** - an MLP mapping `[state, action_onehot] -> Q(s,a)`.
   Action selection is **epsilon-greedy** with exponential decay
   (`epsilon_start -> epsilon_end`, `epsilon_decay` per step) and a
   configurable `ActionValidator` gating. `train_step` / `train_batch`
   apply the Bellman update `target = r + γ·maxₐ Q(s', a')` (or just `r`
-  when `done`).
+  when `done`). The learner is trained in each background training cycle
+  on feedback-amended rewards (`reward_for_transition`) — see the
+  [teaching loop](#teaching--human-learning-loop) below.
 - **`ActionLearningEnv`** - a simulation with a shaped reward structure
   (e.g. `celebrate` with a face -> `+1.0`; `sleep` -> `-0.5`; `look_center`
   with a face -> `+0.5`).
@@ -452,10 +459,13 @@ All parameters are environment-configurable via `DESKBOT_LEARNING__*`
 
 ### CLI (`robot.cli.learning`)
 
-`deskbot-learning` exposes `status`, `train`, `evaluate --model <path>`,
-`reset [--confirm]`, and `export [--output <path>]`. The CLI reads the
-checkpoint directory from settings; `train` notes that live forcing should
-go through the REST API.
+Five separate CLI entry points (all in `robot.cli.learning`):
+`deskbot-learning-status`, `deskbot-learning-train`,
+`deskbot-learning-evaluate [--model <path>]`,
+`deskbot-learning-reset [--confirm]`, and
+`deskbot-learning-export [--output <path>]`. The CLI reads the checkpoint
+directory from settings; `train` notes that live forcing should go through
+the REST API.
 
 ### REST API (`robot.api.learning`)
 
@@ -471,7 +481,7 @@ Router prefix `/api/v1/learning`:
 ### Web dashboard
 
 A dedicated page is served at **`/learning`** (see
-[`web/learning/index.html`](https://github.com/well-it-wasnt-me/deskbot/tree/main/web/learning))
+[`web/learning/index.html`](https://github.com/well-it-wasnt-me/RON/tree/main/web/learning))
 that polls the REST API and visualises, in real time:
 
 - whether the brain is enabled / available,
@@ -558,18 +568,19 @@ stream, closing the observe->learn loop. See
 
 ---
 
-## Teaching & human-learning loop — current status
+## Teaching & human-learning loop
 
-> **This section documents work in progress.** The goal is an end-to-end
-> loop where a developer enters teaching mode, says *"when I wave, wave
-> back"*, then repeatedly `human waves -> RON waves -> human says "Good"`
-> and observes real learning: `total_experiences > 0`, experiences carry
-> real `(state, action=wave, reward, next_state)`, and after enough
-> repetitions the trained policy has `Q(state, wave) > Q(state,
-> unrelated)`. It is being built incrementally; only the landed parts
-> below are real today.
+> The end-to-end loop is **landed**: a developer enables teaching, says
+> *"when I wave, wave back"*, then repeatedly `human waves -> RON waves ->
+> human says "Good"` and observes real learning — `total_experiences > 0`,
+> experiences carry real `(state, action=wave, reward, next_state)`, and
+> after enough repetitions the trained policy has
+> `Q(state, wave) > Q(state, unrelated)`. See the dedicated
+> [Teaching Mode](teaching_mode.md) guide for the flow, the synthetic
+> gesture limitation, feedback semantics, safety, and the state-size
+> decision.
 
-### Landed
+### What is now wired
 
 - **Teaching / gesture / conversation context in the state vector.** The
   former zero-filled reserved block `[51..61)` now carries
@@ -579,7 +590,7 @@ stream, closing the observe->learn loop. See
   stays 570 — repurposing slots, not resizing. Teaching is a **context
   flag, not a `RobotState`**, to preserve the 8-wide state one-hot and the
   570-dim vector.
-- **`GestureDetected` observation event.** A new frozen event
+- **`GestureDetected` observation event.** A frozen event
   (`gesture`, `confidence`, `x`, `y`) flows through the same path as
   `FaceDetected`. The recorder subscribes to it (non-critical) and updates
   the gesture one-hot + `person_present` — **observation only, never a
@@ -589,39 +600,42 @@ stream, closing the observe->learn loop. See
   `Observation.from_encoder` -> `to_vector` round-trip (which rebuilds a
   fresh `StateEncoder`), so they survive encoding instead of silently
   zeroing out.
-
-### Planned (not yet built — do not assume these exist)
-
-- **Action-space expansion** to 16 with learnable `Wave` / `Speak` /
-  `ChangeEmotion` / `SetState` / `MoveArm` actions and a reverse
-  `action_index -> BehaviorAction` mapping. (Today the space is still the
-  original 10 gaze/blink/celebrate/sleep actions.)
-- **Canonical execution layer** routing the LLM tool executor's
-  learnable builtins (`change_emotion` / `set_state` / `move_servo` /
-  `speak`) through the instrumented `ActionExecutor` so they create
-  transitions too. (Today those tools drive hardware/TTS directly and are
-  uninstrumented.)
-- **Explicit human feedback** — a `HumanFeedback` event, a
-  `FeedbackLedger` (last-wins, recency-gated, **never invented**), and a
-  `FeedbackService` that attaches feedback to the most-recent eligible
-  transition; plus a constrained `"when I {gesture} {action}"` speech
-  parser (not unrestricted LLM generation).
-- **Composable `RewardModel`** with a `human_feedback_reward` component
-  and a `reward_for_transition` lookup (immediate reward + post-hoc
-  ledger).
-- **Training the `ActionLearner`** in `_run_training_cycle` with
-  feedback-amended rewards — this is the change that makes `Q(wave)` rise.
-  Today the `ActionLearner` is constructed but **never trained**, so
-  Q-values never change; experiences accumulate but no policy learns.
-- **Teaching mode + policy proposal + `SafetyGate` wiring** — a
-  `TeachingController` (demonstrate / practice modes) and a
-  **non-mutating** `SafetyGate.is_valid` path (the existing `validate`
-  mutates cooldown/rate state on every call, so it must not be used inside
-  `select_action`'s per-candidate loop). The policy proposes; `SafetyGate`
-  gates before execution. Safety mechanisms are never bypassed.
-- **Observability** — `/api/v1/teaching/*` endpoints and a `web/teaching`
-  dashboard; the hardcoded `enabled=True` in `/learning/status` is fixed
-  to read `settings.learning.enabled`.
+- **16-action space with learnable behaviours.** `deskbot_action_space()`
+  registers 16 actions: the original 10 gaze/blink/celebrate/sleep actions
+  plus `speak`, `change_emotion`, `set_state`, `wave`, `move_left_arm`,
+  `move_right_arm`. A reverse `action_index -> BehaviorAction` mapping
+  (`action_index_to_behavior_action`) resolves an index back to the
+  executable behaviour.
+- **Canonical execution layer.** The LLM tool executor's learnable
+  builtins (`change_emotion` / `set_state` / `move_servo` / `speak`) route
+  through the instrumented `ActionExecutor`, so they create real
+  transitions too — the single learning recording point.
+- **Explicit human feedback.** A `HumanFeedback` event, a `FeedbackLedger`
+  (last-wins, recency-gated, **never invented**), and a `FeedbackService`
+  that attaches feedback to the most-recent eligible transition; plus a
+  constrained `"when I {gesture} {action}"` speech parser
+  (`parse_teaching_instruction`) — not unrestricted LLM generation.
+- **Composable `RewardModel` with a `human_feedback_reward` component**
+  and a `reward_for_transition(transition_id)` lookup that returns the
+  immediate reward **plus** post-hoc ledger feedback (within
+  `staleness_s`). This is the amended reward the action learner trains on
+  — the only signal that "wave was good" is the human's praise, not a
+  hard-coded action reward.
+- **Training the `ActionLearner` in `_run_training_cycle`.** The action
+  learner now trains in each background cycle on feedback-amended rewards
+  — this is the change that makes `Q(wave)` rise. Experiences accumulate
+  *and* the policy learns.
+- **Teaching mode + policy proposal + `SafetyGate` wiring.** A
+  `TeachingController` (demonstrate / practice modes) drives the loop. In
+  practice mode the policy proposes an action, gated by a
+  **non-mutating** `SafetyGate.is_valid` path during selection (the
+  mutating `validate` is re-applied once, before execution). The policy
+  proposes; `SafetyGate` gates before execution. Safety mechanisms are
+  never bypassed. Below `min_experiences_for_practice`, practice falls back
+  to demonstration.
+- **Observability.** `/api/v1/teaching/*` endpoints and a `web/teaching`
+  dashboard; `/learning/status` reads `settings.learning.enabled` (a
+  prior hard-coded `enabled=True` was fixed).
 
 ### Reported limitations (by design)
 
@@ -633,6 +647,11 @@ stream, closing the observe->learn loop. See
   (post-hoc ledger), by design.
 - **Action-learner trains online in-place** (no candidate/rollback); the
   `SafetyGate` is the runtime guard.
+- **`speak` learns *when* to speak**, not what to say — text content is
+  execution metadata, not a per-utterance learnable action.
+- **Preference learning stays a separate subsystem**; it cooperates only
+  via the shared `FeedbackLedger` / observations, not merged into the
+  action learner.
 
 ---
 
@@ -645,7 +664,7 @@ flowchart TD
     Rec --> Mem["WorkingMemory -> ReplayBuffer -> EpisodicMemory (SQLite)"]
     Mem --> LS["LearningService (background thread)"]
     LS --> L1["trains candidate WorldModel on replay samples"]
-    LS --> L2["ActionLearner: Q(s,a) — NOTE: constructed but not yet trained (see status below)"]
+    LS --> L2["ActionLearner: Q(s,a) — trained in-cycle on feedback-amended rewards (see teaching loop)"]
     LS --> L3["PreferenceLearner observes patterns -> confidence"]
     L1 --> Eval["ModelEvaluator / ActionSafetyValidator"]
     Eval --> Promote["promote candidate -> CheckpointManager (versioned, rollback)"]

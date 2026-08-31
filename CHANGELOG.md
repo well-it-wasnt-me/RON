@@ -2,6 +2,41 @@
 
 <!-- version list -->
 
+## Unreleased
+
+### Features
+
+- **teaching**: Human-in-the-loop teaching mode. Demonstrate a gesture->action
+  mapping with a constrained spoken instruction ("when I wave, wave back"),
+  inject gestures, and give spoken/API feedback (praise/correction). The
+  ActionLearner now trains on feedback-amended rewards each training cycle, so
+  Q-values move toward the demonstrated action. Gated by `DESKBOT_TEACHING__ENABLED`
+  (requires learning enabled). See [Teaching Mode](docs/modules/teaching_mode.md).
+
+- **learning**: Action space expanded from 10 to 16 with learnable `speak`,
+  `change_emotion`, `set_state`, `wave`, `move_left_arm`, `move_right_arm`
+  actions and a reverse `action_index -> BehaviorAction` mapping. The state
+  encoder is now `ENCODER_VERSION = 2`: the former reserved block `[51..61)`
+  carries teaching/gesture/conversation context (STATE_SIZE stays 91, multimodal
+  vector stays 570).
+
+- **learning**: Learnable LLM builtins (`change_emotion`/`set_state`/`move_servo`/
+  `speak`) now route through the instrumented `ActionExecutor`, so tool calls
+  create real learning transitions.
+
+- **api**: New `/api/v1/teaching/*` endpoints (status, transitions, feedback,
+  demonstration, qvalues) and a `/teaching` web dashboard. `GET /learning/status`
+  now reports `enabled` from `settings.learning.enabled` instead of a hard-coded
+  `true`.
+
+- **audio**: RTSP microphone source - capture audio from an RTSP stream
+  (`src/robot/hardware/sensors/rtsp_microphone.py`).
+
+### Security
+
+- API-key authentication (`DESKBOT_API__API_KEY`) gates mutating endpoints;
+  default bind address is `127.0.0.1`.
+
 ## v2.0.2 (2026-08-21)
 
 ### Bug Fixes

@@ -131,6 +131,7 @@ executor = ToolExecutor(
     bus=event_bus,
     servo_controller=servo_ctrl,
     tts=tts_engine,
+    action_executor=action_executor,  # optional: route learnable tools through the executor
 )
 
 result = await executor.execute_tool_call("change_emotion", {"emotion": "happy"})
@@ -139,13 +140,31 @@ result = await executor.execute_tool_call("change_emotion", {"emotion": "happy"}
 
 ### Built-in tool dispatch
 
-| Tool | Dispatch target |
+When an `action_executor` is **not** wired (the legacy path), built-in tools
+dispatch directly to the event bus and hardware controllers:
+
+| Tool | Dispatch target (legacy) |
 |------|----------------|
 | `change_emotion` | Publishes `EmotionChanged` + `BlinkRequested` on the event bus |
 | `play_sound` | Publishes `SoundEffectPlayed` on the event bus |
 | `set_state` | Publishes `StateChanged` on the event bus |
 | `move_servo` | Calls `ServoController.get(name).move_to()` + publishes `ServoMoved` |
 | `speak` | Calls `TextToSpeech.speak(text)` |
+
+#### Learning-aware routing
+
+When an `action_executor` **is** wired (the default once learning is enabled in
+`DeskBotApp`), the **learnable** builtins — `change_emotion`, `set_state`,
+`move_servo`, and `speak` — are routed through the canonical
+[`ActionExecutor`][robot.services.executor.ActionExecutor] instead of going
+directly to the bus/hardware. Each call is translated into the matching
+`BehaviorAction` (`ChangeEmotionAction`, `SetStateAction`,
+`RequestServoMoveAction`, `SpeakAction`) and dispatched via
+`ActionExecutor.execute_one`, so the LLM tool call is recorded as a **real
+learning transition** with the same lifecycle, safety checks, and interaction
+tagging as any other action (see [Services](services.md)). `play_sound` is
+intentionally **not** routed (it is not in the action space) and is logged as
+`action_not_learnable`.
 
 ### Argument validation
 
