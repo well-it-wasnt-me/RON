@@ -1086,6 +1086,155 @@ class ConfigSchemaResponse(BaseModel):
     )
 
 
+# ---------------------------------------------------------------------------
+# Teaching loop (Phases 8-10)
+# ---------------------------------------------------------------------------
+
+
+class TeachingStatusResponse(BaseModel):
+    """Snapshot of the human teaching loop."""
+
+    model_config = _ex(
+        {
+            "enabled": True,
+            "in_teaching_mode": True,
+            "session_id": "550e8400-e29b-41d4-a716-446655440000",
+            "mode": "demonstrate",
+            "trigger_gesture": "wave",
+            "desired_action": "wave",
+            "total_experiences": 12,
+            "min_experiences_for_practice": 64,
+        }
+    )
+
+    enabled: bool
+    in_teaching_mode: bool = False
+    session_id: str | None = None
+    mode: str | None = None
+    trigger_gesture: str | None = None
+    desired_action: str | None = None
+    total_experiences: int = 0
+    min_experiences_for_practice: int = 0
+
+
+class TeachingTransitionItem(BaseModel):
+    """A recent teaching transition, with a state summary (no raw conversation).
+
+    The ``state_summary`` is derived from reserved state-vector slots
+    (teaching/interaction/person flags + gesture one-hot), never from raw
+    conversation text.
+    """
+
+    model_config = _ex(
+        {
+            "timestamp": "2026-08-31T10:00:00Z",
+            "transition_id": "abc123",
+            "action_name": "wave",
+            "action_index": 13,
+            "execution_success": True,
+            "reward": 1.32,
+            "feedback_source": "speech",
+            "interaction_id": "int-1",
+            "teaching_session_id": "sess-1",
+            "state_summary": {
+                "teaching_context": True,
+                "interaction_active": True,
+                "person_present": True,
+                "gesture": "wave",
+            },
+        }
+    )
+
+    timestamp: str
+    transition_id: str | None = None
+    action_name: str
+    action_index: int
+    execution_success: bool = True
+    reward: float = 0.0
+    feedback_source: str | None = None
+    interaction_id: str | None = None
+    teaching_session_id: str | None = None
+    state_summary: dict[str, Any]
+
+
+class TeachingTransitionsResponse(BaseModel):
+    """A page of recent teaching transitions."""
+
+    model_config = _ex(
+        {"total": 12, "limit": 20, "transitions": [{"action_name": "wave"}]}
+    )
+
+    total: int
+    limit: int
+    transitions: list[TeachingTransitionItem]
+
+
+class TeachingFeedbackRequest(BaseModel):
+    """Submit explicit human feedback for the most-recent eligible transition."""
+
+    model_config = _ex({"polarity": 1, "magnitude": 1.0, "source": "api", "text": "good"})
+
+    polarity: int = Field(ge=-1, le=1, description="+1 praise, -1 correction")
+    magnitude: float = Field(default=1.0, gt=0.0, le=2.0)
+    source: str = Field(default="api")
+    text: str = Field(default="")
+
+
+class TeachingFeedbackResponse(BaseModel):
+    """Acknowledgement of a feedback submission."""
+
+    model_config = _ex({"attributed": True, "transition_id": "abc123", "delta": 1.0})
+
+    attributed: bool
+    transition_id: str | None = None
+    delta: float = 0.0
+
+
+class TeachingDemonstrationRequest(BaseModel):
+    """Arm a teaching session from an instruction and/or inject a gesture.
+
+    When ``instruction`` is present, the constrained parser arms a session
+    (no LLM). When ``gesture`` is present, a demonstration/practice step is
+    triggered for the armed session. Both may be supplied in one call.
+    """
+
+    model_config = _ex(
+        {"instruction": "when i wave, wave back", "gesture": "wave", "mode": "demonstrate"}
+    )
+
+    instruction: str | None = Field(default=None)
+    gesture: str | None = Field(default=None)
+    mode: str = Field(default="demonstrate")
+
+
+class TeachingDemonstrationResponse(BaseModel):
+    """Result of arming / triggering a demonstration."""
+
+    model_config = _ex(
+        {
+            "session_id": "550e8400-e29b-41d4-a716-446655440000",
+            "trigger_gesture": "wave",
+            "desired_action": "wave",
+            "executed_action": "wave",
+            "executed_action_index": 13,
+        }
+    )
+
+    session_id: str | None = None
+    trigger_gesture: str | None = None
+    desired_action: str | None = None
+    executed_action: str | None = None
+    executed_action_index: int | None = None
+
+
+class TeachingQValuesResponse(BaseModel):
+    """Q-values for a state (current encoder state by default)."""
+
+    model_config = _ex({"q_values": {"wave": 8.12, "look_left": 7.46}})
+
+    q_values: dict[str, float]
+
+
 __all__ = [
     "AudioDevice",
     "AudioDeviceTestRequest",
@@ -1147,6 +1296,14 @@ __all__ = [
     "SystemInfoResponse",
     "TTSTestRequest",
     "TTSTestResponse",
+    "TeachingDemonstrationRequest",
+    "TeachingDemonstrationResponse",
+    "TeachingFeedbackRequest",
+    "TeachingFeedbackResponse",
+    "TeachingQValuesResponse",
+    "TeachingStatusResponse",
+    "TeachingTransitionItem",
+    "TeachingTransitionsResponse",
     "TestPatternResponse",
     "ToneRequest",
     "ToneResponse",

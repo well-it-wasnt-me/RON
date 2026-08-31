@@ -128,7 +128,7 @@ class TestDeskbotActionSpace:
 
     def test_has_expected_actions(self) -> None:
         space = deskbot_action_space()
-        assert space.size == 10
+        assert space.size == 16
         names = [a.name for a in space]
         assert "look_left" in names
         assert "look_right" in names
@@ -137,11 +137,18 @@ class TestDeskbotActionSpace:
         assert "celebrate" in names
         assert "sleep" in names
         assert "look_around" in names
+        # Learnable interaction actions (teaching loop).
+        assert "speak" in names
+        assert "change_emotion" in names
+        assert "set_state" in names
+        assert "wave" in names
+        assert "move_left_arm" in names
+        assert "move_right_arm" in names
 
     def test_action_vector_size(self) -> None:
         space = deskbot_action_space()
         vec = space.action_vector(0)
-        assert vec.shape == (10,)
+        assert vec.shape == (16,)
 
 
 # ========================================================================
@@ -209,7 +216,7 @@ class TestActionLearner:
     def test_creation(self) -> None:
         space = deskbot_action_space()
         learner = ActionLearner(action_space=space, state_size=4, seed=42)
-        assert learner.action_space.size == 10
+        assert learner.action_space.size == 16
         assert learner.param_count() > 0
 
     def test_q_values_shape(self) -> None:

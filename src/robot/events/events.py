@@ -142,6 +142,65 @@ class FaceDetected:
 
 
 @dataclass(slots=True, frozen=True)
+class GestureDetected:
+    """A human hand gesture was observed (e.g. a wave).
+
+    This is an *observation*, never an action. It updates the learning
+    state encoder (gesture one-hot) but does not create a transition.
+    Today the robot has no built-in vision gesture detector, so this
+    event is produced by a synthetic injection channel (teaching API,
+    CLI, constrained speech parser, or a test) rather than a CV model.
+    """
+
+    gesture: str  # one of: none, wave, point, open_hand, other
+    confidence: float = 1.0
+    x: float = 0.5  # normalized 0..1 gesture centroid, when available
+    y: float = 0.5
+
+
+@dataclass(slots=True, frozen=True)
+class HumanFeedback:
+    """Explicit human feedback on a recent robot action.
+
+    A *post-hoc* signal: the human reacts to what the robot just did. It is an
+    observation that the :class:`~robot.learning.feedback_service.FeedbackService`
+    attributes to the most-recent eligible transition (by recency and, when
+    available, ``interaction_id``). It never creates a transition by itself and
+    never invents a reward — the attribution target must already exist in the
+    recorder's working memory, else the feedback is dropped with a log line.
+
+    Attributes
+    ----------
+    polarity:
+        ``+1`` for positive ("good"), ``-1`` for negative ("no"/"wrong").
+        Other integers are tolerated but the reward path clamps magnitude.
+    magnitude:
+        Strength of the feedback, multiplied with ``polarity`` to form the
+        reward delta. Default ``1.0``.
+    source:
+        Origin of the feedback (``"speech"``, ``"api"``, ``"cli"`` …) so the
+        dashboard can show how feedback was given.
+    interaction_id:
+        The teaching interaction the feedback belongs to, when known. Used to
+        preferentially attribute feedback to a transition from the same
+        interaction. ``None`` for ambient feedback.
+    transition_id:
+        The transition the feedback was attributed to. Filled in by the
+        :class:`~robot.learning.feedback_service.FeedbackService` at attribution
+        time; ``None`` until then.
+    text:
+        The raw human utterance that produced this feedback, for auditing.
+    """
+
+    polarity: int
+    magnitude: float = 1.0
+    source: str = "speech"
+    interaction_id: str | None = None
+    transition_id: str | None = None
+    text: str = ""
+
+
+@dataclass(slots=True, frozen=True)
 class SpeechRecognized:
     text: str
     confidence: float = 1.0
@@ -203,6 +262,8 @@ __all__ = [
     "EmotionName",
     "Event",
     "FaceDetected",
+    "GestureDetected",
+    "HumanFeedback",
     "IdleTimeout",
     "LLMTokenReceived",
     "LookRequested",

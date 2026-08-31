@@ -3,10 +3,10 @@
 Explicit types for observations, actions, and rewards so that a single
 transition can be inspected and clearly answer:
 
-1. What did the robot know?   → :class:`Observation`
-2. What did it do?            → :class:`LearningAction` (from ActionSpace)
-3. What happened?             → :class:`Observation` (next)
-4. What reward did it receive? → ``float``
+1. What did the robot know?   -> :class:`Observation`
+2. What did it do?            -> :class:`LearningAction` (from ActionSpace)
+3. What happened?             -> :class:`Observation` (next)
+4. What reward did it receive? -> ``float``
 
 Observations
 ------------
@@ -14,11 +14,11 @@ Observations
 An :class:`Observation` is an immutable snapshot of everything the robot
 perceived at a given moment:
 
-* :class:`RobotObservation` — emotions, behaviour state, servo
+* :class:`RobotObservation` - emotions, behaviour state, servo
   positions, personality traits, idle time.
-* :class:`VisionObservation` — face detection results (reuses the
+* :class:`VisionObservation` - face detection results (reuses the
   existing :class:`VisionFeatures`).
-* :class:`AudioObservation` — audio signal features (reuses the
+* :class:`AudioObservation` - audio signal features (reuses the
   existing :class:`AudioFeatures`).
 
 Reward history
@@ -26,7 +26,7 @@ Reward history
 
 The :class:`RobotObservation` includes an optional ``recent_rewards``
 tuple.  This is retained **deliberately** for temporal credit
-assignment — the learning algorithm may need to know whether the robot
+assignment - the learning algorithm may need to know whether the robot
 is on a positive or negative streak.  Only **past** rewards are
 included; the current or future reward for the transition being
 recorded is **never** part of the observation.  The tuple is empty by
@@ -62,13 +62,13 @@ class RobotObservation:
     Attributes
     ----------
     emotions:
-        Mapping of emotion name → intensity (0..1).
+        Mapping of emotion name -> intensity (0..1).
     state:
         Current behaviour state.
     personality:
-        Mapping of trait name → value (0..1).
+        Mapping of trait name -> value (0..1).
     servos:
-        Mapping of servo name → angle (degrees).
+        Mapping of servo name -> angle (degrees).
     idle_seconds:
         How long the robot has been idle.
     recent_rewards:
@@ -83,6 +83,16 @@ class RobotObservation:
     servos: dict[str, float] = field(default_factory=dict)
     idle_seconds: float = 0.0
     recent_rewards: tuple[float, ...] = ()
+    # Teaching / conversation / gesture context (carried through the
+    # encoder round-trip so it survives Observation.to_vector()). These
+    # mirror the StateEncoder fields of the same name.
+    teaching_context: bool = False
+    interaction_active: bool = False
+    person_present: bool = False
+    gesture: str = "none"
+    conversation_turn: int = 0
+    last_action_index: int = -1
+    action_space_size: int = 16
 
 
 @dataclass(frozen=True)
@@ -180,6 +190,13 @@ class Observation:
                 servos=dict(encoder.servos),
                 idle_seconds=encoder.idle_seconds,
                 recent_rewards=tuple(encoder.recent_rewards),
+                teaching_context=encoder.teaching_context,
+                interaction_active=encoder.interaction_active,
+                person_present=encoder.person_present,
+                gesture=encoder.gesture,
+                conversation_turn=encoder.conversation_turn,
+                last_action_index=encoder.last_action_index,
+                action_space_size=encoder.action_space_size,
             ),
             vision=VisionObservation(features=encoder.vision),
             audio=AudioObservation(features=encoder.audio),
@@ -203,6 +220,15 @@ class Observation:
         enc.audio = self.audio.features
         enc.idle_seconds = self.robot.idle_seconds
         enc.recent_rewards = list(self.robot.recent_rewards)
+        # Restore teaching/gesture context so the round-trip vector matches
+        # a directly-encoded encoder (otherwise these slots silently zero out).
+        enc.teaching_context = self.robot.teaching_context
+        enc.interaction_active = self.robot.interaction_active
+        enc.person_present = self.robot.person_present
+        enc.gesture = self.robot.gesture
+        enc.conversation_turn = self.robot.conversation_turn
+        enc.last_action_index = self.robot.last_action_index
+        enc.action_space_size = self.robot.action_space_size
         return enc.encode()
 
     def to_dict(self) -> dict[str, Any]:
@@ -215,6 +241,13 @@ class Observation:
                 "servos": dict(self.robot.servos),
                 "idle_seconds": self.robot.idle_seconds,
                 "recent_rewards": list(self.robot.recent_rewards),
+                "teaching_context": self.robot.teaching_context,
+                "interaction_active": self.robot.interaction_active,
+                "person_present": self.robot.person_present,
+                "gesture": self.robot.gesture,
+                "conversation_turn": self.robot.conversation_turn,
+                "last_action_index": self.robot.last_action_index,
+                "action_space_size": self.robot.action_space_size,
             },
             "vision": {
                 "face_detected": self.vision.features.face_detected,
@@ -234,15 +267,16 @@ class Observation:
 
 
 # ---------------------------------------------------------------------------
-# Event → Observation mapping
+# Event -> Observation mapping
 # ---------------------------------------------------------------------------
 
 
 def event_to_observation_update(event: object, observation: Observation) -> Observation:
     """Apply a perception event to an observation, returning a new observation.
 
-    Observation events (``FaceDetected``, ``SpeechRecognized``,
-    ``EmotionChanged``, ``IdleTimeout``, ``ServoMoved``, ``StateChanged``)
+    Observation events (``FaceDetected``, ``GestureDetected``,
+    ``SpeechRecognized``, ``EmotionChanged``, ``IdleTimeout``,
+    ``ServoMoved``, ``StateChanged``)
     update the observation.  They are **never** treated as actions.
 
     Parameters
@@ -262,6 +296,7 @@ def event_to_observation_update(event: object, observation: Observation) -> Obse
     from robot.events.events import (
         EmotionChanged,
         FaceDetected,
+        GestureDetected,
         IdleTimeout,
         ServoMoved,
         SpeechRecognized,
@@ -276,6 +311,12 @@ def event_to_observation_update(event: object, observation: Observation) -> Obse
         vision = VisionObservation.from_face(
             x=event.x, y=event.y, confidence=event.confidence, face_count=1
         )
+        # A detected face means a person is present.
+        robot = dataclasses.replace(robot, person_present=True)
+    elif isinstance(event, GestureDetected):
+        # A gesture is an observation: it updates the gesture one-hot and
+        # marks a person present. It never creates a transition.
+        robot = dataclasses.replace(robot, gesture=event.gesture, person_present=True)
     elif isinstance(event, EmotionChanged):
         new_emotions = dict(robot.emotions)
         new_emotions[event.current.value] = event.intensity
@@ -289,7 +330,7 @@ def event_to_observation_update(event: object, observation: Observation) -> Obse
     elif isinstance(event, IdleTimeout):
         robot = dataclasses.replace(robot, idle_seconds=event.seconds_idle)
     elif isinstance(event, SpeechRecognized):
-        # Speech recognition is an observation — it informs the robot
+        # Speech recognition is an observation - it informs the robot
         # that interaction is happening but does not change the
         # encoder's structured fields directly.
         pass

@@ -175,40 +175,75 @@ vectors). `InMemoryExperienceStore` is provided for tests.
 
 ### `ExperienceRecorder` (`recorder.py`)
 
-The bridge from the live event bus to memory. It subscribes to
-`StateChanged`, `EmotionChanged`, `ServoMoved`, `FaceDetected`,
-`SpeechRecognized`, and `IdleTimeout`, updates the `StateEncoder`, and
-records experiences. Each event type maps to a stable action-vector layout
-(`_action_vector_from_event`): a one-hot event-type prefix followed by
-event-specific parameters (emotion one-hot + intensity, normalised servo
-angle, face x/y/confidence, speech presence, idle minutes). Small shaping
-rewards are assigned per event (e.g. `+0.1` for seeing a face, `-0.1` for
-idling).
+The bridge from the live event bus to memory. It subscribes to the
+**observation** events `StateChanged`, `EmotionChanged`, `ServoMoved`,
+`FaceDetected`, `GestureDetected`, and `IdleTimeout` (`SpeechRecognized` is
+intentionally *not* subscribed — it has no encoder field to update, so
+subscribing would just pay bus-dispatch cost for a no-op). Every handler
+**updates the `StateEncoder` only** — it never creates a transition.
+
+This is the key invariant of the recorder: **observation events never
+produce experiences.** Only a real action selected from the `ActionSpace`
+and executed on the robot opens a transition through the
+`TransitionStore` lifecycle:
+
+```
+recorder.begin_transition(action_index)      # snapshot state_t
+  -> robot executes the action (via ActionExecutor)
+recorder.complete_transition(pending, ...)  # snapshot state_t+1, store Experience
+```
+
+`begin_transition` / `complete_transition` are called by the instrumented
+`ActionExecutor` (see `robot.services.executor`), not by the recorder's
+event handlers. The `FaceDetected` and `GestureDetected` handlers also set
+the `person_present` teaching-context flag; `GestureDetected` additionally
+sets the gesture one-hot. A reward is assigned at `complete_transition`
+time — either an explicit value, the `default_reward`, or (when
+`use_reward_model=True`) the `RewardModel` computed from the observation /
+action / outcome. There is **no** per-event shaping reward and **no**
+event-to-action-vector mapping; events are observations, actions come from
+the action space.
 
 ---
 
 ## Part 3 - State encoder (`state_encoder.py`)
 
 Converts DeskBot's current context into a **deterministic, fixed-size
-91-element** vector. Layout (`ENCODER_VERSION = 1`):
+91-element** vector. Layout (`ENCODER_VERSION = 2`):
 
-| Range | Section     | Contents                                                           |
-|-------|-------------|--------------------------------------------------------------------|
-| 0–9   | emotions    | one intensity per `EmotionName` (10)                               |
-| 10–17 | robot_state | one-hot per `RobotState` (8)                                       |
-| 18–22 | personality | curiosity, energy, shyness, friendliness, playfulness              |
-| 23–32 | servos      | pan, tilt, left_arm, right_arm + 6 reserved (normalised to [-1,1]) |
-| 33–38 | vision      | face_detected, x, y, confidence, size, count                       |
-| 39–41 | audio       | RMS energy, peak amplitude, zero-crossing rate                     |
-| 42–45 | flags       | speaking, listening, interaction, idle-time                        |
-| 46–50 | rewards     | 5 most recent reward values                                        |
-| 51–90 | reserved    | zeros for future features                                          |
+| Range  | Section            | Contents                                                           |
+|--------|--------------------|--------------------------------------------------------------------|
+| 0–9    | emotions           | one intensity per `EmotionName` (10)                               |
+| 10–17  | robot_state        | one-hot per `RobotState` (8)                                       |
+| 18–22  | personality        | curiosity, energy, shyness, friendliness, playfulness              |
+| 23–32  | servos             | pan, tilt, left_arm, right_arm + 6 reserved (normalised to [-1,1]) |
+| 33–38  | vision             | face_detected, x, y, confidence, size, count                       |
+| 39–41  | audio              | RMS energy, peak amplitude, zero-crossing rate                     |
+| 42–45  | flags              | speaking, listening, interaction, idle-time                        |
+| 46–50  | rewards            | 5 most recent reward values                                        |
+| 51     | teaching_context   | 0/1 — teaching mode active                                         |
+| 52     | interaction_active | 0/1 — inside a teaching interaction/episode                          |
+| 53     | person_present     | 0/1 — a face is present                                             |
+| 54–58  | gesture            | one-hot: none / wave / point / open_hand / other                   |
+| 59     | conversation_turn  | recent conversation turn count (normalised, cap 10)                 |
+| 60     | last_action_index  | last executed action index (normalised by action-space size)        |
+| 61–90  | reserved           | zeros for future features                                           |
 
 `VisionFeatures` is built from face-detection results; `AudioFeatures.from_pcm()`
 extracts RMS / peak / ZCR from raw 16-bit PCM. Missing sensors fall back to
 safe defaults (no face -> `0.5` positions; no audio -> `0.0`). The encoder
 sanitises `NaN`/`inf` to `0.0`. `state_layout()` returns the slice map for
 introspection.
+
+> **v2 layout note.** Slots `[51..61)` were previously zero-filled reserved
+> space. They now carry the **human-teaching / gesture / conversation
+> context** so a policy can condition on "is a teaching interaction active,
+> is a person present, which gesture was observed". Repurposing these slots
+> does **not** change `STATE_SIZE` (still 91) or the multimodal vector
+> (still 570) — the slots merely carry meaning instead of zeros. Teaching
+> is a *context flag*, deliberately **not** a new `RobotState`: adding a
+> `TEACHING` state would shift the 8-wide state one-hot and break the 570-dim
+> vector. An unknown gesture name falls back to the `"none"` one-hot slot.
 
 ---
 
@@ -240,15 +275,22 @@ predictable transitions that the world model should learn to forecast.
 A Q-learning policy with function approximation.
 
 - **`ActionSpace`** - registry of `LearningAction`s (index, name,
-  description, action_type, params). `deskbot_action_space()` registers the
-  10 standard DeskBot actions: `look_left/right/center/up/down`, `blink`,
-  `wink`, `celebrate`, `sleep`, `look_around`.
+  description, action_type, params). `deskbot_action_space()` registers
+  **16** actions: the 10 original gaze/blink/celebrate/sleep actions
+  (`look_left/right/center/up/down`, `blink`, `wink`, `celebrate`, `sleep`,
+  `look_around`) plus the learnable interaction actions `speak`,
+  `change_emotion`, `set_state`, `wave`, `move_left_arm`, `move_right_arm`
+  (indices 10-15). A reverse `action_index -> BehaviorAction` mapping
+  (`action_index_to_behavior_action`) resolves an index back to the
+  executable behaviour (see [Teaching Mode](#teaching--human-learning-loop)).
 - **`ActionLearner`** - an MLP mapping `[state, action_onehot] -> Q(s,a)`.
   Action selection is **epsilon-greedy** with exponential decay
   (`epsilon_start -> epsilon_end`, `epsilon_decay` per step) and a
   configurable `ActionValidator` gating. `train_step` / `train_batch`
   apply the Bellman update `target = r + γ·maxₐ Q(s', a')` (or just `r`
-  when `done`).
+  when `done`). The learner is trained in each background training cycle
+  on feedback-amended rewards (`reward_for_transition`) — see the
+  [teaching loop](#teaching--human-learning-loop) below.
 - **`ActionLearningEnv`** - a simulation with a shaped reward structure
   (e.g. `celebrate` with a face -> `+1.0`; `sleep` -> `-0.5`; `look_center`
   with a face -> `+0.5`).
@@ -417,10 +459,13 @@ All parameters are environment-configurable via `DESKBOT_LEARNING__*`
 
 ### CLI (`robot.cli.learning`)
 
-`deskbot-learning` exposes `status`, `train`, `evaluate --model <path>`,
-`reset [--confirm]`, and `export [--output <path>]`. The CLI reads the
-checkpoint directory from settings; `train` notes that live forcing should
-go through the REST API.
+Five separate CLI entry points (all in `robot.cli.learning`):
+`deskbot-learning-status`, `deskbot-learning-train`,
+`deskbot-learning-evaluate [--model <path>]`,
+`deskbot-learning-reset [--confirm]`, and
+`deskbot-learning-export [--output <path>]`. The CLI reads the checkpoint
+directory from settings; `train` notes that live forcing should go through
+the REST API.
 
 ### REST API (`robot.api.learning`)
 
@@ -436,7 +481,7 @@ Router prefix `/api/v1/learning`:
 ### Web dashboard
 
 A dedicated page is served at **`/learning`** (see
-[`web/learning/index.html`](https://github.com/well-it-wasnt-me/deskbot/tree/main/web/learning))
+[`web/learning/index.html`](https://github.com/well-it-wasnt-me/RON/tree/main/web/learning))
 that polls the REST API and visualises, in real time:
 
 - whether the brain is enabled / available,
@@ -523,6 +568,93 @@ stream, closing the observe->learn loop. See
 
 ---
 
+## Teaching & human-learning loop
+
+> The end-to-end loop is **landed**: a developer enables teaching, says
+> *"when I wave, wave back"*, then repeatedly `human waves -> RON waves ->
+> human says "Good"` and observes real learning — `total_experiences > 0`,
+> experiences carry real `(state, action=wave, reward, next_state)`, and
+> after enough repetitions the trained policy has
+> `Q(state, wave) > Q(state, unrelated)`. See the dedicated
+> [Teaching Mode](teaching_mode.md) guide for the flow, the synthetic
+> gesture limitation, feedback semantics, safety, and the state-size
+> decision.
+
+### What is now wired
+
+- **Teaching / gesture / conversation context in the state vector.** The
+  former zero-filled reserved block `[51..61)` now carries
+  `teaching_context`, `interaction_active`, `person_present`, a 5-way
+  gesture one-hot, `conversation_turn`, and `last_action_index`
+  (`ENCODER_VERSION = 2`). `STATE_SIZE` stays 91 and the multimodal vector
+  stays 570 — repurposing slots, not resizing. Teaching is a **context
+  flag, not a `RobotState`**, to preserve the 8-wide state one-hot and the
+  570-dim vector.
+- **`GestureDetected` observation event.** A frozen event
+  (`gesture`, `confidence`, `x`, `y`) flows through the same path as
+  `FaceDetected`. The recorder subscribes to it (non-critical) and updates
+  the gesture one-hot + `person_present` — **observation only, never a
+  transition.**
+- **Observation round-trip preserved.** The new context fields are carried
+  through `RobotObservation` and copied in *both* directions of the
+  `Observation.from_encoder` -> `to_vector` round-trip (which rebuilds a
+  fresh `StateEncoder`), so they survive encoding instead of silently
+  zeroing out.
+- **16-action space with learnable behaviours.** `deskbot_action_space()`
+  registers 16 actions: the original 10 gaze/blink/celebrate/sleep actions
+  plus `speak`, `change_emotion`, `set_state`, `wave`, `move_left_arm`,
+  `move_right_arm`. A reverse `action_index -> BehaviorAction` mapping
+  (`action_index_to_behavior_action`) resolves an index back to the
+  executable behaviour.
+- **Canonical execution layer.** The LLM tool executor's learnable
+  builtins (`change_emotion` / `set_state` / `move_servo` / `speak`) route
+  through the instrumented `ActionExecutor`, so they create real
+  transitions too — the single learning recording point.
+- **Explicit human feedback.** A `HumanFeedback` event, a `FeedbackLedger`
+  (last-wins, recency-gated, **never invented**), and a `FeedbackService`
+  that attaches feedback to the most-recent eligible transition; plus a
+  constrained `"when I {gesture} {action}"` speech parser
+  (`parse_teaching_instruction`) — not unrestricted LLM generation.
+- **Composable `RewardModel` with a `human_feedback_reward` component**
+  and a `reward_for_transition(transition_id)` lookup that returns the
+  immediate reward **plus** post-hoc ledger feedback (within
+  `staleness_s`). This is the amended reward the action learner trains on
+  — the only signal that "wave was good" is the human's praise, not a
+  hard-coded action reward.
+- **Training the `ActionLearner` in `_run_training_cycle`.** The action
+  learner now trains in each background cycle on feedback-amended rewards
+  — this is the change that makes `Q(wave)` rise. Experiences accumulate
+  *and* the policy learns.
+- **Teaching mode + policy proposal + `SafetyGate` wiring.** A
+  `TeachingController` (demonstrate / practice modes) drives the loop. In
+  practice mode the policy proposes an action, gated by a
+  **non-mutating** `SafetyGate.is_valid` path during selection (the
+  mutating `validate` is re-applied once, before execution). The policy
+  proposes; `SafetyGate` gates before execution. Safety mechanisms are
+  never bypassed. Below `min_experiences_for_practice`, practice falls back
+  to demonstration.
+- **Observability.** `/api/v1/teaching/*` endpoints and a `web/teaching`
+  dashboard; `/learning/status` reads `settings.learning.enabled` (a
+  prior hard-coded `enabled=True` was fixed).
+
+### Reported limitations (by design)
+
+- **No real CV gesture/hand detector.** Gestures are injected via the
+  `GestureDetected` event (teaching API / CLI / constrained speech parser
+  / tests). Building a detector is out of scope.
+- **Reward is sparse.** Immediate `RewardModel` components are mostly 0
+  without face/audio; the dominant learning signal is human feedback
+  (post-hoc ledger), by design.
+- **Action-learner trains online in-place** (no candidate/rollback); the
+  `SafetyGate` is the runtime guard.
+- **`speak` learns *when* to speak**, not what to say — text content is
+  execution metadata, not a per-utterance learnable action.
+- **Preference learning stays a separate subsystem**; it cooperates only
+  via the shared `FeedbackLedger` / observations, not merged into the
+  action learner.
+
+---
+
 ## Data flow (end to end)
 
 ```mermaid
@@ -532,7 +664,7 @@ flowchart TD
     Rec --> Mem["WorkingMemory -> ReplayBuffer -> EpisodicMemory (SQLite)"]
     Mem --> LS["LearningService (background thread)"]
     LS --> L1["trains candidate WorldModel on replay samples"]
-    LS --> L2["ActionLearner updates Q(s,a) from rewards"]
+    LS --> L2["ActionLearner: Q(s,a) — trained in-cycle on feedback-amended rewards (see teaching loop)"]
     LS --> L3["PreferenceLearner observes patterns -> confidence"]
     L1 --> Eval["ModelEvaluator / ActionSafetyValidator"]
     Eval --> Promote["promote candidate -> CheckpointManager (versioned, rollback)"]

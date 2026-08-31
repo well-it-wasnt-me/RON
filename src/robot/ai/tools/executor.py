@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from robot.ai.tools.registry import ToolRegistry
 from robot.ai.tools.schema import ToolDefinition, ToolParameter, ToolParameterType
+from robot.behavior.actions import (
+    ChangeEmotionAction,
+    RequestServoMoveAction,
+    SetStateAction,
+    SpeakAction,
+)
 from robot.errors import DeskBotError
 from robot.events.bus import InMemoryEventBus
 from robot.events.events import (
@@ -20,6 +26,9 @@ from robot.interfaces.audio import AudioOutput
 from robot.interfaces.servo import ServoController
 from robot.logging import get_logger
 from robot.speech.tts import TextToSpeech
+
+if TYPE_CHECKING:
+    from robot.services.executor import ActionExecutor
 
 _log = get_logger("ai.tools.executor")
 
@@ -36,6 +45,12 @@ _BUILTIN_HANDLER_MAP: dict[str, str] = {
     "speak": "_handle_speak",
 }
 
+#: Builtin tools that correspond to a registered ActionSpace action. When an
+#: :class:`ActionExecutor` is wired, these route through it so the call is
+#: recorded as a learning transition. ``play_sound`` is intentionally absent -
+#: it is not registered in the ActionSpace, so it stays a direct bus publish.
+_LEARNABLE_TOOLS: frozenset[str] = frozenset({"change_emotion", "set_state", "move_servo", "speak"})
+
 
 @dataclass(slots=True)
 class ToolExecutor:
@@ -46,6 +61,11 @@ class ToolExecutor:
     servo_controller: ServoController | None = None
     tts: TextToSpeech | None = None
     audio: AudioOutput | None = None
+    #: Optional canonical action executor. When set, learnable builtin tools
+    #: route through it so each call is recorded as a learning transition
+    #: (single execution point). When ``None``, the direct ``_handle_*`` paths
+    #: are used (preserves the pre-teaching-loop behaviour and all tests).
+    action_executor: ActionExecutor | None = None
 
     async def execute_tool_call(
         self,
@@ -63,10 +83,89 @@ class ToolExecutor:
 
         handler_name = _BUILTIN_HANDLER_MAP.get(tool_name)
         if handler_name is not None:
+            # Learnable builtins route through the ActionExecutor when one is
+            # wired, so the call becomes a learning transition. ``play_sound``
+            # is not registered in the ActionSpace - it stays a direct bus
+            # publish and is logged as not-learnable.
+            if self.action_executor is not None and tool_name in _LEARNABLE_TOOLS:
+                return await self._route_to_action_executor(tool_name, validated)
+            if tool_name == "play_sound":
+                _log.info(
+                    "tool_executor.action_not_learnable",
+                    tool=tool_name,
+                    reason="not registered in ActionSpace",
+                )
             handler = getattr(self, handler_name)
             return cast("dict[str, Any]", await handler(validated))
 
         return await self.registry.execute(tool_name, validated)
+
+    async def _route_to_action_executor(  # noqa: PLR0911
+        self, tool_name: str, args: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Route a learnable builtin tool through the ActionExecutor.
+
+        Builds the matching :class:`BehaviorAction` and executes it via the
+        canonical executor, returning a status dict shaped like the direct
+        ``_handle_*`` handlers. Validation errors (unknown emotion/state) and
+        hardware failures (e.g. out-of-range servo) are returned as error dicts
+        rather than raised, matching the direct handlers' contract.
+        """
+        assert self.action_executor is not None  # guarded by caller
+        try:
+            if tool_name == "change_emotion":
+                emotion_name = str(args.get("emotion", "neutral"))
+                intensity = max(0.0, min(1.0, float(args.get("intensity", 1.0))))
+                try:
+                    EmotionName(emotion_name)
+                except ValueError:
+                    return {
+                        "error": f"unknown emotion {emotion_name!r}",
+                        "valid": [e.value for e in EmotionName],
+                    }
+                await self.action_executor.execute_one(
+                    ChangeEmotionAction(emotion=emotion_name, intensity=intensity)
+                )
+                return {"status": "ok", "emotion": emotion_name, "intensity": intensity}
+
+            if tool_name == "set_state":
+                from robot.behavior.state_machine import RobotState
+
+                state_name = str(args.get("state", "idle"))
+                try:
+                    RobotState(state_name)
+                except ValueError:
+                    return {
+                        "error": f"unknown state {state_name!r}",
+                        "valid": [s.value for s in RobotState],
+                    }
+                await self.action_executor.execute_one(SetStateAction(state=state_name))
+                return {"status": "ok", "state": state_name}
+
+            if tool_name == "move_servo":
+                if self.servo_controller is None:
+                    return {"error": "no servo controller available"}
+                servo_name = str(args.get("servo", "pan"))
+                angle = float(args.get("angle", 90.0))
+                try:
+                    await self.action_executor.execute_one(
+                        RequestServoMoveAction(servo=servo_name, angle=angle)
+                    )
+                    return {"status": "ok", "servo": servo_name, "angle": angle}
+                except Exception as exc:
+                    return {"error": str(exc), "servo": servo_name}
+
+            if tool_name == "speak":
+                text = str(args.get("text", ""))
+                if not text:
+                    return {"error": "empty text"}
+                await self.action_executor.execute_one(SpeakAction(text=text))
+                return {"status": "ok", "text": text[:100]}
+
+            return {"error": f"tool {tool_name!r} not routable to action executor"}
+        except Exception as exc:
+            _log.exception("tool_executor.route_failed", tool=tool_name)
+            return {"error": str(exc), "tool": tool_name}
 
     def _validate_arguments(
         self, definition: ToolDefinition, arguments: dict[str, Any]

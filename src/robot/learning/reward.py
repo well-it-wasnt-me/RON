@@ -92,6 +92,43 @@ def interaction_reward(ctx: RewardContext) -> float:
     return 0.0
 
 
+def human_feedback_reward(ctx: RewardContext) -> float:
+    """Reward from explicit human feedback events in the transition.
+
+    Sums ``polarity * magnitude`` over every :class:`~robot.events.events.HumanFeedback`
+    present in ``ctx.events`` (the events that occurred *during* this transition's
+    compute window), then clamps the running total to ``[-1, 1]``. Returns ``0.0``
+    when no human feedback is present — it never invents a signal.
+
+    This is the *immediate* path: feedback that was already attributed and is
+    sitting in ``ctx.events`` at reward-compute time. The richer *post-hoc* path
+    — human feedback arriving after the transition closed — is owned by the
+    :class:`~robot.learning.feedback_ledger.FeedbackLedger` and applied by
+    :meth:`LearningService.reward_for_transition`.
+
+    Composition
+    -----------
+    The default :class:`RewardModel` sums its components. Each component returns
+    an independent float; no per-component weights are applied (a component that
+    should weigh less simply scales its own return). The model-level clamp
+    (``max_abs_reward``, default ``2.0``) bounds the *total*, so this feedback
+    component's own ``[-1, 1]`` clamp leaves room for the engagement/penalty
+    components to contribute without the total saturating on feedback alone.
+    """
+    from robot.events.events import HumanFeedback
+
+    total = 0.0
+    for event in ctx.events:
+        if isinstance(event, HumanFeedback):
+            total += float(event.polarity) * float(event.magnitude)
+
+    if total > 1.0:
+        return 1.0
+    if total < -1.0:
+        return -1.0
+    return total
+
+
 # ---------------------------------------------------------------------------
 # Reward model
 # ---------------------------------------------------------------------------
@@ -117,7 +154,12 @@ class RewardModel:
     """
 
     components: list[RewardComponent] = field(
-        default_factory=lambda: [face_engagement_reward, idle_penalty_reward, interaction_reward]
+        default_factory=lambda: [
+            face_engagement_reward,
+            idle_penalty_reward,
+            interaction_reward,
+            human_feedback_reward,
+        ]
     )
     max_abs_reward: float = 2.0
     default_reward: float = 0.0
@@ -190,6 +232,7 @@ __all__ = [
     "RewardContext",
     "RewardModel",
     "face_engagement_reward",
+    "human_feedback_reward",
     "idle_penalty_reward",
     "interaction_reward",
 ]

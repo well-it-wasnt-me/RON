@@ -55,6 +55,24 @@ to `paplay`. The WAV header carries the format.
 The `UsbSpeaker` converts s16le to float32 and plays at the buffer's
 own sample rate. PortAudio handles resampling to the device's native rate.
 
+## Microphone sources
+
+DeskBot supports two microphone backends, configured with
+`DESKBOT_MICROPHONE__BACKEND`:
+
+- **`usb`** (default) - a local USB microphone captured via PortAudio.
+- **`rtsp`** - audio captured from an RTSP stream. The RTSP camera's audio
+  track (typically 8000 Hz A-law) is automatically decoded to PCM. The **same
+  `DESKBOT_CAMERA__RTSP_URL`** supplies both video and microphone audio, so a
+  single IP camera provides perception and speech input. Set
+  `DESKBOT_MICROPHONE__RTSP_TRANSPORT` to `tcp` (recommended, default) or `udp`
+  for stream reliability.
+
+The RTSP microphone lives in
+`src/robot/hardware/sensors/rtsp_microphone.py`. Like the USB microphone it
+publishes `SpeechRecognized` indirectly - it feeds PCM chunks into the same
+STT/wake-word pipeline.
+
 ## PulseAudio (not PipeWire)
 
 DeskBot intentionally uses **standalone PulseAudio** rather than

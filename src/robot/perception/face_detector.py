@@ -382,7 +382,7 @@ class CascadeFaceDetector:
 def _verify_sha256(path: Path, expected: str) -> bool:
     """Verify the SHA-256 checksum of a file."""
     if not expected:
-        return True  # No checksum pinned — skip verification
+        return True  # No checksum pinned - skip verification
     h = hashlib.sha256()
     with path.open("rb") as f:
         for chunk in iter(lambda: f.read(8192), b""):

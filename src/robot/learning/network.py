@@ -104,7 +104,7 @@ class Network:
 
         self.backward(grad)
 
-        # Check for NaN/inf in gradients — skip the step if contaminated
+        # Check for NaN/inf in gradients - skip the step if contaminated
         # to prevent poisoning the weights.
         if optimizer is not None:
             for layer in self.layers:

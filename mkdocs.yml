@@ -56,6 +56,7 @@ nav:
     - Vector Memory: modules/vector-memory.md
   - Learning:
     - Local Brain: modules/learning.md
+    - Teaching Mode: modules/teaching_mode.md
   - Infrastructure:
     - Events: modules/events.md
     - Interfaces: modules/interfaces.md

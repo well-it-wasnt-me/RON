@@ -44,6 +44,7 @@ from robot.events.bus import InMemoryEventBus
 from robot.events.events import (
     EmotionChanged,
     EmotionName,
+    GestureDetected,
     RobotStarted,
     RobotStopped,
 )
@@ -76,6 +77,9 @@ from robot.learning.experience import (
     SqliteExperienceStore,
     WorkingMemory,
 )
+from robot.learning.feedback_ledger import FeedbackLedger
+from robot.learning.feedback_service import FeedbackService
+from robot.learning.interaction_context import InteractionContext
 from robot.learning.learning_service import (
     CheckpointConfig,
     LearningSchedule,
@@ -85,6 +89,8 @@ from robot.learning.learning_service import (
 from robot.learning.observation_adapter import LearningObservationAdapter
 from robot.learning.preference_learner import PreferenceLearner
 from robot.learning.safety import LearningSafetyManager
+from robot.learning.safety_gate import SafetyGate
+from robot.learning.teaching_controller import TeachingController
 from robot.lifecycle import Lifecycle
 from robot.lifecycle.degradation import DegradationEntry, DegradationRegistry, safe_init
 from robot.logging import configure_logging, get_logger
@@ -147,6 +153,13 @@ class DeskBotApp:
     _observation_adapter: LearningObservationAdapter | None = field(
         default=None, init=False, repr=False
     )
+    _interaction_context: InteractionContext | None = field(
+        default=None, init=False, repr=False
+    )
+    _feedback_ledger: FeedbackLedger | None = field(default=None, init=False, repr=False)
+    _feedback_service: FeedbackService | None = field(default=None, init=False, repr=False)
+    _safety_gate: SafetyGate | None = field(default=None, init=False, repr=False)
+    _teaching_controller: TeachingController | None = field(default=None, init=False, repr=False)
     _api_bridge: StateBridge | None = field(default=None, init=False, repr=False)
     _api_server: object | None = field(default=None, init=False, repr=False)
     _api_thread: object | None = field(default=None, init=False, repr=False)
@@ -368,7 +381,7 @@ class DeskBotApp:
 
         # Face engine (the new, complete face renderer)
         face_renderer = FaceRenderer(width=settings.displays.width, height=settings.displays.height)
-        # Legacy eye engine — no longer constructed in the production path.
+        # Legacy eye engine - no longer constructed in the production path.
         # The EyeDisplayAnimator field is kept as None for back-compat with
         # tests that check ``app.eye_animator is not None``. Use ``face_animator``
         # for all production rendering. See findings.md L25.
@@ -416,6 +429,7 @@ class DeskBotApp:
             servo_controller=servo_controller,
             audio=audio,
             degradation=degradation,
+            executor=executor,
         )
 
         # Lifecycle
@@ -529,11 +543,95 @@ class DeskBotApp:
         # Wire the learning transition lifecycle into the real action-execution
         # path.  When on-device learning is enabled, every mappable action
         # executed through the ActionExecutor opens a transition before execution
-        # and completes it (with reward + outcome) after — so live robot actions
+        # and completes it (with reward + outcome) after - so live robot actions
         # produce real stored experiences.  Disabled learning leaves the
         # recorder unset and the executor behaves exactly as before.
         if learning_service is not None and executor is not None:
             executor.experience_recorder = learning_service.recorder
+
+        # Phase 8: human teaching loop. Built only when both learning and
+        # teaching are enabled — the controller needs the trained policy, the
+        # recorder (for feedback attribution + experience counting), and the
+        # canonical executor. The safety gate enforces servo range / cooldown
+        # on every practice proposal; the controller never writes to hardware
+        # or the replay buffer directly. When disabled, none of these are
+        # constructed and the robot behaves exactly as before.
+        interaction_context: InteractionContext | None = None
+        feedback_ledger: FeedbackLedger | None = None
+        feedback_service: FeedbackService | None = None
+        safety_gate: SafetyGate | None = None
+        teaching_controller: TeachingController | None = None
+        if (
+            learning_service is not None
+            and executor is not None
+            and settings.teaching.enabled
+            and learning_service.recorder is not None
+            and learning_service.action_learner is not None
+        ):
+            tcfg = settings.teaching
+            interaction_context = InteractionContext()
+            feedback_ledger = FeedbackLedger()
+            feedback_service = FeedbackService(
+                learning_service.recorder,
+                feedback_ledger,
+                feedback_window_s=tcfg.feedback_window_s,
+                staleness_s=tcfg.staleness_s,
+            )
+            # Defence-in-depth servo limits: the registered physical ranges
+            # for every servo the action space can drive. The gate's static
+            # layer rejects any action whose target angle is out of range
+            # before it ever reaches hardware.
+            safety_gate = SafetyGate(
+                action_space=learning_service.action_space,
+                servo_limits={
+                    "pan": (-90.0, 90.0),
+                    "tilt": (-30.0, 30.0),
+                    "left_arm": (0.0, 180.0),
+                    "right_arm": (0.0, 180.0),
+                },
+                cooldown_s=tcfg.cooldown_s,
+            )
+            teaching_controller = TeachingController(
+                action_learner=learning_service.action_learner,
+                safety_gate=safety_gate,
+                action_space=learning_service.action_space,
+                interaction_context=interaction_context,
+                executor=executor,
+                min_experiences_for_practice=tcfg.min_experiences_for_practice,
+            )
+            # Let reward_for_transition fold human feedback into the reward.
+            learning_service.feedback_ledger = feedback_ledger
+            # Tag every executor-recorded transition with the interaction /
+            # teaching-session id.
+            executor.interaction_context = interaction_context
+            # Let the executor speak when it runs a SpeakAction during a
+            # demonstration (shares the conversation's TTS + audio).
+            executor.tts = conversation.tts
+            executor.audio = conversation.audio
+            conversation.feedback_service = feedback_service
+            conversation.teaching_controller = teaching_controller
+
+            # Synthetic gesture channel: a GestureDetected event drives the
+            # demonstrate/practice loop. This is a non-critical handler —
+            # failures must never destabilise the bus.
+            async def _on_gesture(event: GestureDetected) -> None:
+                assert teaching_controller is not None
+                assert learning_service is not None
+                state = learning_service.encoder.encode()
+                await teaching_controller.on_gesture_detected(event.gesture, state)
+
+            bus.subscribe(GestureDetected, _on_gesture)
+            _log.info(
+                "teaching.enabled",
+                feedback_window_s=tcfg.feedback_window_s,
+                staleness_s=tcfg.staleness_s,
+                min_experiences_for_practice=tcfg.min_experiences_for_practice,
+            )
+        app._interaction_context = interaction_context
+        app._feedback_ledger = feedback_ledger
+        app._feedback_service = feedback_service
+        app._safety_gate = safety_gate
+        app._teaching_controller = teaching_controller
         app.conversation = conversation
         app._degradation = degradation
 
@@ -844,6 +942,10 @@ class DeskBotApp:
         app.state.bus_profiler = self._bus_profiler
         app.state.learning_service = self._learning_service
         app.state.safety_manager = self._safety_manager
+        app.state.teaching_controller = self._teaching_controller
+        app.state.feedback_service = self._feedback_service
+        app.state.safety_gate = self._safety_gate
+        app.state.interaction_context = self._interaction_context
 
         # Wire calibration routes to the real servo controller, display,
         # and settings so the web panel's calibration page works.
@@ -1037,6 +1139,7 @@ def _build_ai_stack(  # noqa: PLR0912
     servo_controller: ServoController | None = None,
     audio: AudioOutput | None = None,
     degradation: DegradationRegistry | None = None,
+    executor: ActionExecutor | None = None,
 ) -> ConversationService:
     """Build the LLM/STT/TTS/wake-word stack from configuration.
 
@@ -1235,6 +1338,10 @@ def _build_ai_stack(  # noqa: PLR0912
             tts=tts,
             audio=audio,
         )
+        # Route learnable builtin tools through the canonical ActionExecutor so
+        # each LLM tool call is recorded as a learning transition (single
+        # execution point). Left unset when no executor was threaded in.
+        tool_executor.action_executor = executor
 
     memory = create_memory(settings) if settings.memory.enabled else None
 

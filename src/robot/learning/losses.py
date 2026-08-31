@@ -30,7 +30,7 @@ def mse_derivative(predicted: Tensor, target: Tensor) -> Tensor:
 
     where ``n`` is the total number of elements (``batch_size * output_features``).
     The downstream dense layer does **not** apply an additional ``1/batch_size``
-    factor — the normalisation is carried entirely by this derivative.
+    factor - the normalisation is carried entirely by this derivative.
     """
     n = predicted.size
     return (predicted - target) * (2.0 / n)

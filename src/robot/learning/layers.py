@@ -20,7 +20,7 @@ matrix multiplication), with no extra ``1/batch_size`` factor.
 
 Numerical gradient checks should compute the finite-difference
 gradient of the same scalar loss (e.g. ``mse_loss``) without
-any additional normalisation — the analytical and numerical
+any additional normalisation - the analytical and numerical
 gradients should match directly.
 """
 

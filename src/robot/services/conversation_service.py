@@ -26,7 +26,7 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from robot.ai.conversation import ConversationManager
 from robot.ai.llm_mock import MockLLM
@@ -50,12 +50,29 @@ from robot.events.events import (
 from robot.interfaces.audio import AudioBuffer, AudioOutput, convert_audio
 from robot.interfaces.llm import LLM, LLMResponse, Message, Role, ToolCall
 from robot.interfaces.microphone import AudioChunk, Microphone
+from robot.learning.feedback_service import FeedbackService
 from robot.logging import get_logger
 from robot.speech.stt import MockSTT, SpeechToText
 from robot.speech.tts import MockTTS, TextToSpeech
 from robot.speech.wakeword import NullWakeWordChecker, WakeWordChecker
 
+if TYPE_CHECKING:
+    from robot.learning.teaching_controller import TeachingController
+
 _log = get_logger("services.conversation")
+
+#: Utterances treated as positive human feedback ("good robot").
+_POSITIVE_FEEDBACK_WORDS: frozenset[str] = frozenset(
+    {"good", "yes", "nice", "right", "correct", "great", "yep", "yeah", "perfect"}
+)
+#: Utterances treated as negative human feedback.
+_NEGATIVE_FEEDBACK_WORDS: frozenset[str] = frozenset(
+    {"no", "wrong", "don't", "dont", "nope", "bad", "incorrect", "stop", "not"}
+)
+#: Multi-word positive phrases; matched as substrings (lowercased).
+_POSITIVE_FEEDBACK_PHRASES: frozenset[str] = frozenset({"that's good", "thats good", "good job"})
+#: Multi-word negative phrases.
+_NEGATIVE_FEEDBACK_PHRASES: frozenset[str] = frozenset({"not that", "no don't", "no dont"})
 
 # Maximum number of tool-call round trips before giving up and
 # speaking whatever text we have. Prevents infinite loops if the
@@ -109,6 +126,17 @@ class ConversationService:
     #: Audio output for physical playback of TTS audio. When ``None``,
     #: TTS audio is synthesised but not played through a speaker.
     audio: AudioOutput | None = None
+    #: Optional human-feedback service. When set, a recognised utterance that
+    #: reads as praise/correction ("good"/"no") is attributed to the most-recent
+    #: eligible transition as post-hoc feedback. The turn still goes to the
+    #: LLM — feedback is a side effect, never a replacement for the reply. When
+    #: ``None`` no utterance is ever treated as feedback.
+    feedback_service: FeedbackService | None = None
+    #: Optional teaching controller (Phase 8). When set, ``_on_speech`` first
+    #: tries to parse a teaching instruction; on a match it starts a session
+    #: and acknowledges instead of running a normal LLM turn. Left ``None``
+    #: outside teaching mode.
+    teaching_controller: TeachingController | None = None
 
     _audio_task: asyncio.Task[None] | None = field(default=None, init=False, repr=False)
     _recording_buffer: bytearray = field(default_factory=bytearray, init=False)
@@ -146,7 +174,7 @@ class ConversationService:
         This is the canonical entry point for text-based user input
         (terminal chat, API, MQTT).  It transitions to LISTENING and
         publishes :class:`SpeechRecognized`, which the existing
-        `:meth:`_on_speech` handler processes through LLM → TTS →
+        `:meth:`_on_speech` handler processes through LLM -> TTS ->
         audio playback, exactly like a spoken utterance.
 
         Because the event bus awaits all subscribers, this method
@@ -385,14 +413,79 @@ class ConversationService:
             )
         )
 
+    @staticmethod
+    def _match_feedback(text: str) -> str | None:  # noqa: PLR0911
+        """Classify an utterance as positive/negative feedback, or ``None``.
+
+        A small, deliberately constrained matcher (no LLM): positive cues
+        like ``"good"``/``"yes"``/``"that's good"`` and negative cues like
+        ``"no"``/``"wrong"``/``"don't"``. Returns ``"positive"``/``"negative"``
+        or ``None`` when the utterance is not feedback. Phrase matches take
+        priority over single-word matches so ``"that's good"`` is positive
+        rather than tripping on any other word.
+        """
+        lowered = text.strip().lower()
+        if not lowered:
+            return None
+        # Multi-word phrases first (longer signal is more specific).
+        for phrase in _NEGATIVE_FEEDBACK_PHRASES:
+            if phrase in lowered:
+                return "negative"
+        for phrase in _POSITIVE_FEEDBACK_PHRASES:
+            if phrase in lowered:
+                return "positive"
+        # Single-token utterance (or utterance whose first token is a cue).
+        tokens = lowered.replace(".", "").replace(",", "").replace("!", "").split()
+        if not tokens:
+            return None
+        first = tokens[0]
+        if first in _POSITIVE_FEEDBACK_WORDS:
+            return "positive"
+        if first in _NEGATIVE_FEEDBACK_WORDS:
+            return "negative"
+        return None
+
     async def _on_speech(self, event: SpeechRecognized) -> None:
         if self.state_machine.state is not RobotState.LISTENING:
             return
         await self.state_machine.transition(RobotState.THINKING)
 
+        # Teaching instructions are handled *before* the LLM turn and without
+        # it: a constrained parser recognises "RON, when I wave, wave back",
+        # arms a teaching session, and we acknowledge + return. The LLM never
+        # decides what action the robot should learn. When no teaching
+        # controller is wired, or the utterance is not an instruction, the
+        # turn falls through to the normal LLM conversation below.
+        if self.teaching_controller is not None:
+            session_id = self.teaching_controller.arm_from_instruction(event.text)
+            if session_id is not None:
+                _log.info(
+                    "conversation.teaching_armed",
+                    session_id=session_id,
+                    text=event.text,
+                )
+                ack = "Got it. Show me the gesture and I'll respond."
+                await self.bus.publish(BotReply(text=ack, user_text=event.text))
+                await self._speak_reply(ack)
+                await self.state_machine.transition(RobotState.LISTENING)
+                return
+
         # Extract preferences from the user utterance.
         if self.preference_tracker is not None:
             self.preference_tracker.process_user_text(event.text)
+
+        # Human feedback is a *side effect*: if the utterance reads as
+        # praise/correction AND a recent eligible transition exists, attribute
+        # it post-hoc. The turn still proceeds to the LLM below. Without a
+        # feedback service wired, no utterance is ever treated as feedback.
+        if self.feedback_service is not None:
+            polarity = self._match_feedback(event.text)
+            if polarity is not None:
+                await self.feedback_service.handle_feedback(
+                    polarity=+1 if polarity == "positive" else -1,
+                    source="speech",
+                    text=event.text,
+                )
 
         memory_context = self._memory_context(event.text)
 

@@ -97,7 +97,7 @@ class StateMachine:
             raise StateTransitionError(f"illegal transition {self._state.value} -> {target.value}")
         previous = self._state
 
-        # Run exit hooks — log errors; in strict mode, propagate them.
+        # Run exit hooks - log errors; in strict mode, propagate them.
         for hook in self._exit_hooks.get(previous, ()):
             try:
                 hook()
@@ -115,7 +115,7 @@ class StateMachine:
         _log.info("state.transition", previous=previous.value, current=target.value)
         await self.bus.publish(StateChanged(previous=previous, current=target))
 
-        # Run entry hooks — log errors; in strict mode, propagate them.
+        # Run entry hooks - log errors; in strict mode, propagate them.
         for hook in self._entry_hooks.get(target, ()):
             try:
                 hook()

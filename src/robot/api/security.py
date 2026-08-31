@@ -35,7 +35,7 @@ def mask_secret_value(value: Any) -> Any:
 def mask_secrets_in_dict(data: dict[str, Any]) -> dict[str, Any]:
     """Recursively walk a config dict and mask any field whose name looks secret.
 
-    This is the single source of truth for secret masking — used by both
+    This is the single source of truth for secret masking - used by both
     the REST ``GET /config`` endpoint and the Telegram ``/config`` command.
     """
     masked: dict[str, Any] = {}
@@ -71,7 +71,7 @@ async def require_api_key(
     """
     settings = getattr(request.app.state, "settings", None)
     if settings is None:
-        return  # no settings → can't enforce (test/bootstrap mode)
+        return  # no settings -> can't enforce (test/bootstrap mode)
     configured_key: str = getattr(settings.api, "api_key", "")
     if not configured_key:
         return  # auth disabled

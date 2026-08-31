@@ -325,7 +325,7 @@ class SqlitePreferenceStore:
         """Persist the full learner state for a preference.
 
         This is the canonical persistence path for
-        :class:`PreferenceLearner` — it stores all fields needed to
+        :class:`PreferenceLearner` - it stores all fields needed to
         reconstruct the learner's internal state exactly.
         """
         with self._lock:

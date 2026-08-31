@@ -9,9 +9,9 @@ or::
     python -m robot.cli.chat
 
 Typed messages enter the **same** conversation pipeline used by speech
-input — :meth:`ConversationService.handle_user_text` transitions to
+input - :meth:`ConversationService.handle_user_text` transitions to
 LISTENING and publishes :class:`SpeechRecognized`, so the existing
-LLM → tool-calling → TTS → state-transition path is exercised
+LLM -> tool-calling -> TTS -> state-transition path is exercised
 identically.
 
 The interface works with entirely mock backends (no microphone, no
@@ -110,7 +110,7 @@ async def _run_chat(app: DeskBotApp) -> None:  # noqa: PLR0912
 
             try:
                 # handle_user_text publishes SpeechRecognized, which
-                # triggers _on_speech → LLM → TTS → audio → IDLE.
+                # triggers _on_speech -> LLM -> TTS -> audio -> IDLE.
                 # The publish() call awaits the full pipeline, so this
                 # blocks until the turn completes.
                 await conversation.handle_user_text(line, source="text")
@@ -135,7 +135,7 @@ async def _run_chat(app: DeskBotApp) -> None:  # noqa: PLR0912
                 # If tokens were streamed, display them as the response.
                 if streaming_active:
                     print()  # newline after streamed tokens
-                    print("[response timed out — showing streamed text]")
+                    print("[response timed out - showing streamed text]")
                 else:
                     print("DeskBot: [no response received]")
                 continue
@@ -151,7 +151,7 @@ async def _run_chat(app: DeskBotApp) -> None:  # noqa: PLR0912
             # Report TTS/audio status if degraded.
             tts_name = type(conversation.tts).__name__
             if tts_name == "MockTTS":
-                print("[TTS: mock backend — no physical speech]")
+                print("[TTS: mock backend - no physical speech]")
     finally:
         app.bus.unsubscribe(BotReply, _on_reply)
         app.bus.unsubscribe(LLMTokenReceived, _on_token)
