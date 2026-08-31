@@ -7,11 +7,14 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from robot.interfaces.llm import LLM, Message, Role
+from robot.logging import get_logger as _get_logger
 
 if TYPE_CHECKING:
     from robot.ai.conversation_store import ConversationStore
 
 MAX_HISTORY: int = 20
+
+_log = _get_logger("ai.conversation")
 
 
 @dataclass(slots=True)
@@ -110,16 +113,20 @@ class ConversationManager:
         return await self._llm.complete(messages)
 
     async def load(self) -> None:
-        """Load the last conversation from the store, if available."""
+        """Load the last conversation from the store, if available.
+
+        Note: this loads the conversation identified by ``conversation_id``
+        (the configured default, typically ``"default"``). If the user
+        previously switched to a different conversation via the API, that
+        history is not automatically resumed on restart. A future version
+        should persist the last-active conversation id.
+        """
         if self._store is None:
             return
         tuples = await self._store.load(self._conversation_id)
         if tuples is not None:
             self._current = Conversation.from_tuples(
                 system_prompt=self._system_prompt, tuples=tuples
-            )
-            _log = __import__("robot.logging", fromlist=["get_logger"]).get_logger(
-                "ai.conversation"
             )
             _log.info(
                 "conversation.loaded",

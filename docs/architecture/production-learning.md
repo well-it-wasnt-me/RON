@@ -11,6 +11,12 @@ every safety, data, and evaluation gate has been satisfied.
 > learning, and the background training service) is documented in
 > [Learning Architecture](learning.md).  This document covers the
 > **production hardening** layers built on top of that foundation.
+>
+> **Multimodal encoding is now production-integrated.** Enable with
+> `DESKBOT_LEARNING__USE_MULTIMODAL=true` to use trainable vision/audio
+> sub-encoders + temporal history for richer state vectors. The
+> `LearningService` automatically adjusts the world model and action
+> learner state sizes and trains the sub-encoders in each cycle.
 
 ## Design philosophy
 

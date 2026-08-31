@@ -40,6 +40,14 @@ from robot.logging import get_logger
 
 _log = get_logger("hardware.sensors.camera.rtsp")
 
+
+def _redact_url(url: str) -> str:
+    """Redact credentials from a URL for safe logging/error messages."""
+    import re
+
+    return re.sub(r"(://[^:@/]+):[^@/]+@", r"\1:****@", url)
+
+
 # Environment variable override for FFmpeg RTSP open timeout (microseconds).
 _OPEN_TIMEOUT_ENV = "FF_OPEN_TIMEOUT"
 _DEFAULT_OPEN_TIMEOUT_US = 5_000_000  # 5 seconds
@@ -113,7 +121,7 @@ class RtspCamera(Camera):
         cap = cv2.VideoCapture(self.url, cv2.CAP_FFMPEG)
         if not cap.isOpened():
             raise RuntimeError(
-                f"could not open RTSP stream {self.url!r}; "
+                f"could not open RTSP stream {_redact_url(self.url)!r}; "
                 f"check the URL, credentials, and network connectivity."
             )
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)

@@ -4,7 +4,7 @@ services:
     image: deskbot:local
     restart: unless-stopped
     ports:
-      - "${DESKBOT_API_PORT:-8000}:8000"
+      - "127.0.0.1:${DESKBOT_API_PORT:-8000}:8000"
     env_file:
       - path: .env
         required: false

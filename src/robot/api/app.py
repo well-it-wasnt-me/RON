@@ -66,11 +66,13 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         description="REST API for monitoring and controlling DeskBot.",
     )
 
-    # Allow cross-origin requests from any dashboard.
+    # CORS: restrict to loopback by default.  Set DESKBOT_API__CORS_ORIGINS
+    # as a JSON list to allow specific external dashboards.
+    cors_origins = getattr(settings.api, "cors_origins", None) or ["http://localhost:8000"]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
+        allow_origins=cors_origins,
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )

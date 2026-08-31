@@ -19,10 +19,17 @@ class Role(str, Enum):
 
 @dataclass(slots=True, frozen=True)
 class Message:
-    """A single message in a chat conversation."""
+    """A single message in a chat conversation.
+
+    For OpenAI-compatible tool calling, an assistant message may carry
+    ``tool_calls`` (the function calls the model requested) and a tool-role
+    message carries ``tool_call_id`` linking it back to the originating call.
+    """
 
     role: Role
     content: str
+    tool_calls: tuple[ToolCall, ...] = ()
+    tool_call_id: str = ""
 
 
 @dataclass(slots=True, frozen=True)

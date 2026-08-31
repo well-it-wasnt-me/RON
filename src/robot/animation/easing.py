@@ -42,8 +42,10 @@ def ease_in_out_cubic(t: float) -> float:
 
 
 def ease_out_elastic(t: float) -> float:
-    if t in (0.0, 1.0):
-        return float(t)
+    if t <= 0.0:
+        return 0.0
+    if t >= 1.0:
+        return 1.0
     c4 = (2.0 * math.pi) / 3.0
     return float(2.0 ** (-10.0 * t) * math.sin((t * 10.0 - 0.75) * c4) + 1.0)
 

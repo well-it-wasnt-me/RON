@@ -16,6 +16,10 @@ from robot.hardware.displays.gc9a01 import FakeSpiTransport, GC9A01Display
 from robot.hardware.displays.mock_display import MockDisplay
 from robot.hardware.sensors.mock_camera import MockCamera
 from robot.hardware.sensors.mock_microphone import MockMicrophone
+from robot.hardware.sensors.rtsp_camera import RtspCamera
+from robot.hardware.sensors.rtsp_microphone import RtspMicrophone
+from robot.hardware.sensors.usb_camera import UsbCamera
+from robot.hardware.sensors.usb_microphone import UsbMicrophone
 from robot.hardware.servos.factory import ServoControllerFactory
 from robot.hardware.servos.gpio_controller import RaspberryPiGPIOServoController
 from robot.hardware.servos.mock_servo import MockServo, MockServoBus
@@ -33,6 +37,10 @@ __all__ = [
     "MockServoBus",
     "PCA9685ServoController",
     "RaspberryPiGPIOServoController",
+    "RtspCamera",
+    "RtspMicrophone",
     "ServoControllerFactory",
+    "UsbCamera",
+    "UsbMicrophone",
     "UsbSpeaker",
 ]

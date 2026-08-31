@@ -16,6 +16,7 @@ Design principles
 
 from __future__ import annotations
 
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -52,10 +53,12 @@ class DegradationRegistry:
 
     def __init__(self) -> None:
         self._entries: list[DegradationEntry] = []
+        self._lock = threading.Lock()
 
     def record(self, entry: DegradationEntry) -> None:
         """Record a degradation entry and log at WARNING level."""
-        self._entries.append(entry)
+        with self._lock:
+            self._entries.append(entry)
         if entry.status == "ok":
             _log.info(
                 "component.ok",
@@ -73,13 +76,15 @@ class DegradationRegistry:
 
     def report(self) -> list[DegradationEntry]:
         """Return a snapshot of all recorded degradation entries."""
-        return list(self._entries)
+        with self._lock:
+            return list(self._entries)
 
     def summary(self) -> str:
         """Return a human-readable one-line summary of degradation status."""
-        if not self._entries:
+        entries = self.report()
+        if not entries:
             return "all components ok"
-        degraded = [e for e in self._entries if e.status != "ok"]
+        degraded = [e for e in entries if e.status != "ok"]
         if not degraded:
             return "all components ok"
         parts = [f"{e.component}->{e.fallback_backend}" for e in degraded]
@@ -100,8 +105,9 @@ class DegradationRegistry:
 
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-serialisable dict for the health endpoint."""
+        entries = self.report()
         components: dict[str, dict[str, str]] = {}
-        for entry in self._entries:
+        for entry in entries:
             info: dict[str, str] = {
                 "status": entry.status,
                 "backend": (

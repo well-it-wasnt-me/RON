@@ -371,9 +371,7 @@ class ActionLearner:
         """
         batch_size = states.shape[0]
         n_actions = self.action_space.size
-        inputs = np.zeros(
-            (batch_size * n_actions, self.state_size + n_actions), dtype=np.float64
-        )
+        inputs = np.zeros((batch_size * n_actions, self.state_size + n_actions), dtype=np.float64)
         # Broadcast each state to n_actions rows
         for i in range(batch_size):
             row_start = i * n_actions
@@ -440,9 +438,7 @@ class ActionLearner:
             # Batch Q-value computation for all non-terminal next states
             next_q_all = self.q_values_batch(next_states[non_terminal_mask])
             max_next_q = np.max(next_q_all, axis=1)
-            targets[non_terminal_mask, 0] = (
-                rewards[non_terminal_mask] + self.gamma * max_next_q
-            )
+            targets[non_terminal_mask, 0] = rewards[non_terminal_mask] + self.gamma * max_next_q
 
         # Terminal transitions just get the reward
         terminal_mask = dones.astype(bool)
@@ -538,7 +534,7 @@ class ActionLearningEnv:
         assert self._state is not None
         action = self.action_space.get(action_index)
         reward = 0.0
-        noise = self._rng.normal(0, self.noise_std, 4)
+        noise = self._rng.normal(0, self.noise_std, 1)
         face_detected = self._state[2]
 
         if action.name == "look_left":

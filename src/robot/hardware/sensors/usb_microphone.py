@@ -56,6 +56,7 @@ class UsbMicrophone(Microphone):
     _stream_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
     _reader_thread: threading.Thread | None = field(default=None, init=False, repr=False)
     _closed: bool = field(default=False, init=False)
+    _stop: threading.Event = field(default_factory=threading.Event, init=False)
     _reader_error: str | None = field(default=None, init=False)
     _reader_started_at: float | None = field(default=None, init=False)
     _configured_sample_rate: int = field(default=16_000, init=False)
@@ -428,6 +429,9 @@ class UsbMicrophone(Microphone):
         )
 
     def _close_stream(self, *, join_reader: bool) -> None:
+        # Signal the reader thread to stop before nulling the stream
+        # so it doesn't write into a None reference.
+        self._stop.set()
         stream = self._stream
         self._stream = None
         if stream is not None:

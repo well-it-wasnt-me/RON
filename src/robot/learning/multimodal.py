@@ -1,7 +1,9 @@
 """Multimodal learning: unified representation from vision, audio, and robot state.
 
 .. note::
-    This module is **experimental / future-phase** code. It is tested in
+    This module is **experimental / future-phase** code. It is not wired
+    into the production :class:`LearningService` and is only exercised by
+    unit tests. Do not rely on it for production behaviour. It is tested in
     isolation but is not yet wired into :class:`LearningService`. The
     production learning path currently uses :class:`StateEncoder` and
     :class:`WorldModel` directly. Integration is planned for a future
@@ -301,6 +303,9 @@ class HistoryBuffer:
 
     def push(self, state: list[float]) -> None:
         """Add a state to the history, evicting the oldest if at capacity."""
+        assert len(state) == self.state_size, (
+            f"state length {len(state)} does not match state_size {self.state_size}"
+        )
         self._buffer.append(state)
         while len(self._buffer) > self.history_length:
             self._buffer.popleft()
@@ -318,8 +323,7 @@ class HistoryBuffer:
             # Most recent entries go at the end
             offset = (self.history_length - len(entries) + i) * self.state_size
             for j, v in enumerate(state):
-                if offset + j < len(result):
-                    result[offset + j] = v
+                result[offset + j] = v
         return result
 
     def encode_numpy(self) -> np.ndarray:
@@ -590,6 +594,11 @@ class MultimodalEnvironment:
         Layout matches the :class:`StateEncoder` layout:
         [emotions(10), state(8), personality(5), servos(10),
          vision(6), audio(3), flags(4), rewards(5), reserved(40)]
+
+        .. warning::
+            The index constants below (33, 39, 42, etc.) must mirror the
+            offsets in :class:`StateEncoder`. If the encoder layout changes,
+            these must be updated. Import the shared constants when available.
         """
         vec = np.zeros(STATE_SIZE, dtype=np.float64)
 
@@ -692,7 +701,13 @@ class MultimodalEnvironment:
                 self._face_confidence = 0.6
 
         # Dynamics: face and audio change over time
+        # Recompute face/audio from the (possibly mutated) fields so the
+        # dynamics reflect the post-action state.
+        face = self._face_detected > 0.5
+        audio = self._audio_energy > 0.3
         if face:
+            # Face is present — reset idle time (user is interacting).
+            self._idle_time = 0.0
             # Face might drift slightly
             self._face_x += noise[2] * 0.05
             self._face_x = max(0.0, min(1.0, self._face_x))

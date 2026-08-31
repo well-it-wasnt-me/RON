@@ -27,6 +27,10 @@ def mse_derivative(predicted: Tensor, target: Tensor) -> Tensor:
     """Gradient of MSE loss w.r.t. ``predicted``.
 
     ``dL/dpredicted = 2 * (predicted - target) / n``
+
+    where ``n`` is the total number of elements (``batch_size * output_features``).
+    The downstream dense layer does **not** apply an additional ``1/batch_size``
+    factor — the normalisation is carried entirely by this derivative.
     """
     n = predicted.size
     return (predicted - target) * (2.0 / n)

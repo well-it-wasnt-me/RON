@@ -20,6 +20,13 @@ Restart=on-failure
 RestartSec=5
 StateDirectory=deskbot
 NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/deskbot /opt/deskbot/.venv
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryDenyWriteExecute=false
+LockPersonality=true
 
 [Install]
 WantedBy=multi-user.target

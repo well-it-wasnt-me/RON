@@ -161,10 +161,12 @@ class ServoOverlay:
     def _arm_endpoint(
         self, sx: float, sy: float, angle: float, side: str, length: float
     ) -> tuple[float, float]:
+        # Left arm extends to the left, right arm to the right.
+        # At 90° the arm hangs straight down; higher angles raise it outward.
         sign = -1.0 if side == "left" else 1.0
         rad = math.radians(angle - 90.0)
-        dx = -sign * length * math.sin(rad)
-        dy = -length * math.cos(rad)
+        dx = sign * length * math.sin(rad)
+        dy = length * math.cos(rad)
         return (sx + dx, sy + dy)
 
     def _draw_target_indicator(

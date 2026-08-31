@@ -31,7 +31,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from robot.events.bus import InMemoryEventBus
 from robot.events.events import (
@@ -48,6 +48,9 @@ from robot.learning.observation import Observation
 from robot.learning.reward import RewardModel
 from robot.learning.state_encoder import StateEncoder
 from robot.learning.transition import PendingTransition, Transition, TransitionStore
+
+if TYPE_CHECKING:
+    from robot.learning.multimodal import MultimodalEncoder
 from robot.logging import get_logger
 
 _log = get_logger("learning.recorder")
@@ -95,6 +98,10 @@ class ExperienceRecorder:
     default_reward: float = 0.0
     reward_model: RewardModel = field(default_factory=RewardModel)
     on_experience_recorded: Callable[[Experience], None] | None = field(default=None, repr=False)
+    #: Optional multimodal encoder. When set, transitions use the multimodal
+    #: encode() for state vectors while event handlers still update the inner
+    #: StateEncoder (accessible via multimodal_encoder.state_encoder).
+    multimodal_encoder: MultimodalEncoder | None = field(default=None, init=False, repr=False)
 
     # Transition store (created in __post_init__)
     transition_store: TransitionStore = field(default=None, init=False, repr=False)  # type: ignore[assignment]
@@ -106,6 +113,17 @@ class ExperienceRecorder:
             on_transition_completed=self._on_transition_completed,
         )
 
+    def _encode_state(self) -> list[float]:
+        """Produce the state vector for transition recording.
+
+        When a multimodal encoder is configured, uses its richer encode()
+        (trainable vision/audio sub-encoders + temporal history). Otherwise
+        falls back to the plain StateEncoder.
+        """
+        if self.multimodal_encoder is not None:
+            return self.multimodal_encoder.encode()
+        return self.encoder.encode()
+
     # ------------------------------------------------------------------ lifecycle
     def attach(self) -> None:
         """Subscribe to the event bus."""
@@ -115,7 +133,8 @@ class ExperienceRecorder:
         self.bus.subscribe(EmotionChanged, self._on_emotion_changed)
         self.bus.subscribe(ServoMoved, self._on_servo_moved)
         self.bus.subscribe(FaceDetected, self._on_face_detected)
-        self.bus.subscribe(SpeechRecognized, self._on_speech_recognized)
+        # SpeechRecognized is an observation, not an action — not subscribed
+        # to avoid paying bus dispatch cost for a no-op handler.
         self.bus.subscribe(IdleTimeout, self._on_idle_timeout)
         self._subscribed = True
         _log.info("experience_recorder.attached")
@@ -126,7 +145,6 @@ class ExperienceRecorder:
         self.bus.unsubscribe(EmotionChanged, self._on_emotion_changed)
         self.bus.unsubscribe(ServoMoved, self._on_servo_moved)
         self.bus.unsubscribe(FaceDetected, self._on_face_detected)
-        self.bus.unsubscribe(SpeechRecognized, self._on_speech_recognized)
         self.bus.unsubscribe(IdleTimeout, self._on_idle_timeout)
         self._subscribed = False
 
@@ -178,7 +196,7 @@ class ExperienceRecorder:
         PendingTransition
             The open transition.
         """
-        state = self.encoder.encode()
+        state = self._encode_state()
         return self.transition_store.begin(
             state=state,
             action_index=action_index,
@@ -260,7 +278,7 @@ class ExperienceRecorder:
             When True and ``reward`` is None, compute the reward using
             the :class:`RewardModel` instead of the default.
         """
-        next_state = self.encoder.encode()
+        next_state = self._encode_state()
 
         # Capture typed observation if the transition has one
         next_observation = None

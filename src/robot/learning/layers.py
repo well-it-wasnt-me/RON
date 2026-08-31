@@ -126,7 +126,6 @@ class DenseLayer:
         assert self._pre_activation is not None
         assert self._output is not None
 
-
         # Activation derivative
         if self.activation_name == "softmax":
             # For softmax + cross-entropy, the combined derivative
@@ -171,8 +170,21 @@ class DenseLayer:
         layer.out_features = cast("int", state["out_features"])
         layer.activation_name = cast("str", state["activation"])
         layer._forward_fn, layer._derivative_fn = get_activation(str(state["activation"]))
-        layer.weights = Tensor(np.array(state["weights"], dtype=np.float64))
-        layer.biases = Tensor(np.array(state["biases"], dtype=np.float64))
+        weights = np.array(state["weights"], dtype=np.float64)
+        biases = np.array(state["biases"], dtype=np.float64)
+        # Validate shapes match the declared dimensions.
+        if weights.shape != (layer.in_features, layer.out_features):
+            raise ValueError(
+                f"checkpoint weight shape {weights.shape} does not match "
+                f"declared ({layer.in_features}, {layer.out_features})"
+            )
+        if biases.shape != (layer.out_features,):
+            raise ValueError(
+                f"checkpoint bias shape {biases.shape} does not match "
+                f"declared ({layer.out_features},)"
+            )
+        layer.weights = Tensor(weights)
+        layer.biases = Tensor(biases)
         layer.weight_grad = Tensor.zeros(layer.in_features, layer.out_features)
         layer.bias_grad = Tensor.zeros(layer.out_features)
         layer._input = None

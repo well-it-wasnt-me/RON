@@ -403,6 +403,8 @@ class LearningStatusResponse(BaseModel):
     promotions: int = 0
     rollbacks: int = 0
     model_version: int = 0
+    use_multimodal: bool = False
+    multimodal_state_size: int = 0
 
 
 class LearnedPreferenceItem(BaseModel):

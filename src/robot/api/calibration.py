@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from robot.api.schemas import (
     CalibrateServoResponse,
@@ -18,6 +18,7 @@ from robot.api.schemas import (
     ServoReleaseResponse,
     TestPatternResponse,
 )
+from robot.api.security import require_api_key
 
 router = APIRouter(prefix="/calibration", tags=["calibration"])
 
@@ -137,9 +138,11 @@ async def list_servos() -> ServoListResponse:
 @router.post(
     "/servos/{name}/move", summary="Move a servo to an angle", response_model=ServoMoveResponse
 )
-async def move_servo(name: str, angle: float, duration_s: float = 0.4) -> ServoMoveResponse:
+async def move_servo(
+    name: str, angle: float, duration_s: float = 0.4, _: None = Depends(require_api_key)
+) -> ServoMoveResponse:
     servo = _get_servo(name)
-    minimum, maximum, _ = _servo_limits(name, servo)
+    minimum, maximum, _centre = _servo_limits(name, servo)
     if not minimum <= angle <= maximum:
         raise HTTPException(
             status_code=422, detail=f"Angle must be between {minimum} and {maximum} degrees"
@@ -156,7 +159,7 @@ async def move_servo(name: str, angle: float, duration_s: float = 0.4) -> ServoM
 @router.post(
     "/servos/{name}/release", summary="Release a servo", response_model=ServoReleaseResponse
 )
-async def release_servo(name: str) -> ServoReleaseResponse:
+async def release_servo(name: str, _: None = Depends(require_api_key)) -> ServoReleaseResponse:
     servo = _get_servo(name)
     try:
         await servo.release()
@@ -168,7 +171,7 @@ async def release_servo(name: str) -> ServoReleaseResponse:
 
 
 @router.post("/servos/release_all", summary="Release all servos", response_model=ReleaseAllResponse)
-async def release_all_servos() -> ReleaseAllResponse:
+async def release_all_servos(_: None = Depends(require_api_key)) -> ReleaseAllResponse:
     if _state.servo_controller is None:
         raise HTTPException(status_code=503, detail="No servo controller available")
     try:
@@ -186,6 +189,7 @@ async def release_all_servos() -> ReleaseAllResponse:
 async def calibrate_servo(
     name: str,
     include_limits: bool = Query(False, description="Also visit configured endpoints"),
+    _: None = Depends(require_api_key),
 ) -> CalibrateServoResponse:
     """Centre a servo safely, optionally testing configured endpoints."""
     servo = _get_servo(name)
@@ -232,7 +236,9 @@ async def get_display_config() -> DisplayConfigResponse:
 @router.post(
     "/display/test_pattern", summary="Show a test pattern", response_model=TestPatternResponse
 )
-async def show_test_pattern(pattern: str = "gradient") -> TestPatternResponse:
+async def show_test_pattern(
+    pattern: str = "gradient", _: None = Depends(require_api_key)
+) -> TestPatternResponse:
     if _state.display is None:
         raise HTTPException(status_code=503, detail="No display available")
     w, h = _state.display.width, _state.display.height
@@ -251,7 +257,7 @@ async def show_test_pattern(pattern: str = "gradient") -> TestPatternResponse:
 
 
 @router.post("/display/clear", summary="Clear the display", response_model=ClearDisplayResponse)
-async def clear_display() -> ClearDisplayResponse:
+async def clear_display(_: None = Depends(require_api_key)) -> ClearDisplayResponse:
     if _state.display is None:
         raise HTTPException(status_code=503, detail="No display available")
     await _state.display.clear()

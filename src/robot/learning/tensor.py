@@ -101,8 +101,10 @@ class Tensor:
 
     def __truediv__(self, other: Tensor | float | int) -> Tensor:
         if isinstance(other, Tensor):
-            return Tensor(self._data / other._data)
-        return Tensor(self._data / float(other))
+            with np.errstate(divide="ignore", invalid="ignore"):
+                return Tensor(self._data / other._data)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            return Tensor(self._data / float(other))
 
     def __neg__(self) -> Tensor:
         return Tensor(-self._data)
@@ -159,6 +161,11 @@ class Tensor:
 
     def __eq__(self, other: object) -> bool:
         """Value-based equality for testing and comparison.
+
+        Compares the underlying arrays elementwise using ``np.array_equal``.
+        Tensors of different shapes are never equal (returns ``False``).
+        Comparing a Tensor with a non-Tensor returns ``NotImplemented`` so
+        Python falls back to identity comparison.
 
         Because Tensor is mutable (has ``__setitem__``), ``__hash__`` is
         intentionally **not** defined. Python therefore treats instances as

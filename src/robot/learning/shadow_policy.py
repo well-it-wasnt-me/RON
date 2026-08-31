@@ -307,12 +307,18 @@ class ShadowPolicyController:
         self._metrics.total_latency_ms += inference_latency
         self._metrics.max_latency_ms = max(self._metrics.max_latency_ms, inference_latency)
 
-        # In shadow mode, always return the deterministic action
-        # The model action is NEVER executed on hardware
+        # In shadow mode, always return the deterministic action.
+        # In assist mode, return the model action when it passes safety.
+        if self.mode == PolicyMode.ASSIST and safety_result == "ok" and model_action >= 0:
+            return model_action
         return deterministic_action
 
     def set_mode(self, mode: PolicyMode) -> None:
         """Change the policy mode."""
+        if mode == PolicyMode.ACTIVE:
+            raise NotImplementedError(
+                "PolicyMode.ACTIVE is not yet implemented — use SHADOW or ASSIST."
+            )
         self.mode = mode
         _log.info("shadow_policy.mode_changed", mode=mode.value)
 

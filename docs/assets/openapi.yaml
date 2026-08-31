@@ -2320,6 +2320,14 @@ components:
           type: integer
           title: Model Version
           default: 0
+        use_multimodal:
+          type: boolean
+          title: Use Multimodal
+          default: false
+        multimodal_state_size:
+          type: integer
+          title: Multimodal State Size
+          default: 0
       additionalProperties: true
       type: object
       required:
@@ -2342,6 +2350,8 @@ components:
         rollbacks: 3
         total_experiences: 1280
         training_cycles_completed: 8
+        use_multimodal: false
+        multimodal_state_size: 0
     LogEntry:
       properties:
         timestamp:

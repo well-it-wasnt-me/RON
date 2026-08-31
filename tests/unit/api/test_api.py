@@ -197,7 +197,7 @@ async def test_api_config_defaults() -> None:
     """ApiConfig has sensible defaults."""
     cfg = ApiConfig()
     assert cfg.enabled is True
-    assert cfg.host == "0.0.0.0"
+    assert cfg.host == "127.0.0.1"
     assert cfg.port == 8000
 
 

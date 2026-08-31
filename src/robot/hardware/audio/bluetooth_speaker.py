@@ -16,6 +16,7 @@ through a Bluetooth speaker.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import subprocess
 import time
 from dataclasses import dataclass
@@ -227,6 +228,8 @@ class BluetoothSpeaker:
                 )
         except subprocess.TimeoutExpired:
             proc.kill()
+            with contextlib.suppress(Exception):
+                proc.wait(timeout=5)
             _log.warning("audio.playback.failed", reason="timeout")
             return
         except FileNotFoundError:

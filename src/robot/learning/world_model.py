@@ -368,7 +368,14 @@ class WorldModel:
         result.final_loss = result.metrics[-1].train_loss if result.metrics else initial_loss
         result.best_val_loss = best_val_loss
         result.epochs = epochs
-        result.improved = result.final_loss < initial_loss
+        # Use validation loss for the improvement flag when available,
+        # to avoid reporting success on overfit models.
+        initial_val_loss = result.metrics[0].val_loss if result.metrics else initial_loss
+        result.improved = (
+            best_val_loss < initial_val_loss
+            if best_val_loss < float("inf")
+            else result.final_loss < initial_loss
+        )
 
         if result.improved:
             _log.info(
@@ -420,12 +427,23 @@ class WorldModel:
 
         for exp in experiences:
             state = np.array(exp.state, dtype=np.float64)
+            # Validate state length matches expected size
+            if len(state) != self.state_size:
+                raise ValueError(
+                    f"experience state length {len(state)} does not match "
+                    f"state_size {self.state_size}"
+                )
             # Pad or truncate action to fixed size
             action = np.zeros(self.action_size, dtype=np.float64)
             exp_action = np.array(exp.action, dtype=np.float64)
             n_copy = min(len(exp_action), self.action_size)
             action[:n_copy] = exp_action[:n_copy]
             next_state = np.array(exp.next_state, dtype=np.float64)
+            if len(next_state) != self.state_size:
+                raise ValueError(
+                    f"experience next_state length {len(next_state)} does not match "
+                    f"state_size {self.state_size}"
+                )
 
             states_list.append(state)
             actions_list.append(action)

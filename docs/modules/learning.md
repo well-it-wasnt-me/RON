@@ -301,7 +301,15 @@ one manually; `load_latest_checkpoint()` restores the last good model.
 
 ---
 
-## Part 7 - Multimodal learning (`multimodal.py`)
+## Part 7 - Multimodal learning (`multimodal.py`) — **Production integrated**
+
+> **Now wired into `LearningService`.** Enable with
+> `DESKBOT_LEARNING__USE_MULTIMODAL=true`. When enabled, the
+> `MultimodalEncoder` replaces the plain `StateEncoder` for state
+> encoding, the world model and action learner use the larger multimodal
+> vector size, and the vision/audio sub-encoders are trained in each
+> background training cycle via a self-supervised reconstruction
+> objective.
 
 Extends the deterministic state encoder with **trainable** sub-encoders and
 a **temporal history** window so the representation can capture cross-modal
@@ -404,6 +412,8 @@ All parameters are environment-configurable via `DESKBOT_LEARNING__*`
 | `DESKBOT_LEARNING__CHECKPOINT_DIR`               | `~/.deskbot/checkpoints`    | Checkpoint dir                          |
 | `DESKBOT_LEARNING__KEEP_LAST_N_CHECKPOINTS`      | `5`                         | Checkpoints kept on disk                |
 | `DESKBOT_LEARNING__PROMOTE_THRESHOLD`            | `1.0`                       | Promotion improvement factor            |
+| `DESKBOT_LEARNING__USE_MULTIMODAL`               | `false`                     | Use trainable multimodal encoder       |
+| `DESKBOT_LEARNING__MULTIMODAL_HISTORY_LENGTH`     | `5`                         | Temporal history snapshots (0 = none)   |
 
 ### CLI (`robot.cli.learning`)
 
@@ -418,9 +428,9 @@ Router prefix `/api/v1/learning`:
 
 | Method | Path           | Returns                                                                                                     |
 |--------|----------------|-------------------------------------------------------------------------------------------------------------|
-| `GET`  | `/status`      | `TrainingStatus` snapshot (experiences, losses, cycles, promotions/rollbacks, model version, `is_training`) |
+| `GET`  | `/status`      | `TrainingStatus` snapshot (experiences, losses, cycles, promotions/rollbacks, model version, `is_training`, `use_multimodal`, `multimodal_state_size`) |
 | `GET`  | `/preferences` | Learned preferences + total tracked patterns                                                                |
-| `GET`  | `/config`      | Schedule, resource limits, checkpoint config                                                                |
+| `GET`  | `/config`      | Schedule, resource limits, checkpoint config, multimodal config                                            |
 | `POST` | `/train`       | Force an immediate training cycle                                                                           |
 
 ### Web dashboard
@@ -461,6 +471,10 @@ DESKBOT_LEARNING__ENABLED=true
    which constructs (from `settings.learning`):
    - a `LearningSchedule`, `ResourceLimits`, and `CheckpointConfig`,
    - a `LearningService` with a `WorldModel`, `ActionLearner`,
+   -   when `use_multimodal=true`, a `MultimodalEncoder` wrapping the
+     `StateEncoder` with trainable vision/audio sub-encoders + temporal
+     history; the world model and action learner use the larger
+     `multimodal_size()` state dimension,
      `ExperienceRecorder`, `WorkingMemory` and `ReplayBuffer` sized from
      config (`working_memory_capacity`, `replay_buffer_capacity`,
      `replay_seed`),

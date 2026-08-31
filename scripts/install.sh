@@ -570,6 +570,8 @@ if [[ -z "${UV_BIN}" ]]; then
   echo ">>> Installing uv (as ${SERVICE_USER}, into ${UV_DIR})…"
   sudo -u "${SERVICE_USER}" -H -- bash -c \
     "curl -LsSf https://astral.sh/uv/install.sh | sh"
+    # NOTE: consider pinning a specific uv version with UV_VERSION=<x.y.z>
+    # for reproducible installs. See https://docs.astral.sh/uv/
   for cand in "${UV_DIR}/uv" "${SERVICE_HOME}/.cargo/bin/uv"; do
     if [[ -x "$cand" ]]; then UV_BIN="$cand"; break; fi
   done
