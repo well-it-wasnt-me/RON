@@ -1,11 +1,12 @@
 # Local Brain - Learning Module
 
-DeskBot's **local brain** is a self-contained, on-device learning system implemented in [
-`robot.learning`](https://github.com/well-it-wasnt-me/RON/tree/main/src/robot/learning). It lets the robot *observe* its
-environment, *record* experience, *learn*
-measurable relationships from that experience, *retain* what it learned, and *safely* use that knowledge to improve its
-behaviour - all running locally on the Raspberry Pi with **no external inference APIs, no pretrained models, and no
-cloud calls**.
+DeskBot's **local brain** is a self-contained, on-device learning system
+implemented in [`robot.learning`](https://github.com/well-it-wasnt-me/RON/tree/main/src/robot/learning).
+It lets the robot *observe* its environment, *record* experience, *learn*
+measurable relationships from that experience, *retain* what it learned, and
+*safely* use that knowledge to improve its behaviour - all running locally
+on the Raspberry Pi with **no external inference APIs, no pretrained models,
+and no cloud calls**.
 
 > See also the high-level [Learning Architecture](../architecture/learning.md)
 > overview and the [Production Learning System](../architecture/production-learning.md)

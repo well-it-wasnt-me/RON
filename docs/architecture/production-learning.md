@@ -179,10 +179,7 @@ obs = Observation.from_encoder(encoder)
 
 **Observations** are: `FaceDetected`, `SpeechRecognized`, audio level, face confidence, sensor state, user presence.
 
-**Actions** are the 16 entries in `deskbot_action_space()`: the original `look_left`, `look_right`, `look_center`,
-`look_up`, `look_down`, `blink`, `wink`, `celebrate`, `sleep`, `look_around` (indices 0-9) plus the learnable
-interaction actions `speak`, `change_emotion`, `set_state`, `wave`, `move_left_arm`, `move_right_arm` (indices 10-15). A
-reverse `action_index -> BehaviorAction` mapping resolves an index back to the executable behaviour.
+**Actions** are the 16 entries in `deskbot_action_space()`: the original `look_left`, `look_right`, `look_center`, `look_up`, `look_down`, `blink`, `wink`, `celebrate`, `sleep`, `look_around` (indices 0-9) plus the learnable interaction actions `speak`, `change_emotion`, `set_state`, `wave`, `move_left_arm`, `move_right_arm` (indices 10-15). A reverse `action_index -> BehaviorAction` mapping resolves an index back to the executable behaviour.
 
 Never is `FaceDetected` encoded as an action.
 
@@ -204,19 +201,19 @@ reward = model.compute(
 
 Reward components are pluggable:
 
-| Component                | Reward                                                                     |
-|--------------------------|----------------------------------------------------------------------------|
-| `face_engagement_reward` | +0.1 for engaging with a detected face                                     |
-| `idle_penalty_reward`    | −0.5 for sleeping with stimuli present                                     |
-| `interaction_reward`     | +0.05 for interacting with a face                                          |
-| `human_feedback_reward`  | post-hoc human praise/correction (±polarity·magnitude), clamped to [-1, 1] |
+| Component | Reward |
+|-----------|--------|
+| `face_engagement_reward` | +0.1 for engaging with a detected face |
+| `idle_penalty_reward` | −0.5 for sleeping with stimuli present |
+| `interaction_reward` | +0.05 for interacting with a face |
+| `human_feedback_reward` | post-hoc human praise/correction (±polarity·magnitude), clamped to [-1, 1] |
 
 `LearningService.reward_for_transition(transition_id)` returns the **recorded**
 reward (which already includes the immediate `human_feedback_reward` component)
 **plus** the post-hoc `FeedbackLedger` delta, clamped to [-2, 2] (and `0.0`
 when the transition is no longer in `working_memory.recent(256)`; the
-`staleness_s` bound is defined but not currently enforced). This amended reward is what the action learner trains on —
-see the
+`staleness_s` bound is defined but not currently enforced). This amended reward
+is what the action learner trains on — see the
 [teaching loop](#teaching-loop).
 
 ### No future leakage
@@ -255,6 +252,19 @@ making consecutive calls produce different outputs even for the same observation
 >   principle but is **not yet wired into `LearningService`**. The two differ in
 >   dimensionality and trainability; treat this phase as the design target, not
 >   the running code path.
+
+### Current wiring vs. design
+
+> **As wired today**, `DESKBOT_LEARNING__USE_MULTIMODAL=true` enables the
+> **570-D trainable `MultimodalEncoder`** (robot state 91 + vision 16 + audio 8
+> + history 91×5), with trainable vision/audio sub-encoders and self-supervised
+> reconstruction — see
+> [Learning > Part 7](../modules/learning.md). The stateless
+> `DeterministicMultimodalEncoder` (164-D) described below is the intended
+> production design: it shares the deterministic-feature / no-future-leakage
+> principle but is **not yet wired into `LearningService`**. The two differ in
+> dimensionality and trainability; treat this phase as the design target, not
+> the running code path.
 
 ### Stateless design
 
@@ -588,13 +598,15 @@ robot/learning/
 
 ## Teaching loop
 
-The **teaching mode** layers a human-in-the-loop on top of the action learner. Gated by `DESKBOT_TEACHING__ENABLED=true`
-(requires learning enabled), it arms a session from a constrained spoken instruction, demonstrates or practices on a
-matching `GestureDetected` event, and attributes spoken/API praise/correction to the most-recent eligible real
-transition via `FeedbackService` /
-`FeedbackLedger`. The `ActionLearner` then trains on the feedback-amended reward each cycle. Safety is preserved:
-practice proposals pass a non-mutating
-`SafetyGate.is_valid` during selection and are re-validated with the full mutating `validate` before execution. See
+The **teaching mode** layers a human-in-the-loop on top of the action learner.
+Gated by `DESKBOT_TEACHING__ENABLED=true` (requires learning enabled), it arms a
+session from a constrained spoken instruction, demonstrates or practices on a
+matching `GestureDetected` event, and attributes spoken/API praise/correction
+to the most-recent eligible real transition via `FeedbackService` /
+`FeedbackLedger`. The `ActionLearner` then trains on the feedback-amended
+reward each cycle. Safety is preserved: practice proposals pass a non-mutating
+`SafetyGate.is_valid` during selection and are re-validated with the full
+mutating `validate` before execution. See
 [Teaching Mode](../modules/teaching_mode.md) for the full loop.
 
 ## Production checklist

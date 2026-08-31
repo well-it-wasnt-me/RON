@@ -55,6 +55,60 @@
 - **web**: Little cleaning ([#11](https://github.com/well-it-wasnt-me/RON/pull/11),
   [`25a4c9a`](https://github.com/well-it-wasnt-me/RON/commit/25a4c9a65936c5b7a23aa7f3d567071afe9c3dd8))
 
+
+## v2.2.0 (2026-08-31)
+
+### Bug Fixes
+
+- Mic chunks overlaps. ([#11](https://github.com/well-it-wasnt-me/RON/pull/11),
+  [`25a4c9a`](https://github.com/well-it-wasnt-me/RON/commit/25a4c9a65936c5b7a23aa7f3d567071afe9c3dd8))
+
+- Teaching api, and friggin states.... ([#11](https://github.com/well-it-wasnt-me/RON/pull/11),
+  [`25a4c9a`](https://github.com/well-it-wasnt-me/RON/commit/25a4c9a65936c5b7a23aa7f3d567071afe9c3dd8))
+
+- **dev-brain-fart**: Yeah..i know... ([#11](https://github.com/well-it-wasnt-me/RON/pull/11),
+  [`25a4c9a`](https://github.com/well-it-wasnt-me/RON/commit/25a4c9a65936c5b7a23aa7f3d567071afe9c3dd8))
+
+- **face-renderer**: At certain point + and - become one and the same...
+  ([#11](https://github.com/well-it-wasnt-me/RON/pull/11),
+  [`25a4c9a`](https://github.com/well-it-wasnt-me/RON/commit/25a4c9a65936c5b7a23aa7f3d567071afe9c3dd8))
+
+- **learning**: Now it collects proper experiences to train from
+  ([#11](https://github.com/well-it-wasnt-me/RON/pull/11),
+  [`25a4c9a`](https://github.com/well-it-wasnt-me/RON/commit/25a4c9a65936c5b7a23aa7f3d567071afe9c3dd8))
+
+### Chores
+
+- Fixing my last PR ([#11](https://github.com/well-it-wasnt-me/RON/pull/11),
+  [`25a4c9a`](https://github.com/well-it-wasnt-me/RON/commit/25a4c9a65936c5b7a23aa7f3d567071afe9c3dd8))
+
+- Lint, typecheck and tests ([#11](https://github.com/well-it-wasnt-me/RON/pull/11),
+  [`25a4c9a`](https://github.com/well-it-wasnt-me/RON/commit/25a4c9a65936c5b7a23aa7f3d567071afe9c3dd8))
+
+### Documentation
+
+- Bringin it up to date. ([#11](https://github.com/well-it-wasnt-me/RON/pull/11),
+  [`25a4c9a`](https://github.com/well-it-wasnt-me/RON/commit/25a4c9a65936c5b7a23aa7f3d567071afe9c3dd8))
+
+- Partial doc update ([#11](https://github.com/well-it-wasnt-me/RON/pull/11),
+  [`25a4c9a`](https://github.com/well-it-wasnt-me/RON/commit/25a4c9a65936c5b7a23aa7f3d567071afe9c3dd8))
+
+- Small update ([#11](https://github.com/well-it-wasnt-me/RON/pull/11),
+  [`25a4c9a`](https://github.com/well-it-wasnt-me/RON/commit/25a4c9a65936c5b7a23aa7f3d567071afe9c3dd8))
+
+### Features
+
+- Get audio from rtsp stream ([#11](https://github.com/well-it-wasnt-me/RON/pull/11),
+  [`25a4c9a`](https://github.com/well-it-wasnt-me/RON/commit/25a4c9a65936c5b7a23aa7f3d567071afe9c3dd8))
+
+- Integrate on-device learning into runtime ([#11](https://github.com/well-it-wasnt-me/RON/pull/11),
+  [`25a4c9a`](https://github.com/well-it-wasnt-me/RON/commit/25a4c9a65936c5b7a23aa7f3d567071afe9c3dd8))
+
+### Refactoring
+
+- **web**: Little cleaning ([#11](https://github.com/well-it-wasnt-me/RON/pull/11),
+  [`25a4c9a`](https://github.com/well-it-wasnt-me/RON/commit/25a4c9a65936c5b7a23aa7f3d567071afe9c3dd8))
+
 ## v2.2.0 (2026-08-31)
 
 ### Bug Fixes
