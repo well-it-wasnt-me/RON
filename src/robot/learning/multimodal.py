@@ -392,14 +392,14 @@ class MultimodalEncoder:
         """Total size of the multimodal representation vector."""
         return multimodal_size(self.history_length)
 
-    def encode(self) -> list[float]:
+    def encode(self, *, update_history: bool = True) -> list[float]:
         """Produce the full multimodal representation vector.
 
-        The layout is:
-
-        ``[robot_state | vision_encoded | audio_encoded | history]``
-
-        where ``|`` denotes concatenation.
+        Parameters
+        ----------
+        update_history:
+            If True, append the current robot state to temporal history.
+            Set to False for read-only consumers such as Q-value inspection.
         """
         # 1. Robot state (deterministic)
         robot_state = self.state_encoder.encode()
@@ -410,8 +410,10 @@ class MultimodalEncoder:
         # 3. Audio (trainable)
         audio_vec = self.audio_encoder.encode(self.state_encoder.audio)
 
-        # 4. Push the current state into history and encode it
-        self._history.push(robot_state)
+        # 4. Update temporal history only when requested
+        if update_history:
+            self._history.push(robot_state)
+
         history_vec = self._history.encode()
 
         # Concatenate all parts

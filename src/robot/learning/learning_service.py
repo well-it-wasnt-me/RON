@@ -840,22 +840,39 @@ class LearningService:
             assert self.current_world_model is not None
             return self.current_world_model
 
+    def get_current_learning_state(self) -> list[float]:
+        """Return the current state in the representation used by learning models."""
+        if self.multimodal_encoder is not None:
+            state = self.multimodal_encoder.encode()
+        else:
+            state = self.encoder.encode()
+
+        if len(state) != self.state_size:
+            raise RuntimeError(
+                "Learning state dimension mismatch: "
+                f"encoder produced {len(state)}, expected {self.state_size}"
+            )
+
+        return list(state)
+
     def q_values(self, state: list[float] | np.ndarray) -> dict[str, float]:
-        """Q-values for every action in ``state``, keyed by action name.
-
-        Returns a mapping ``{action_name: q_value}`` over the whole action
-        space, suitable for the teaching API and tests (e.g. comparing
-        ``Q(state, "wave")`` against ``Q(state, "look_left")``). The values
-        are the policy's current estimates — they reflect the online in-place
-        training driven by :meth:`_train_action_learner`.
-
-        Raises ``RuntimeError`` when the policy is not initialised.
-        """
+        """Q-values for every action in the configured learning state."""
         with self._lock:
             if self.action_learner is None:
                 raise RuntimeError("action_learner not initialised")
+
             arr = np.asarray(state, dtype=np.float64)
+
+            if arr.ndim != 1:
+                raise ValueError(f"learning state must be 1-D, got shape {arr.shape}")
+
+            if arr.size != self.state_size:
+                raise ValueError(
+                    f"learning state dimension mismatch: got {arr.size}, expected {self.state_size}"
+                )
+
             vec = self.action_learner.q_values(arr)
+
         return {self.action_space.get(i).name: float(vec[i]) for i in range(self.action_space.size)}
 
     def get_candidate_world_model(self) -> WorldModel:

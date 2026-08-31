@@ -40,7 +40,6 @@ from robot.learning.state_encoder import (
     _INTERACTION_ACTIVE,
     _PERSON_PRESENT,
     _TEACHING_CONTEXT,
-    STATE_SIZE,
 )
 
 router = APIRouter(prefix="/teaching", tags=["teaching"])
@@ -62,6 +61,25 @@ def _get_feedback_service(request: Request) -> Any:
 
 def _get_learning_service(request: Request) -> Any:
     return getattr(request.app.state, "learning_service", None)
+
+
+def _get_learning_state(request: Request) -> list[float]:
+    """Return the state vector matching the learning service's configured state size."""
+    svc = _get_learning_service(request)
+    multimodal = getattr(svc, "multimodal_encoder", None)
+    state = multimodal.encode() if multimodal is not None else svc.encoder.encode()
+
+    expected_size = getattr(svc, "state_size", None)
+    if expected_size is not None and len(state) != expected_size:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Learning state dimension mismatch: "
+                f"encoder produced {len(state)}, expected {expected_size}"
+            ),
+        )
+
+    return list(state)
 
 
 def _state_summary(state: list[float]) -> dict[str, Any]:
@@ -241,7 +259,7 @@ async def teaching_demonstration(
         svc = _get_learning_service(request)
         if svc is None:
             raise HTTPException(status_code=404, detail="Learning service not available")
-        state = svc.encoder.encode()
+        state = _get_learning_state(request)
         executed = await controller.on_gesture_detected(body.gesture, state)
         if executed is not None:
             executed_index = executed
@@ -269,10 +287,7 @@ async def teaching_qvalues(request: Request) -> TeachingQValuesResponse:
         raise HTTPException(status_code=404, detail="Learning service not available")
     if getattr(svc, "action_learner", None) is None:
         raise HTTPException(status_code=404, detail="Action learner not available")
-    state = svc.encoder.encode()
-    # q_values needs a full-length state vector.
-    if len(state) < STATE_SIZE:
-        state = state + [0.0] * (STATE_SIZE - len(state))
+    state = _get_learning_state(request)
     try:
         q = svc.q_values(state)
     except RuntimeError as exc:

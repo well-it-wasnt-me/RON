@@ -382,15 +382,26 @@ class ActionLearner:
 
     def q_values(self, state: np.ndarray) -> np.ndarray:
         """Compute Q-values for all actions in the given state."""
-        n_actions = self.action_space.size
-        inputs = np.zeros((n_actions, self.state_size + n_actions), dtype=np.float64)
-        # Broadcast state to all rows
-        inputs[:, : self.state_size] = state[np.newaxis, :]
-        for i in range(n_actions):
-            inputs[i, self.state_size + i] = 1.0
+        state = np.asarray(state, dtype=np.float64)
 
-        pred = self.model.predict(Tensor(inputs))
-        return pred.data.flatten()
+        if state.ndim != 1:
+            raise ValueError(f"state must be a 1-D vector, got shape {state.shape}")
+
+        if state.size != self.state_size:
+            raise ValueError(
+                f"state dimension mismatch: got {state.size}, expected {self.state_size}"
+            )
+
+        if not np.all(np.isfinite(state)):
+            raise ValueError("state contains NaN or infinite values")
+
+        n_actions = self.action_space.size
+        inputs = np.zeros(
+            (n_actions, self.state_size + n_actions),
+            dtype=np.float64,
+        )
+
+        inputs[:, : self.state_size] = state
 
     def q_value(self, state: np.ndarray, action_index: int) -> float:
         """Compute Q(s, a) for a single state-action pair."""
@@ -409,6 +420,19 @@ class ActionLearner:
         np.ndarray
             Array of shape ``(batch, n_actions)``.
         """
+        states = np.asarray(states, dtype=np.float64)
+
+        if states.ndim != 2:
+            raise ValueError(f"states must be a 2-D array, got shape {states.shape}")
+
+        if states.shape[1] != self.state_size:
+            raise ValueError(
+                f"state dimension mismatch: got {states.shape[1]}, expected {self.state_size}"
+            )
+
+        if not np.all(np.isfinite(states)):
+            raise ValueError("states contain NaN or infinite values")
+
         batch_size = states.shape[0]
         n_actions = self.action_space.size
         inputs = np.zeros((batch_size * n_actions, self.state_size + n_actions), dtype=np.float64)
@@ -432,6 +456,16 @@ class ActionLearner:
         done: bool = False,
     ) -> float:
         """Run one Q-learning update."""
+        state = np.asarray(state, dtype=np.float64)
+        next_state = np.asarray(next_state, dtype=np.float64)
+
+        if state.ndim != 1 or state.size != self.state_size:
+            raise ValueError(f"state must have shape ({self.state_size},), got {state.shape}")
+
+        if next_state.ndim != 1 or next_state.size != self.state_size:
+            raise ValueError(
+                f"next_state must have shape ({self.state_size},), got {next_state.shape}"
+            )
         if done:
             target_q = reward
         else:
