@@ -392,14 +392,14 @@ class MultimodalEncoder:
         """Total size of the multimodal representation vector."""
         return multimodal_size(self.history_length)
 
-    def encode(self) -> list[float]:
+    def encode(self, *, update_history: bool = True) -> list[float]:
         """Produce the full multimodal representation vector.
 
-        The layout is:
-
-        ``[robot_state | vision_encoded | audio_encoded | history]``
-
-        where ``|`` denotes concatenation.
+        Parameters
+        ----------
+        update_history:
+            If True, append the current robot state to temporal history.
+            Set to False for read-only consumers such as Q-value inspection.
         """
         # 1. Robot state (deterministic)
         robot_state = self.state_encoder.encode()
@@ -410,8 +410,10 @@ class MultimodalEncoder:
         # 3. Audio (trainable)
         audio_vec = self.audio_encoder.encode(self.state_encoder.audio)
 
-        # 4. Push the current state into history and encode it
-        self._history.push(robot_state)
+        # 4. Update temporal history only when requested
+        if update_history:
+            self._history.push(robot_state)
+
         history_vec = self._history.encode()
 
         # Concatenate all parts
@@ -565,11 +567,22 @@ class MultimodalEnvironment:
             "celebrate",
             "sleep",
             "look_around",
+            # Learnable interaction actions (teaching loop). Kept in sync with
+            # deskbot_action_space() so the simulation's action dimensions match
+            # the production space. The step() dynamics below do not model
+            # these yet - they fall through to a neutral 0.0 reward - but the
+            # action-space width is consistent for downstream consumers.
+            "speak",
+            "change_emotion",
+            "set_state",
+            "wave",
+            "move_left_arm",
+            "move_right_arm",
         ]
 
     @property
     def action_size(self) -> int:
-        return 10
+        return 16
 
     def __post_init__(self) -> None:
         self._rng = np.random.default_rng(self.seed)
@@ -593,7 +606,7 @@ class MultimodalEnvironment:
 
         Layout matches the :class:`StateEncoder` layout:
         [emotions(10), state(8), personality(5), servos(10),
-         vision(6), audio(3), flags(4), rewards(5), reserved(40)]
+         vision(6), audio(3), flags(4), rewards(5), teaching_context(14), reserved(30)]
 
         .. warning::
             The index constants below (33, 39, 42, etc.) must mirror the
@@ -706,7 +719,7 @@ class MultimodalEnvironment:
         face = self._face_detected > 0.5
         audio = self._audio_energy > 0.3
         if face:
-            # Face is present — reset idle time (user is interacting).
+            # Face is present - reset idle time (user is interacting).
             self._idle_time = 0.0
             # Face might drift slightly
             self._face_x += noise[2] * 0.05

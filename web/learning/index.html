@@ -4,94 +4,36 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DeskBot Learning - Local Brain</title>
+<link rel="stylesheet" href="/assets/css/app.css">
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#0f1117;--card:#1a1d27;--border:#2a2d3a;--text:#e4e6ed;--muted:#8b8fa3;--accent:#6c63ff;--accent2:#00d4aa;--red:#ff5757;--orange:#ff9f43;--blue:#4fc3f7;--yellow:#ffd93d;--green:#6bcf7f}
-body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-header{padding:1rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--bg);z-index:10;flex-wrap:wrap;gap:.5rem}
-header h1{font-size:1.25rem;font-weight:700;display:flex;align-items:center;gap:.5rem}
-header h1 .pulse{width:10px;height:10px;border-radius:50%;background:var(--muted);display:inline-block}
-header h1 .pulse.live{background:var(--accent2);box-shadow:0 0 8px var(--accent2);animation:pulse 1.2s infinite}
-header h1 .pulse.train{background:var(--orange);box-shadow:0 0 8px var(--orange);animation:pulse 1s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-header nav{display:flex;gap:1rem;flex-wrap:wrap}
-header nav a{color:var(--muted);text-decoration:none;font-size:.85rem}
-header nav a:hover{color:var(--accent)}
-header .refresh{display:flex;align-items:center;gap:.5rem;font-size:.8rem;color:var(--muted)}
-main{max-width:1100px;margin:0 auto;padding:1.5rem;display:flex;flex-direction:column;gap:1.25rem}
-.card{background:var(--card);border:1px solid var(--border);border-radius:.75rem;padding:1.25rem}
-.card h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.75rem;display:flex;align-items:center;gap:.5rem;justify-content:space-between}
-.card h2 .left{display:flex;align-items:center;gap:.5rem}
-.card h2 .badge{font-size:.65rem;padding:.15rem .5rem;border-radius:9999px;background:var(--border);color:var(--muted);text-transform:none;letter-spacing:0;font-weight:600}
-.badge.ok{background:rgba(0,212,170,.15);color:var(--accent2)}
-.badge.err{background:rgba(255,87,87,.15);color:var(--red)}
-.badge.warn{background:rgba(255,149,67,.15);color:var(--orange)}
-.badge.live{background:rgba(0,212,170,.15);color:var(--accent2)}
-.info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.75rem}
-.info-item{display:block}
-.info-item label{font-size:.72rem;color:var(--muted);display:block;margin-bottom:.15rem}
-.info-item .val{font-size:1.05rem;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
-.info-item .val.good{color:var(--accent2)}
-.info-item .val.bad{color:var(--red)}
-.info-item .val.muted{color:var(--muted)}
-.row{display:flex;gap:1rem;flex-wrap:wrap}
-.col{flex:1;min-width:220px}
-button{background:var(--accent);color:#fff;border:none;border-radius:.5rem;padding:.55rem 1.1rem;font-size:.85rem;font-weight:600;cursor:pointer;transition:opacity .2s,transform .05s;white-space:nowrap}
-button:hover{opacity:.85}
-button:active{transform:scale(.97)}
-button:disabled{opacity:.4;cursor:not-allowed}
-button.success{background:var(--accent2);color:#000}
-button.danger{background:var(--red)}
-button.secondary{background:var(--border);color:var(--text)}
-.btn-row{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.25rem;align-items:center}
-.hint{font-size:.75rem;color:var(--muted);margin-top:.3rem}
+/* Page-specific: loss bars, sparkline, confidence bars, config table, banner */
 .loss-bar-wrap{margin-top:.4rem}
 .loss-bar{height:18px;background:var(--bg);border:1px solid var(--border);border-radius:.4rem;overflow:hidden;position:relative}
 .loss-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--accent2),var(--blue));transition:width .4s ease;border-radius:.3rem}
 .loss-fill.cand{background:linear-gradient(90deg,var(--orange),var(--yellow))}
 .loss-scale{display:flex;justify-content:space-between;font-size:.65rem;color:var(--muted);margin-top:.15rem}
-table{width:100%;border-collapse:collapse;font-size:.85rem}
-th,td{padding:.5rem .6rem;text-align:left;border-bottom:1px solid var(--border)}
-th{color:var(--muted);font-weight:600;font-size:.72rem;text-transform:uppercase;letter-spacing:.04em}
-td .chip{font-size:.7rem;padding:.1rem .45rem;border-radius:9999px;background:var(--border);color:var(--muted)}
-td .chip.explicit{background:rgba(108,99,255,.18);color:var(--accent)}
-td .chip.behavioral{background:rgba(139,143,163,.18);color:var(--muted)}
 .conf-wrap{display:flex;align-items:center;gap:.5rem}
 .conf-track{flex:1;height:8px;background:var(--bg);border-radius:9999px;overflow:hidden;min-width:60px}
 .conf-fill{height:100%;background:linear-gradient(90deg,var(--orange),var(--accent2));border-radius:9999px}
 .conf-num{font-variant-numeric:tabular-nums;font-weight:700;min-width:38px;text-align:right}
-.empty{color:var(--muted);font-size:.85rem;padding:.5rem 0}
 .config-table td:first-child{color:var(--muted);width:55%}
 .config-table td:last-child{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
 #banner{display:none;background:rgba(255,149,67,.12);border:1px solid var(--orange);color:var(--orange);border-radius:.6rem;padding:.75rem 1rem;font-size:.85rem;line-height:1.5}
 #banner.show{display:block}
 #banner b{color:var(--orange)}
-#toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--card);border:1px solid var(--border);border-radius:.5rem;padding:.75rem 1rem;font-size:.85rem;z-index:100;opacity:0;transition:opacity .3s;pointer-events:none;max-width:350px}
-#toast.show{opacity:1}
-#toast.ok{border-color:var(--accent2)}
-#toast.err{border-color:var(--red)}
-.toggle-row{display:flex;align-items:center;gap:.5rem;font-size:.85rem;color:var(--muted)}
-.toggle-row input{accent-color:var(--accent);width:18px;height:18px}
 .spark{width:100%;height:60px;display:block}
-.sep{border:none;border-top:1px solid var(--border);margin:.9rem 0}
 .legend{display:flex;gap:1rem;font-size:.72rem;color:var(--muted);margin-top:.3rem;flex-wrap:wrap}
 .legend span{display:flex;align-items:center;gap:.3rem}
 .legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
 </style>
 </head>
 <body>
-<header>
-  <h1><span class="pulse" id="head-pulse"></span> &#129504; DeskBot Local Brain</h1>
-  <nav>
-    <a href="/">Dashboard</a>
-    <a href="/settings">Hardware Test</a>
-    <a href="/calibration">Calibration</a>
-    <a href="/config">Config</a>
-    <span style="color:var(--accent);font-weight:600">Learning</span>
-  </nav>
-  <div class="refresh">
+<header class="app-bar">
+  <div class="app-brand"><span class="brand-icon pulse" id="head-pulse"></span> &#129504; DeskBot Local Brain</div>
+  <nav class="app-nav" data-active="learning"></nav>
+  <div class="app-bar-right">
     <label class="toggle-row"><input type="checkbox" id="auto-refresh" checked> Auto-refresh</label>
-    <span id="last-update">-</span>
+    <span id="last-update" class="hint" style="margin:0">-</span>
   </div>
 </header>
 <main>
@@ -136,7 +78,7 @@ td .chip.behavioral{background:rgba(139,143,163,.18);color:var(--muted)}
       <span class="hint" id="train-hint"></span>
     </div>
     <div class="btn-row" style="margin-top:.5rem">
-      <input type="password" id="api-key-input" placeholder="API key (optional)" style="background:var(--bg);border:1px solid var(--border);border-radius:.4rem;padding:.4rem .6rem;color:var(--text);font-size:.8rem;width:200px" title="Set when DESKBOT_API__API_KEY is configured">
+      <input type="password" id="api-key-input" class="api-key" placeholder="API key (optional)" title="Set when DESKBOT_API__API_KEY is configured">
       <span class="hint">Required only when API key auth is enabled.</span>
     </div>
     <div class="hint">Forcing a cycle trains the candidate model now, regardless of the schedule, then evaluates &amp; promotes/rolls back.</div>
@@ -180,76 +122,14 @@ td .chip.behavioral{background:rgba(139,143,163,.18);color:var(--muted)}
 </main>
 <div id="toast"></div>
 
+<script src="/assets/js/app.js"></script>
 <script>
 "use strict";
 const API = window.location.origin + '/api/v1/learning';
-const $ = (id) => document.getElementById(id);
 const lossHistory = [];           // recent current-loss samples for the sparkline
 const MAX_HIST = 60;
 
 let available = false;            // is the learning service wired into the app?
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-function toast(msg, ok = true) {
-  const t = $('toast');
-  t.textContent = msg;
-  t.className = 'show ' + (ok ? 'ok' : 'err');
-  clearTimeout(toast._t);
-  toast._t = setTimeout(() => t.className = '', 2600);
-}
-
-async function apiGet(path) {
-  const r = await fetch(API + path);
-  if (!r.ok) {
-    const err = new Error('HTTP ' + r.status);
-    err.status = r.status;
-    try { err.body = await r.json(); } catch { err.body = null; }
-    throw err;
-  }
-  return await r.json();
-}
-
-async function apiPost(path, body) {
-  const headers = {'Content-Type': 'application/json'};
-  const key = $('api-key-input') ? $('api-key-input').value.trim() : '';
-  if (key) headers['Authorization'] = 'Bearer ' + key;
-  const r = await fetch(API + path, {method: 'POST', headers, body: JSON.stringify(body || {})});
-  if (!r.ok) {
-    const err = new Error('HTTP ' + r.status);
-    err.status = r.status;
-    try { err.body = await r.json(); } catch { err.body = null; }
-    throw err;
-  }
-  return await r.json();
-}
-
-function fmtNum(n, digits = 4) {
-  if (n === null || n === undefined) return '-';
-  if (typeof n !== 'number' || !isFinite(n)) return '-';
-  return n.toFixed(digits);
-}
-
-function fmtTime(iso) {
-  if (!iso) return 'never';
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString();
-  } catch { return iso; }
-}
-
-function relTime(iso) {
-  if (!iso) return '-';
-  try {
-    const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-    if (diff < 0) return 'just now';
-    if (diff < 60) return Math.round(diff) + 's ago';
-    if (diff < 3600) return Math.round(diff / 60) + 'm ago';
-    if (diff < 86400) return Math.round(diff / 3600) + 'h ago';
-    return Math.round(diff / 86400) + 'd ago';
-  } catch { return iso; }
-}
 
 function setVal(id, text, cls) {
   const el = $(id);
@@ -315,7 +195,7 @@ function renderUnavailable(err) {
     showBanner(
       '<b>Learning service not available.</b> The local brain module is fully implemented but not yet wired into the live ' +
       'DeskBot app, or learning is disabled. Set <code>DESKBOT_LEARNING__ENABLED=true</code> and start the service to see live data. ' +
-      'See <a style="color:var(--orange)" href="https://github.com/well-it-wasnt-me/deskbot/blob/main/docs/modules/learning.md" target="_blank">Local Brain docs</a>.<br>Enable multimodal encoding with <code>DESKBOT_LEARNING__USE_MULTIMODAL=true</code> for richer state vectors.',
+      'See <a style="color:var(--orange)" href="https://github.com/well-it-wasnt-me/RON/blob/main/docs/modules/learning.md" target="_blank">Local Brain docs</a>.<br>Enable multimodal encoding with <code>DESKBOT_LEARNING__USE_MULTIMODAL=true</code> for richer state vectors.',
       'warn');
   } else {
     showBanner('<b>Could not reach the learning API.</b> ' + (err && err.message ? err.message : 'Is the DeskBot API running?'), 'err');
@@ -439,16 +319,12 @@ function renderPreferences(p) {
   }
 }
 
-function esc(s) {
-  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
 // ---------------------------------------------------------------------------
 // Refresh loop
 // ---------------------------------------------------------------------------
 async function refresh() {
   try {
-    const s = await apiGet('/status');
+    const s = await apiGet(API + '/status');
     renderStatus(s);
     $('last-update').textContent = 'updated ' + new Date().toLocaleTimeString();
   } catch (e) {
@@ -457,10 +333,10 @@ async function refresh() {
     return;
   }
   // config + preferences are non-critical; fetch independently
-  apiGet('/config').then(renderConfig).catch(() => {
+  apiGet(API + '/config').then(renderConfig).catch(() => {
     $('cfg-badge').textContent = 'unavailable'; $('cfg-badge').className = 'badge err';
   });
-  apiGet('/preferences').then(renderPreferences).catch(() => {
+  apiGet(API + '/preferences').then(renderPreferences).catch(() => {
     $('pref-badge').textContent = 'unavailable'; $('pref-badge').className = 'badge err';
     $('pref-empty').style.display = 'block';
   });
@@ -480,7 +356,7 @@ $('btn-train').addEventListener('click', async () => {
   $('btn-train').disabled = true;
   $('train-hint').textContent = 'Forcing training cycle…';
   try {
-    const r = await apiPost('/train');
+    const r = await apiPost(API + '/train');
     if (r.triggered) { toast('Training cycle triggered'); }
     else { toast('Not triggered: ' + (r.reason || 'not enough experiences or already training'), false); }
   } catch (e) {

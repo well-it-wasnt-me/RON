@@ -4,42 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DeskBot Settings</title>
+<link rel="stylesheet" href="/assets/css/app.css">
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#0f1117;--card:#1a1d27;--border:#2a2d3a;--text:#e4e6ed;--muted:#8b8fa3;--accent:#6c63ff;--accent2:#00d4aa;--red:#ff5757;--orange:#ff9f43;--blue:#4fc3f7;--yellow:#ffd93d;--green:#6bcf7f}
-body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-header{padding:1rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--bg);z-index:10}
-header h1{font-size:1.25rem;font-weight:700}
-header nav a{color:var(--muted);text-decoration:none;font-size:.85rem;margin-left:1rem}
-header nav a:hover{color:var(--accent)}
-main{max-width:1100px;margin:0 auto;padding:1.5rem;display:flex;flex-direction:column;gap:1.25rem}
-.card{background:var(--card);border:1px solid var(--border);border-radius:.75rem;padding:1.25rem}
-.card h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.75rem;display:flex;align-items:center;gap:.5rem}
-.card h2 .badge{font-size:.65rem;padding:.15rem .5rem;border-radius:9999px;background:var(--border);color:var(--muted);text-transform:none;letter-spacing:0}
-.card h2 .badge.ok{background:rgba(0,212,170,.15);color:var(--accent2)}
-.card h2 .badge.mock{background:rgba(255,149,67,.15);color:var(--orange)}
-.card h2 .badge.err{background:rgba(255,87,87,.15);color:var(--red)}
-.row{display:flex;gap:1rem;flex-wrap:wrap}
-.col{flex:1;min-width:200px}
+/* Page-specific: camera, mic meter, audio devices, LLM response, sound effects */
 label{font-size:.8rem;color:var(--muted);display:block;margin-bottom:.3rem}
-input[type="text"],input[type="number"],select,textarea{background:var(--bg);border:1px solid var(--border);border-radius:.5rem;padding:.5rem .75rem;color:var(--text);font-size:.9rem;width:100%;font-family:inherit}
-textarea{min-height:50px;resize:vertical}
-input[type="range"]{width:100%;accent-color:var(--accent)}
-button{background:var(--accent);color:#fff;border:none;border-radius:.5rem;padding:.55rem 1.1rem;font-size:.85rem;font-weight:600;cursor:pointer;transition:opacity .2s,transform .05s;white-space:nowrap}
-button:hover{opacity:.85}
-button:active{transform:scale(.97)}
-button:disabled{opacity:.4;cursor:not-allowed}
-button.danger{background:var(--red)}
-button.success{background:var(--accent2);color:#000}
-button.warn{background:var(--orange)}
-button.secondary{background:var(--border);color:var(--text)}
-.btn-row{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem}
-.btn-row>*{flex:0 0 auto}
-.info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:.75rem}
-info-item{display:block}
-.info-item label{margin-bottom:.1rem}
-.info-item .val{font-size:.95rem;font-weight:600;color:var(--accent)}
-/* Camera */
 #cam-preview{width:100%;max-width:480px;border-radius:.5rem;border:1px solid var(--border);background:#000;display:block;margin:0 auto}
 #cam-snapshot{max-width:100%;border-radius:.5rem;border:1px solid var(--border);display:none;margin-top:.5rem}
 /* Mic meter */
@@ -60,28 +28,17 @@ info-item{display:block}
 .llm-response.error{color:var(--red);border-color:var(--red)}
 /* Sound effects */
 .sfx-grid{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem}
-.sfx-btn{background:var(--border);color:var(--text);padding:.35rem .8rem;font-size:.8rem;border-radius:9999px}
+.sfx-btn{background:var(--border);color:var(--text);padding:.35rem .8rem;font-size:.8rem;border-radius:9999px;border:none;cursor:pointer;font-family:inherit}
 .sfx-btn:hover{background:var(--accent);color:#fff}
-/* Status toast */
-#toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--card);border:1px solid var(--border);border-radius:.5rem;padding:.75rem 1rem;font-size:.85rem;z-index:100;opacity:0;transition:opacity .3s;pointer-events:none;max-width:350px}
-#toast.show{opacity:1}
-#toast.ok{border-color:var(--accent2)}
-#toast.err{border-color:var(--red)}
-.section-divider{border:none;border-top:1px solid var(--border);margin:1rem 0}
-.hint{font-size:.75rem;color:var(--muted);margin-top:.3rem}
-.toggle-row{display:flex;align-items:center;gap:.5rem}
-.toggle-row input[type="checkbox"]{accent-color:var(--accent);width:18px;height:18px}
 </style>
 </head>
 <body>
-<header>
-  <h1>&#9881; DeskBot Settings</h1>
-  <nav>
-    <a href="/">Dashboard</a>
-    <a href="/calibration">Calibration</a>
-    <a href="/config">Config</a>
-    <a href="/learning">Local Brain</a>
-  </nav>
+<header class="app-bar">
+  <div class="app-brand"><span class="brand-icon">&#9881;</span> DeskBot Settings</div>
+  <nav class="app-nav" data-active="settings"></nav>
+  <div class="app-bar-right">
+    <input id="api-key-input" type="password" class="api-key" placeholder="API key (optional)" title="Set when DESKBOT_API__API_KEY is configured">
+  </div>
 </header>
 <main>
 
@@ -112,7 +69,7 @@ info-item{display:block}
           <option value="poll">Poll (JPEG every 200ms)</option>
         </select>
         <div class="hint" id="cam-hint"></div>
-        <hr class="section-divider">
+        <hr class="sep">
         <div class="info-grid" id="cam-info"></div>
       </div>
     </div>
@@ -197,7 +154,7 @@ info-item{display:block}
     <textarea id="tts-text">Hello! This is a test of the text to speech system.</textarea>
     <div class="btn-row">
       <button id="btn-tts-direct" class="success">Speak (TTS only)</button>
-      <button id="btn-tts-llm" class="accent">Speak via LLM</button>
+      <button id="btn-tts-llm" class="secondary">Speak via LLM</button>
     </div>
     <div class="hint" id="tts-hint"></div>
   </div>
@@ -223,35 +180,11 @@ info-item{display:block}
 </main>
 <div id="toast"></div>
 
+<script src="/assets/js/app.js"></script>
 <script>
-function getApiKey() { const el = document.getElementById('api-key-input'); return el ? el.value.trim() : ''; }
-function authHeaders() { const h = {}; const k = getApiKey(); if (k) h['Authorization'] = 'Bearer ' + k; return h; }
 const API = window.location.origin + '/api/v1/settings';
-const $ = (id) => document.getElementById(id);
-const toastEl = $('toast');
-let toastTimer = null;
 
-function toast(msg, ok=true) {
-  toastEl.textContent = msg;
-  toastEl.className = 'show ' + (ok ? 'ok' : 'err');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toastEl.className = '', 3000);
-}
-
-async function apiGet(path) {
-  try { const r = await fetch(API + path); return await r.json(); }
-  catch(e) { toast('Request failed: ' + e.message, false); return null; }
-}
-async function apiPost(path, body) {
-  try {
-    const r = await fetch(API + path, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
-    const ct = r.headers.get('content-type') || '';
-    if (ct.includes('application/json')) return await r.json();
-    return {status: r.ok ? 'ok' : 'error', _response: r};
-  } catch(e) { toast('Request failed: ' + e.message, false); return {status:'error', error:e.message}; }
-}
-
-function badge(el, text, cls) {
+function setBadge(el, text, cls) {
   el.textContent = text;
   el.className = 'badge ' + (cls || '');
 }
@@ -260,9 +193,9 @@ function badge(el, text, cls) {
 // System Info
 // ---------------------------------------------------------------------------
 async function loadSystemInfo() {
-  const d = await apiGet('/info');
-  if (!d) { badge($('sys-badge'), 'error', 'err'); return; }
-  badge($('sys-badge'), d.ready ? 'ready' : 'not ready', d.ready ? 'ok' : 'err');
+  const d = await apiGet(API + '/info', {safe:true});
+  if (!d) { setBadge($('sys-badge'), 'error', 'err'); return; }
+  setBadge($('sys-badge'), d.ready ? 'ready' : 'not ready', d.ready ? 'ok' : 'err');
   const items = [];
   const add = (label, val) => items.push({label, val});
 
@@ -283,12 +216,12 @@ async function loadSystemInfo() {
   $('sys-info').innerHTML = items.map(i => `<div class="info-item"><label>${i.label}</label><span class="val">${i.val}</span></div>`).join('');
 
   // Update section badges
-  if (d.camera) badge($('cam-badge'), d.camera.is_mock ? 'mock' : 'live', d.camera.is_mock ? 'mock' : 'ok');
-  if (d.microphone) badge($('mic-badge'), d.microphone.is_mock ? 'mock' : 'live', d.microphone.is_mock ? 'mock' : 'ok');
-  if (d.audio) badge($('audio-badge'), d.audio.is_mock ? 'mock' : 'live', d.audio.is_mock ? 'mock' : 'ok');
-  badge($('tts-badge'), d.tts || '-', d.tts ? 'ok' : '');
-  badge($('llm-badge'), d.llm || '-', d.llm ? 'ok' : '');
-  if (d.sound_effects) badge($('sfx-badge'), d.sound_effects.enabled ? 'enabled' : 'disabled', d.sound_effects.enabled ? 'ok' : 'mock');
+  if (d.camera) setBadge($('cam-badge'), d.camera.is_mock ? 'mock' : 'live', d.camera.is_mock ? 'mock' : 'ok');
+  if (d.microphone) setBadge($('mic-badge'), d.microphone.is_mock ? 'mock' : 'live', d.microphone.is_mock ? 'mock' : 'ok');
+  if (d.audio) setBadge($('audio-badge'), d.audio.is_mock ? 'mock' : 'live', d.audio.is_mock ? 'mock' : 'ok');
+  setBadge($('tts-badge'), d.tts || '-', d.tts ? 'ok' : '');
+  setBadge($('llm-badge'), d.llm || '-', d.llm ? 'ok' : '');
+  if (d.sound_effects) setBadge($('sfx-badge'), d.sound_effects.enabled ? 'enabled' : 'disabled', d.sound_effects.enabled ? 'ok' : 'mock');
 
   // Populate camera info
   if (d.camera) {
@@ -392,7 +325,7 @@ function stopMicMonitor() {
 }
 
 async function pollMicLevel() {
-  const d = await apiGet('/mic/level');
+  const d = await apiGet(API + '/mic/level', {safe:true});
   if (!d || d.level === undefined) return;
   const pct = Math.min(100, Math.round(d.level * 100));
   $('mic-meter').style.width = pct + '%';
@@ -414,7 +347,8 @@ $('btn-mic-test').addEventListener('click', async () => {
 
   try {
     const r = await fetch(API + '/mic/test', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
+      method: 'POST',
+      headers: Object.assign({'Content-Type': 'application/json'}, authHeaders()),
       body: JSON.stringify({duration_s: dur, play_back: playBack})
     });
     if (r.ok) {
@@ -441,7 +375,7 @@ $('btn-mic-test').addEventListener('click', async () => {
 });
 
 $('btn-mic-stop').addEventListener('click', async () => {
-  await apiPost('/audio/stop');
+  await apiPost(API + '/audio/stop', {}, {safe:true});
   $('btn-mic-stop').disabled = true;
   toast('Playback stopped');
 });
@@ -460,7 +394,7 @@ $('btn-tone').addEventListener('click', async () => {
   $('btn-tone').disabled = true;
   $('btn-tone').textContent = 'Playing…';
   $('audio-hint').textContent = `Playing ${freq} Hz for ${dur}s…`;
-  const r = await apiPost('/audio/tone', {frequency_hz: freq, duration_s: dur, volume: vol});
+  const r = await apiPost(API + '/audio/tone', {frequency_hz: freq, duration_s: dur, volume: vol}, {safe:true});
   if (r.status === 'ok') {
     toast(`Tone: ${freq} Hz played`);
     $('btn-audio-stop').disabled = false;
@@ -472,14 +406,14 @@ $('btn-tone').addEventListener('click', async () => {
 });
 
 $('btn-audio-stop').addEventListener('click', async () => {
-  await apiPost('/audio/stop');
+  await apiPost(API + '/audio/stop', {}, {safe:true});
   $('btn-audio-stop').disabled = true;
   toast('Audio stopped');
 });
 
 async function loadAudioDevices() {
   $('audio-devices').innerHTML = '<div class="hint">Loading devices…</div>';
-  const d = await apiGet('/audio/devices');
+  const d = await apiGet(API + '/audio/devices', {safe:true});
   if (!d || !d.devices) {
     $('audio-devices').innerHTML = '<div class="hint">sounddevice not available</div>';
     return;
@@ -502,7 +436,7 @@ async function loadAudioDevices() {
 async function testAudioDevice(idx, name) {
   toast(`Testing device: ${name}…`);
   document.querySelectorAll('.device-item').forEach(e => e.classList.remove('active'));
-  const r = await apiPost('/audio/test-device', {device: parseInt(idx), frequency_hz: 440, duration_s: 1, volume: 0.5});
+  const r = await apiPost(API + '/audio/test-device', {device: parseInt(idx), frequency_hz: 440, duration_s: 1, volume: 0.5}, {safe:true});
   if (r.status === 'ok') {
     toast(`Played tone on: ${name}`);
     // Highlight the tested device briefly.
@@ -523,7 +457,7 @@ $('btn-tts-direct').addEventListener('click', async () => {
   if (!text) return;
   $('btn-tts-direct').disabled = true;
   $('tts-hint').textContent = 'Speaking via TTS…';
-  const r = await apiPost('/tts/test', {text, direct: true});
+  const r = await apiPost(API + '/tts/test', {text, direct: true}, {safe:true});
   if (r.status === 'ok') toast('TTS: ' + (r.engine || 'ok'));
   else { toast('TTS failed: ' + (r.detail || ''), false); $('tts-hint').textContent = 'Failed: ' + (r.detail || ''); }
   $('btn-tts-direct').disabled = false;
@@ -535,7 +469,7 @@ $('btn-tts-llm').addEventListener('click', async () => {
   if (!text) return;
   $('btn-tts-llm').disabled = true;
   $('tts-hint').textContent = 'Sending through LLM pipeline…';
-  const r = await apiPost('/tts/test', {text, direct: false});
+  const r = await apiPost(API + '/tts/test', {text, direct: false}, {safe:true});
   if (r.status === 'ok') toast('Sent to LLM pipeline');
   else { toast('Failed: ' + (r.detail || ''), false); $('tts-hint').textContent = 'Failed: ' + (r.detail || ''); }
   $('btn-tts-llm').disabled = false;
@@ -550,7 +484,7 @@ $('btn-llm-test').addEventListener('click', async () => {
   $('btn-llm-test').disabled = true;
   $('llm-response').textContent = 'Thinking…';
   $('llm-response').className = 'llm-response';
-  const r = await apiPost('/llm/test', {prompt});
+  const r = await apiPost(API + '/llm/test', {prompt}, {safe:true});
   $('btn-llm-test').disabled = false;
   if (r.status === 'ok') {
     $('llm-response').textContent = r.response;
@@ -566,7 +500,7 @@ $('btn-llm-test').addEventListener('click', async () => {
 // Sound effects
 // ---------------------------------------------------------------------------
 async function playSfx(name) {
-  const r = await apiPost('/sound-effect/' + name);
+  const r = await apiPost(API + '/sound-effect/' + name, {}, {safe:true});
   if (r.status === 'ok') toast('▶ ' + name);
   else toast('Failed: ' + (r.error || ''), false);
 }

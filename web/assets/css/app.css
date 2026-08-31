@@ -1,0 +1,166 @@
+/* DeskBot shared design system — tokens, primitives, header/nav.
+   Loaded by every web dashboard via /assets/css/app.css. Page-specific
+   styles live inline in each page. */
+
+:root {
+  --bg: #0f1117;
+  --bg2: #161821;
+  --card: #1a1d27;
+  --border: #2a2d3a;
+  --border2: #353846;
+  --text: #e4e6ed;
+  --muted: #8b8fa3;
+  --muted2: #6b6f82;
+  --accent: #6c63ff;
+  --accent2: #00d4aa;
+  --red: #ff5757;
+  --orange: #ff9f43;
+  --blue: #4fc3f7;
+  --yellow: #ffd93d;
+  --green: #6bcf7f;
+  --radius: .5rem;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.45;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent2); }
+h1, h2, h3 { font-weight: 700; }
+
+/* ---- Shared top header + nav (single source of truth for links) ---- */
+.app-bar {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  padding: .8rem 1.5rem;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+}
+.app-bar .app-brand {
+  font-size: 1.1rem; font-weight: 700;
+  display: flex; align-items: center; gap: .5rem;
+  white-space: nowrap;
+}
+.app-bar .app-brand .brand-icon { font-size: 1.3rem; }
+.app-nav { display: flex; gap: .9rem; flex-wrap: wrap; align-items: center; }
+.app-nav a {
+  color: var(--muted); font-size: .85rem; font-weight: 500;
+  padding: .25rem 0; border-bottom: 2px solid transparent;
+  transition: color .15s, border-color .15s;
+}
+.app-nav a:hover { color: var(--text); }
+.app-nav a.active { color: var(--accent); border-bottom-color: var(--accent); }
+.app-nav .nav-cur { color: var(--accent); font-size: .85rem; font-weight: 600; border-bottom: 2px solid var(--accent); padding: .25rem 0; }
+.app-bar .app-bar-right { margin-left: auto; display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+
+/* ---- Layout primitives ---- */
+main { max-width: 1100px; margin: 0 auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem; }
+.row { display: flex; gap: 1rem; flex-wrap: wrap; }
+.col { flex: 1; min-width: 220px; }
+.grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.btn-row { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .5rem; align-items: center; }
+.btn-row > * { flex: 0 0 auto; }
+hr.sep { border: none; border-top: 1px solid var(--border); margin: .9rem 0; }
+
+/* ---- Cards ---- */
+.card { background: var(--card); border: 1px solid var(--border); border-radius: .75rem; padding: 1.25rem; margin-bottom: 1rem; }
+.card-title { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: .75rem; font-weight: 600; }
+.card h2 {
+  font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+  margin-bottom: .75rem; font-weight: 600;
+  display: flex; align-items: center; gap: .5rem; justify-content: space-between;
+}
+.card h2 .left { display: flex; align-items: center; gap: .5rem; }
+.card h2 .badge { font-size: .65rem; padding: .15rem .5rem; border-radius: 9999px; background: var(--border); color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 600; }
+.card-row { display: flex; justify-content: space-between; align-items: center; padding: .3rem 0; font-size: .85rem; }
+.card-row .label { color: var(--muted); }
+.card-row .value { font-weight: 600; }
+
+/* ---- Info grid (status tiles) ---- */
+.info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .75rem; }
+.info-item { display: block; }
+.info-item label { font-size: .72rem; color: var(--muted); display: block; margin-bottom: .15rem; }
+.info-item .val { font-size: 1.05rem; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+.info-item .val.good { color: var(--accent2); }
+.info-item .val.bad { color: var(--red); }
+.info-item .val.muted { color: var(--muted); }
+
+/* ---- Badges ---- */
+.badge { display: inline-flex; align-items: center; gap: .3rem; padding: .15rem .6rem; border-radius: 9999px; font-size: .72rem; font-weight: 600; background: rgba(139, 143, 163, .12); color: var(--muted); }
+.badge.ok, .badge.live { background: rgba(0, 212, 170, .15); color: var(--accent2); }
+.badge.err { background: rgba(255, 87, 87, .15); color: var(--red); }
+.badge.warn { background: rgba(255, 149, 71, .15); color: var(--orange); }
+.badge.mock { background: rgba(255, 149, 71, .15); color: var(--orange); }
+.badge.neutral { background: rgba(139, 143, 163, .12); color: var(--muted); }
+
+/* ---- Chips (table cells) ---- */
+.chip { font-size: .7rem; padding: .1rem .45rem; border-radius: 9999px; background: var(--border); color: var(--muted); white-space: nowrap; }
+.chip.good { background: rgba(0, 212, 170, .15); color: var(--accent2); }
+.chip.bad { background: rgba(255, 87, 87, .15); color: var(--red); }
+.chip.gest { background: rgba(108, 99, 255, .18); color: var(--accent); }
+.chip.fb { background: rgba(255, 217, 61, .15); color: var(--yellow); }
+.chip.explicit { background: rgba(108, 99, 255, .18); color: var(--accent); }
+.chip.behavioral { background: rgba(139, 143, 163, .18); color: var(--muted); }
+
+/* ---- Buttons (support both `button.success` and `button.action.success` conventions) ---- */
+button, .action {
+  background: var(--accent); color: #fff; border: none; border-radius: var(--radius);
+  padding: .5rem 1.1rem; font-size: .85rem; font-weight: 600; cursor: pointer;
+  transition: opacity .2s, transform .05s; white-space: nowrap; font-family: inherit;
+}
+button:hover, .action:hover { opacity: .85; }
+button:active, .action:active { transform: scale(.97); }
+button:disabled, .action:disabled { opacity: .4; cursor: not-allowed; }
+button.success, .action.success { background: var(--accent2); color: #000; }
+button.danger, .action.danger { background: var(--red); }
+button.warn, .action.warn { background: var(--orange); color: #000; }
+button.secondary, .action.secondary { background: var(--border); color: var(--text); }
+
+/* ---- Forms ---- */
+input, select, textarea {
+  background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  border-radius: var(--radius); padding: .45rem .65rem; font-size: .85rem; font-family: inherit;
+}
+input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
+textarea { min-height: 42px; resize: vertical; width: 100%; }
+input.wide { width: 100%; }
+.api-key {
+  background: var(--bg); border: 1px solid var(--border); border-radius: .4rem;
+  padding: .4rem .6rem; color: var(--text); font-size: .8rem; width: 200px;
+}
+.toggle-row { display: flex; align-items: center; gap: .5rem; font-size: .85rem; color: var(--muted); }
+.toggle-row input[type="checkbox"] { width: 18px; height: 18px; }
+
+/* ---- Tables ---- */
+table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+th, td { padding: .45rem .6rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; }
+
+/* ---- Misc text ---- */
+.mono { font-family: ui-monospace, "SF Mono", Consolas, Menlo, monospace; font-variant-numeric: tabular-nums; font-size: .82rem; }
+.hint { font-size: .75rem; color: var(--muted); margin-top: .3rem; }
+.empty { color: var(--muted); font-size: .85rem; padding: .5rem 0; }
+.loading { color: var(--muted); font-style: italic; padding: .5rem 0; }
+
+/* ---- Toast ---- */
+#toast, .toast {
+  position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 100;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: .75rem 1rem; font-size: .85rem; max-width: 350px;
+  opacity: 0; transition: opacity .25s; pointer-events: none;
+}
+#toast.show, .toast.show { opacity: 1; }
+#toast.ok, .toast.ok { border-color: var(--accent2); }
+#toast.err, .toast.err { border-color: var(--red); }
+
+/* ---- Live pulse indicator ---- */
+.pulse { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); display: inline-block; }
+.pulse.live { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); animation: pulse 1.2s infinite; }
+.pulse.train { background: var(--orange); box-shadow: 0 0 8px var(--orange); animation: pulse 1s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }

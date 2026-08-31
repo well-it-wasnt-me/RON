@@ -48,7 +48,11 @@ Create a bot by talking to `@BotFather` on Telegram to get a token.
 ### Chat
 
 Send any plain text message — it goes through the full conversation pipeline
-(STT → LLM → TTS → state transitions), exactly like a spoken utterance.
+(STT → LLM → TTS → state transitions), exactly like a spoken utterance. Because
+text is published as a `SpeechRecognized` event, it also flows through the
+teaching-aware path: when teaching mode is enabled, a chat message can arm a
+`"when I {gesture}, {action}"` session or be read as praise/correction. See
+[Teaching Mode](teaching_mode.md).
 
 ### Slash commands
 

@@ -6,13 +6,13 @@ the robot.
 Modes
 -----
 
-* ``off`` — no learned inference at all.
-* ``shadow`` — the model predicts an action but the deterministic
+* ``off`` - no learned inference at all.
+* ``shadow`` - the model predicts an action but the deterministic
   controller executes the real action.  The learned action is logged
   for comparison.
-* ``assist`` — the model may suggest actions, but deterministic logic
+* ``assist`` - the model may suggest actions, but deterministic logic
   can reject them.
-* ``active`` — only explicitly approved actions can be controlled by
+* ``active`` - only explicitly approved actions can be controlled by
   the learned policy.  **Not enabled in this phase.**
 
 In shadow mode, for every decision we log:
@@ -49,10 +49,10 @@ _log = get_logger("learning.shadow_policy")
 class PolicyMode(str, Enum):
     """Control modes for the learned policy.
 
-    * ``off`` — no learned inference.
-    * ``shadow`` — model predicts, deterministic controller executes.
-    * ``assist`` — model may suggest, deterministic logic can reject.
-    * ``active`` — only approved actions controlled by learned policy.
+    * ``off`` - no learned inference.
+    * ``shadow`` - model predicts, deterministic controller executes.
+    * ``assist`` - model may suggest, deterministic logic can reject.
+    * ``active`` - only approved actions controlled by learned policy.
     """
 
     OFF = "off"
@@ -317,7 +317,7 @@ class ShadowPolicyController:
         """Change the policy mode."""
         if mode == PolicyMode.ACTIVE:
             raise NotImplementedError(
-                "PolicyMode.ACTIVE is not yet implemented — use SHADOW or ASSIST."
+                "PolicyMode.ACTIVE is not yet implemented - use SHADOW or ASSIST."
             )
         self.mode = mode
         _log.info("shadow_policy.mode_changed", mode=mode.value)

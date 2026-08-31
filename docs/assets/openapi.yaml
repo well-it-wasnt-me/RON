@@ -616,6 +616,163 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ForceTrainResponse'
+  /api/v1/teaching/status:
+    get:
+      tags:
+      - teaching
+      summary: Teaching loop status
+      description: Snapshot of the teaching controller and learning service.
+      operationId: teaching_status_api_v1_teaching_status_get
+      responses:
+        '200':
+          description: Teaching-loop snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled: {type: boolean}
+                  in_teaching_mode: {type: boolean, default: false}
+                  session_id: {type: string, nullable: true}
+                  mode: {type: string, nullable: true}
+                  trigger_gesture: {type: string, nullable: true}
+                  desired_action: {type: string, nullable: true}
+                  total_experiences: {type: integer, default: 0}
+                  min_experiences_for_practice: {type: integer, default: 0}
+  /api/v1/teaching/transitions:
+    get:
+      tags:
+      - teaching
+      summary: Recent teaching transitions
+      description: Recent real transitions with a conversation-free state summary.
+      operationId: teaching_transitions_api_v1_teaching_transitions_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema: {type: integer, minimum: 1, maximum: 256, default: 20}
+      responses:
+        '200':
+          description: Recent transitions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: {type: integer}
+                  limit: {type: integer}
+                  transitions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        timestamp: {type: string, format: date-time}
+                        transition_id: {type: string, nullable: true}
+                        action_name: {type: string}
+                        action_index: {type: integer}
+                        execution_success: {type: boolean, default: true}
+                        reward: {type: number, default: 0.0}
+                        feedback_source: {type: string, nullable: true}
+                        interaction_id: {type: string, nullable: true}
+                        teaching_session_id: {type: string, nullable: true}
+                        state_summary:
+                          type: object
+                          properties:
+                            teaching_context: {type: boolean}
+                            interaction_active: {type: boolean}
+                            person_present: {type: boolean}
+                            gesture: {type: string}
+        '404':
+          description: Learning service not available
+  /api/v1/teaching/feedback:
+    post:
+      tags:
+      - teaching
+      summary: Submit explicit human feedback
+      description: Attribute praise/correction to the most-recent eligible real transition. Requires an API key.
+      operationId: teaching_feedback_api_v1_teaching_feedback_post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                polarity: {type: integer, minimum: -1, maximum: 1}
+                magnitude: {type: number, exclusiveMinimum: 0, maximum: 2, default: 1.0}
+                source: {type: string, default: api}
+                text: {type: string, default: ""}
+      responses:
+        '200':
+          description: Acknowledgement
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attributed: {type: boolean}
+                  transition_id: {type: string, nullable: true}
+                  delta: {type: number, default: 0.0}
+        '401':
+          description: API key required
+        '404':
+          description: Feedback service not available
+  /api/v1/teaching/demonstration:
+    post:
+      tags:
+      - teaching
+      summary: Arm a teaching session and/or inject a gesture
+      description: Arm a session from a constrained instruction, or trigger a gesture against the live encoder state. Requires an API key.
+      operationId: teaching_demonstration_api_v1_teaching_demonstration_post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                instruction: {type: string, nullable: true}
+                gesture: {type: string, nullable: true}
+                mode: {type: string, enum: [demonstrate, practice], default: demonstrate}
+      responses:
+        '200':
+          description: Result of arming / triggering
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_id: {type: string, nullable: true}
+                  trigger_gesture: {type: string, nullable: true}
+                  desired_action: {type: string, nullable: true}
+                  executed_action: {type: string, nullable: true}
+                  executed_action_index: {type: integer, nullable: true}
+        '401':
+          description: API key required
+        '404':
+          description: Teaching controller / learning service not available
+        '422':
+          description: Unknown mode or unparseable instruction
+  /api/v1/teaching/qvalues:
+    get:
+      tags:
+      - teaching
+      summary: Current Q-values for the encoder state
+      description: Map of action name to Q-value for the current encoded state.
+      operationId: teaching_qvalues_api_v1_teaching_qvalues_get
+      responses:
+        '200':
+          description: Q-value map
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  q_values:
+                    type: object
+                    additionalProperties: {type: number}
+        '404':
+          description: Learning service / action learner not available
   /api/v1/config/validate:
     post:
       tags:

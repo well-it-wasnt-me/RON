@@ -2,27 +2,27 @@ site_name: DeskBot
 site_description: A modular desktop companion robot powered by Raspberry Pi
 repo_url: https://github.com/well-it-wasnt-me/RON
 theme:
-  name: material
+  name: readthedocs
   palette:
-  - scheme: default
-    primary: indigo
-    accent: indigo
-    toggle:
-      icon: material/brightness-7
-      name: Switch to dark mode
-  - scheme: slate
-    primary: indigo
-    accent: indigo
-    toggle:
-      icon: material/brightness-4
-      name: Switch to light mode
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
   features:
-  - navigation.tabs
-  - navigation.sections
-  - navigation.top
-  - navigation.indexes
-  - search.suggest
-  - search.highlight
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
 nav:
 - Home: index.md
 - Getting Started:
@@ -87,28 +87,28 @@ nav:
   - Behavior Library: reference/behavior-library.md
   - Performance: reference/performance.md
 plugins:
-- search
-- mkdocstrings:
-    handlers:
-      python:
-        paths:
-        - src
-        options:
-          show_source: true
-          show_root_heading: true
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths:
+            - src
+          options:
+            show_source: true
+            show_root_heading: true
 markdown_extensions:
-- pymdownx.highlight:
-    anchor_linenums: true
-- pymdownx.superfences:
-    custom_fences:
-    - name: mermaid
-      class: mermaid
-      format: !!python/name:pymdownx.superfences.fence_div_format
-- pymdownx.tabbed:
-    alternate_style: true
-- admonition
-- attr_list
-- md_in_html
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_div_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - attr_list
+  - md_in_html
 extra_javascript:
-- https://unpkg.com/mermaid@11/dist/mermaid.min.js
-- assets/js/mermaid-init.js
+  - https://unpkg.com/mermaid@11/dist/mermaid.min.js
+  - assets/js/mermaid-init.js

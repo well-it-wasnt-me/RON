@@ -4,82 +4,94 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DeskBot Calibration</title>
+<link rel="stylesheet" href="/assets/css/app.css">
 <style>
-  :root { --bg:#0a0a14; --fg:#e8e8ec; --card:#161625; --accent:#4f8cff; --accent2:#ff6b6b; --border:#2a2a3d; --muted:#888; }
-  * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:Inter,-apple-system,sans-serif; background:var(--bg); color:var(--fg); padding:1rem; max-width:900px; margin:0 auto; }
-  h1 { color:var(--accent); margin-bottom:.5rem; font-size:1.6rem; }
-  h2 { margin:1.5rem 0 .75rem; font-size:1.2rem; }
-  p.muted { color:var(--muted); margin-bottom:1rem; font-size:.9rem; }
-  .card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:1.25rem; margin-bottom:1rem; }
-  .servo-row { display:flex; align-items:center; gap:1rem; margin-bottom:.75rem; padding:.75rem; background:rgba(255,255,255,.03); border-radius:6px; }
+  /* Page-specific: servo rows, connection dot */
+  .servo-row { display:flex; align-items:center; gap:1rem; margin-bottom:.75rem; padding:.75rem; background:rgba(255,255,255,.03); border:1px solid var(--border); border-radius:.5rem; }
   .servo-row label { min-width:80px; font-weight:600; color:var(--accent); }
   .servo-row .angle-display { min-width:60px; text-align:right; font-variant-numeric:tabular-nums; }
-  input[type=range] { flex:1; accent-color:var(--accent); }
-  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:.5rem 1rem; cursor:pointer; font-size:.9rem; }
-  button.danger { background:var(--accent2); }
-  button.secondary { background:var(--border); }
-  .btn-row { display:flex; gap:.5rem; flex-wrap:wrap; margin:.75rem 0; }
-  .status { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:.5rem; vertical-align:middle; }
-  .connected { background:#4ade80; } .disconnected { background:var(--accent2); }
-  .error { color:var(--accent2); min-height:1.2rem; }
+  .servo-row input[type=range] { flex:1; accent-color:var(--accent); }
+  .status { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:.5rem; vertical-align:middle; background:var(--muted); }
+  .status.connected { background:var(--green); }
+  .status.disconnected { background:var(--red); }
+  .error { color:var(--red); min-height:1.2rem; font-size:.85rem; }
+  .conn-line { color:var(--muted); font-size:.9rem; margin-bottom:1rem; }
 </style>
 </head>
 <body>
-<h1>DeskBot Calibration</h1>
-<p class="muted"><span id="connection-status" class="status disconnected"></span><span id="connection-text">Connecting...</span></p>
-<div style="margin-bottom:1rem"><input type="password" id="api-key-input" placeholder="API key (optional)" style="background:#0f1117;border:1px solid #2a2d3a;border-radius:.4rem;padding:.4rem .6rem;color:#e4e6ed;font-size:.8rem;width:200px"></div>
-<p class="muted" style="margin-bottom:1rem"><a href="/" style="color:var(--accent);text-decoration:none">&#8592; Dashboard</a> &middot; <a href="/settings" style="color:var(--accent);text-decoration:none">Hardware Test</a> &middot; <a href="/learning" style="color:var(--accent);text-decoration:none">Local Brain</a></p>
-<h2>Servo Calibration</h2>
-<div class="card">
-  <p class="muted">Move a servo with its configured safe angle range. Calibration moves to the configured centre only unless endpoint testing is explicitly enabled.</p>
-  <div id="servo-controls"></div>
-  <div class="btn-row"><button onclick="releaseAll()">Release All</button><button class="secondary" onclick="centerAll()">Centre All</button></div>
-  <div id="error" class="error"></div>
-</div>
+<header class="app-bar">
+  <div class="app-brand"><span class="brand-icon">&#9881;</span> DeskBot Calibration</div>
+  <nav class="app-nav" data-active="calibration"></nav>
+  <div class="app-bar-right">
+    <input type="password" id="api-key-input" class="api-key" placeholder="API key (optional)" title="Set when DESKBOT_API__API_KEY is configured">
+  </div>
+</header>
+<main>
+  <p class="conn-line"><span id="connection-status" class="status disconnected"></span><span id="connection-text">Connecting...</span></p>
+  <div class="card">
+    <h2>Servo Calibration</h2>
+    <p class="hint">Move a servo within its configured safe angle range. Calibration moves to the configured centre only unless endpoint testing is explicitly enabled.</p>
+    <div id="servo-controls"></div>
+    <div class="btn-row"><button onclick="releaseAll()">Release All</button><button class="secondary" onclick="centerAll()">Centre All</button></div>
+    <div id="error" class="error"></div>
+  </div>
+</main>
+<script src="/assets/js/app.js"></script>
 <script>
-function getApiKey() { const el = document.getElementById('api-key-input'); return el ? el.value.trim() : ''; }
-function authHeaders() { const h = {}; const k = getApiKey(); if (k) h['Authorization'] = 'Bearer ' + k; return h; }
 const API = '/api/v1/calibration';
-const LABELS={pan:'Pan',tilt:'Tilt',left_arm:'Left Arm',right_arm:'Right Arm'};
-const state={};
-const sc=document.getElementById('servo-controls');
-function setConnection(ok,text){document.getElementById('connection-status').className='status '+(ok?'connected':'disconnected');document.getElementById('connection-text').textContent=text;}
-function showError(text){document.getElementById('error').textContent=text||'';}
-function setServo(name,minimum,maximum,centre,angle){
-  const slider=document.getElementById('servo-'+name); if(!slider)return;
-  slider.min=minimum; slider.max=maximum; slider.value=Math.min(maximum,Math.max(minimum,angle));
-  document.getElementById('angle-'+name).textContent=Number(slider.value).toFixed(1)+'°';
-  state[name]={minimum,maximum,centre};
+const LABELS = {pan:'Pan', tilt:'Tilt', left_arm:'Left Arm', right_arm:'Right Arm'};
+const state = {};
+const sc = document.getElementById('servo-controls');
+
+function setConnection(ok, text) {
+  document.getElementById('connection-status').className = 'status ' + (ok ? 'connected' : 'disconnected');
+  document.getElementById('connection-text').textContent = text;
 }
-async function request(path,options={}){
-  const r=await fetch(API+path,{cache:'no-store',...options});
-  let data=null; try{data=await r.json()}catch(_){ }
-  if(!r.ok)throw new Error(data?.detail||`HTTP ${r.status}`);
+function showError(text) { document.getElementById('error').textContent = text || ''; }
+function setServo(name, minimum, maximum, centre, angle) {
+  const slider = document.getElementById('servo-' + name); if (!slider) return;
+  slider.min = minimum; slider.max = maximum; slider.value = Math.min(maximum, Math.max(minimum, angle));
+  document.getElementById('angle-' + name).textContent = Number(slider.value).toFixed(1) + '°';
+  state[name] = {minimum, maximum, centre};
+}
+
+async function request(path, options = {}) {
+  const opts = {cache: 'no-store', ...options};
+  opts.headers = Object.assign({}, authHeaders(), options.headers || {});
+  const r = await fetch(API + path, opts);
+  let data = null; try { data = await r.json(); } catch (_) { }
+  if (!r.ok) throw new Error(data?.detail || `HTTP ${r.status}`);
   return data;
 }
-function addServo(name){
-  const r=document.createElement('div'); r.className='servo-row';
-  r.innerHTML=`<label>${LABELS[name]||name}</label><input type="range" id="servo-${name}" step="0.5"><span class="angle-display" id="angle-${name}">--</span><button class="secondary" onclick="calibrateServo('${name}')">Centre</button><button class="danger" onclick="releaseServo('${name}')">Release</button>`;
+
+function addServo(name) {
+  const r = document.createElement('div'); r.className = 'servo-row';
+  r.innerHTML = `<label>${LABELS[name] || name}</label><input type="range" id="servo-${name}" step="0.5"><span class="angle-display" id="angle-${name}">--</span><button class="secondary" onclick="calibrateServo('${name}')">Centre</button><button class="danger" onclick="releaseServo('${name}')">Release</button>`;
   sc.appendChild(r);
-  document.getElementById('servo-'+name).addEventListener('input',e=>{const v=Number(e.target.value);document.getElementById('angle-'+name).textContent=v.toFixed(1)+'°';moveServo(name,v)});
+  document.getElementById('servo-' + name).addEventListener('input', e => {
+    const v = Number(e.target.value);
+    document.getElementById('angle-' + name).textContent = v.toFixed(1) + '°';
+    moveServo(name, v);
+  });
 }
-async function loadServos(){
-  try{
-    const data=await request('/servos');
+
+async function loadServos() {
+  try {
+    const data = await request('/servos');
     sc.replaceChildren();
-    for(const servo of data.servos||[]){
+    for (const servo of data.servos || []) {
       addServo(servo.name);
-      setServo(servo.name,Number(servo.min_angle),Number(servo.max_angle),Number(servo.center_angle),Number(servo.angle));
+      setServo(servo.name, Number(servo.min_angle), Number(servo.max_angle), Number(servo.center_angle), Number(servo.angle));
     }
-    setConnection(true,`Connected · ${data.servos?.length||0} servos`); showError('');
-  }catch(e){setConnection(false,'Disconnected: '+e.message);showError(e.message);setTimeout(loadServos,3000)}
+    setConnection(true, `Connected · ${data.servos?.length || 0} servos`); showError('');
+  } catch (e) { setConnection(false, 'Disconnected: ' + e.message); showError(e.message); setTimeout(loadServos, 3000); }
 }
-async function moveServo(n,a){try{await request(`/servos/${encodeURIComponent(n)}/move?angle=${encodeURIComponent(a)}&duration_s=0.2`,{method:'POST'});showError('')}catch(e){showError(e.message)}}
-async function releaseServo(n){try{await request(`/servos/${encodeURIComponent(n)}/release`,{method:'POST'});showError('')}catch(e){showError(e.message)}}
-async function releaseAll(){try{await request('/servos/release_all',{method:'POST'});showError('All servos released')}catch(e){showError(e.message)}}
-async function centerAll(){for(const n of Object.keys(state)){const c=state[n].centre;document.getElementById('servo-'+n).value=c;document.getElementById('angle-'+n).textContent=c.toFixed(1)+'°';await moveServo(n,c)}}
-async function calibrateServo(n){try{await request(`/servos/calibrate/${encodeURIComponent(n)}`,{method:'POST'});const c=state[n].centre;document.getElementById('servo-'+n).value=c;document.getElementById('angle-'+n).textContent=c.toFixed(1)+'°';showError('')}catch(e){showError(e.message)}}
+async function moveServo(n, a) { try { await request(`/servos/${encodeURIComponent(n)}/move?angle=${encodeURIComponent(a)}&duration_s=0.2`, {method: 'POST'}); showError(''); } catch (e) { showError(e.message); } }
+async function releaseServo(n) { try { await request(`/servos/${encodeURIComponent(n)}/release`, {method: 'POST'}); showError(''); } catch (e) { showError(e.message); } }
+async function releaseAll() { try { await request('/servos/release_all', {method: 'POST'}); showError('All servos released'); } catch (e) { showError(e.message); } }
+async function centerAll() { for (const n of Object.keys(state)) { const c = state[n].centre; document.getElementById('servo-' + n).value = c; document.getElementById('angle-' + n).textContent = c.toFixed(1) + '°'; await moveServo(n, c); } }
+async function calibrateServo(n) { try { await request(`/servos/calibrate/${encodeURIComponent(n)}`, {method: 'POST'}); const c = state[n].centre; document.getElementById('servo-' + n).value = c; document.getElementById('angle-' + n).textContent = c.toFixed(1) + '°'; showError(''); } catch (e) { showError(e.message); } }
+
 loadServos();
 </script>
 </body>
