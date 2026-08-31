@@ -10,7 +10,7 @@ A teaching interaction is a bounded span of human-guided activity:
 
 This module only **holds** the active identifiers. It never mints them on its
 own in response to actions - minting is driven by the
-:class:`~robot.learning.teaching_controller.TeachingController` (Phase 8), so ambient
+:class:`~robot.learning.teaching.TeachingController` (Phase 8), so ambient
 (non-teaching) actions carry ``interaction_id=None`` and produce untagged
 experiences. The :class:`~robot.services.executor.ActionExecutor` reads
 :meth:`InteractionContext.current_metadata` and merges it into each
