@@ -420,13 +420,21 @@ class TestStateEncoder:
         assert layout["audio"] == (39, 42)
         assert layout["flags"] == (42, 46)
         assert layout["rewards"] == (46, 51)
-        assert layout["reserved"] == (51, 91)
+        # [51..61) is the teaching/gesture/conversation context block.
+        assert layout["teaching_context"] == (51, 52)
+        assert layout["interaction_active"] == (52, 53)
+        assert layout["person_present"] == (53, 54)
+        assert layout["gesture"] == (54, 59)
+        assert layout["conversation_turn"] == (59, 60)
+        assert layout["last_action_index"] == (60, 61)
+        # Only [61..91) remains reserved/zero.
+        assert layout["reserved"] == (61, 91)
 
     def test_reserved_section_is_zero(self) -> None:
-        """Reserved section should be all zeros."""
+        """Remaining reserved section [61..91) should be all zeros."""
         enc = StateEncoder()
         vec = enc.encode()
-        for i in range(51, STATE_SIZE):
+        for i in range(61, STATE_SIZE):
             assert vec[i] == 0.0, f"Reserved index {i} should be 0"
 
     def test_encoder_version(self) -> None:

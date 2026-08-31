@@ -53,7 +53,21 @@ See [Preference Tracking](../modules/preferences.md).
 - `POST /api/v1/learning/train` - Force a training cycle
 
 These return "not available" responses when learning is disabled. See
-[Local Brain](../modules/learning.md).
+[Local Brain](../modules/learning.md). `/api/v1/learning/status` reports
+`enabled` from `settings.learning.enabled` (not a hard-coded value).
+
+## Teaching
+
+The teaching loop (human demonstration + feedback) is exposed under
+`/api/v1/teaching/*`. POST endpoints require the API key
+(`DESKBOT_API__API_KEY`) when one is configured. See
+[Teaching Mode](../modules/teaching_mode.md).
+
+- `GET /api/v1/teaching/status` - Teaching-loop status (enabled, in_teaching_mode, session_id, mode, trigger_gesture, desired_action, total_experiences, min_experiences_for_practice)
+- `GET /api/v1/teaching/transitions?limit=` - Recent transitions (1-256, default 20) with a conversation-free state summary (teaching_context / interaction_active / person_present / gesture), reward, feedback_source, interaction_id, teaching_session_id
+- `POST /api/v1/teaching/feedback` - Submit explicit human feedback `{polarity, magnitude, source, text}`; attributes to the most-recent eligible real transition. Returns `{attributed, transition_id?, delta?}` - `attributed=false` when no eligible transition (feedback dropped, never invented). **API key required.**
+- `POST /api/v1/teaching/demonstration` - Arm a session from a constrained `instruction` and/or inject a `gesture`; `mode` = `demonstrate` | `practice`. Returns `{session_id?, trigger_gesture?, desired_action?, executed_action?, executed_action_index?}`. **API key required.**
+- `GET /api/v1/teaching/qvalues` - Current policy Q-values for the encoder state, as a `{action_name: float}` map
 
 ## Configuration validation
 

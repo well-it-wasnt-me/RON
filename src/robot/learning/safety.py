@@ -133,6 +133,13 @@ class ActionSafetyValidator:
             "celebrate",
             "sleep",
             "look_around",
+            # Learnable interaction actions (teaching loop).
+            "speak",
+            "change_emotion",
+            "set_state",
+            "wave",
+            "move_left_arm",
+            "move_right_arm",
         }
     )
 

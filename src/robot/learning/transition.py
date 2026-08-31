@@ -1,6 +1,6 @@
 """Transition lifecycle: open/close real state-action-outcome transitions.
 
-A transition is not a single synchronous call — it is a lifecycle:
+A transition is not a single synchronous call - it is a lifecycle:
 
 ::
 
@@ -19,7 +19,7 @@ A transition is not a single synchronous call — it is a lifecycle:
     transition.complete(next_state=state_t+1, reward=R, done=...)
         |
         v
-    STORE completed transition  →  Experience
+    STORE completed transition  ->  Experience
 
 Until ``complete()`` is called, no experience is persisted.  This
 prevents the class of bugs where the recorder encodes two consecutive
@@ -80,7 +80,7 @@ class TransitionError(ValueError):
 
 @dataclass(slots=True, frozen=True)
 class Transition:
-    """A completed state → action → next_state → reward transition.
+    """A completed state -> action -> next_state -> reward transition.
 
     Attributes
     ----------
@@ -161,6 +161,7 @@ class Transition:
             "execution_failure_reason": self.execution_failure_reason,
             "latency_ms": self.latency_ms,
             "policy_version": self.policy_version,
+            "done": self.done,
         }
         merged.update(self.metadata)
         return Experience(
@@ -296,7 +297,7 @@ def _validate_vector(vec: list[float], name: str) -> None:
 
 @dataclass(slots=True)
 class TransitionStore:
-    """Manages the open→closed transition lifecycle.
+    """Manages the open->closed transition lifecycle.
 
     Parameters
     ----------

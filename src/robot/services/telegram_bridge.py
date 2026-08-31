@@ -1,14 +1,14 @@
-"""Telegram bridge — chat with DeskBot and control every aspect via Telegram.
+"""Telegram bridge - chat with DeskBot and control every aspect via Telegram.
 
 Requires the ``httpx`` package for the Telegram Bot API HTTP calls.
 
 The bridge runs a long-poll loop in a background task. When a message
 arrives it is dispatched to the appropriate handler:
 
-* **Chat** — plain text is forwarded to :meth:`ConversationService.handle_user_text`,
-  which runs the full LLM → TTS pipeline. The reply is sent back to the
+* **Chat** - plain text is forwarded to :meth:`ConversationService.handle_user_text`,
+  which runs the full LLM -> TTS pipeline. The reply is sent back to the
   Telegram chat.
-* **Slash commands** — ``/emotion``, ``/state``, ``/servo``, ``/speak``,
+* **Slash commands** - ``/emotion``, ``/state``, ``/servo``, ``/speak``,
   ``/sound``, ``/behavior``, ``/status``, ``/config``, ``/help`` let you
   control every aspect of the robot from Telegram.
 """
@@ -55,7 +55,7 @@ class TelegramBridge:
     """Bidirectional Telegram ↔ DeskBot bridge.
 
     Subscribes to :class:`BotReply` events so that when the conversation
-    pipeline produces a reply (from any input source — voice, API, MQTT,
+    pipeline produces a reply (from any input source - voice, API, MQTT,
     or Telegram itself), the reply is forwarded to all allowed Telegram
     chats.
     """
@@ -219,7 +219,7 @@ class TelegramBridge:
         """When a BotReply is published, resolve the pending chat's future.
 
         Only the chat that initiated the conversation turn receives the
-        reply — the :meth:`_handle_chat` method sends the actual message
+        reply - the :meth:`_handle_chat` method sends the actual message
         after awaiting the future.  This prevents cross-talk when multiple
         users message the bot concurrently.
         """
@@ -546,20 +546,20 @@ def _help_text() -> str:
 *Chat:* Send any text to talk to the robot (goes through the LLM conversation pipeline).
 
 *Commands:*
-/emotion `<name>` `[intensity]` — Set the robot's emotion
+/emotion `<name>` `[intensity]` - Set the robot's emotion
   Emotions: neutral, happy, curious, thinking, sleepy, embarrassed, excited, sad, surprised, angry
-/state `<name>` — Change the robot's state
+/state `<name>` - Change the robot's state
   States: boot, idle, curious, listening, thinking, speaking, sleeping, error
-/speak `<text>` — Make the robot speak via TTS (bypasses LLM)
-/servo `<name>` `<angle>` `[duration_s]` — Move a servo
+/speak `<text>` - Make the robot speak via TTS (bypasses LLM)
+/servo `<name>` `<angle>` `[duration_s]` - Move a servo
   Servos: pan, tilt, left_arm, right_arm
-/sound `<name>` — Play a sound effect
+/sound `<name>` - Play a sound effect
   Use `/sound` alone to list available sounds
-/behavior `<name>` — Play a behavior sequence
+/behavior `<name>` - Play a behavior sequence
   Behaviors: greeting, thinking, listening, sleeping, excited, surprised
-/status — Show current robot status (state, hardware, LLM, learning, servos)
-/config `[key]` — Show configuration (sensitive values masked)
-/help — Show this help message"""
+/status - Show current robot status (state, hardware, LLM, learning, servos)
+/config `[key]` - Show configuration (sensitive values masked)
+/help - Show this help message"""
 
 
 __all__ = ["TelegramBridge", "TelegramConfig"]

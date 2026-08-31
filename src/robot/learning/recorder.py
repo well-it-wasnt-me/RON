@@ -20,7 +20,7 @@ and executed on the robot produces a transition via the
         |
     pending.complete(next_state=state_t+1, reward=R, done=…)
         |
-    STORE completed transition → Experience
+    STORE completed transition -> Experience
 
 This prevents the class of fake transitions where two consecutive
 states are encoded without an intervening action.
@@ -37,6 +37,7 @@ from robot.events.bus import InMemoryEventBus
 from robot.events.events import (
     EmotionChanged,
     FaceDetected,
+    GestureDetected,
     IdleTimeout,
     ServoMoved,
     SpeechRecognized,
@@ -133,7 +134,11 @@ class ExperienceRecorder:
         self.bus.subscribe(EmotionChanged, self._on_emotion_changed)
         self.bus.subscribe(ServoMoved, self._on_servo_moved)
         self.bus.subscribe(FaceDetected, self._on_face_detected)
-        # SpeechRecognized is an observation, not an action — not subscribed
+        # GestureDetected is an observation (synthetic injection channel today,
+        # no built-in CV detector). It updates the gesture one-hot / person
+        # flag in the encoder but never creates a transition.
+        self.bus.subscribe(GestureDetected, self._on_gesture_detected)
+        # SpeechRecognized is an observation, not an action - not subscribed
         # to avoid paying bus dispatch cost for a no-op handler.
         self.bus.subscribe(IdleTimeout, self._on_idle_timeout)
         self._subscribed = True
@@ -145,29 +150,41 @@ class ExperienceRecorder:
         self.bus.unsubscribe(EmotionChanged, self._on_emotion_changed)
         self.bus.unsubscribe(ServoMoved, self._on_servo_moved)
         self.bus.unsubscribe(FaceDetected, self._on_face_detected)
+        self.bus.unsubscribe(GestureDetected, self._on_gesture_detected)
         self.bus.unsubscribe(IdleTimeout, self._on_idle_timeout)
         self._subscribed = False
 
     # ------------------------------------------------------------------ context
     def update_context(self, **kwargs: Any) -> None:
-        """Manually update the encoder context."""
+        """Manually update the encoder context.
+
+        Recognised keys mirror :class:`StateEncoder` fields. Unknown keys
+        are ignored. Dict fields (``emotions``/``servos``/``personality``)
+        are *merged* into the existing mapping; ``vision``/``audio``/
+        ``idle_seconds`` replace the field directly. Teaching/gesture keys
+        are forwarded to the encoder's typed updaters.
+        """
+        # Dict fields are merged (in place) to match the legacy behaviour.
+        merge_keys = ("emotions", "servos", "personality")
+        # Scalar/object fields replace the encoder attribute directly.
+        assign_keys = ("vision", "audio", "idle_seconds")
+        # Typed-updater dispatch for fields with a dedicated method.
+        updaters: dict[str, Callable[[Any], None]] = {
+            "state": self.encoder.update_state,
+            "teaching_context": self.encoder.update_teaching_context,
+            "interaction_active": self.encoder.update_interaction_active,
+            "person_present": self.encoder.update_person_present,
+            "gesture": self.encoder.update_gesture,
+            "conversation_turn": self.encoder.update_conversation_turn,
+            "last_action_index": self.encoder.update_last_action,
+        }
         for key, value in kwargs.items():
-            if key == "state":
-                self.encoder.update_state(value)
-            elif key == "emotions":
-                self.encoder.emotions.update(value)
-            elif key == "servos":
-                self.encoder.servos.update(value)
-            elif key == "personality":
-                self.encoder.personality.update(value)
-            elif key == "vision":
-                self.encoder.vision = value
-            elif key == "audio":
-                self.encoder.audio = value
-            elif key == "idle_seconds":
-                self.encoder.idle_seconds = value
-            else:
-                pass
+            if key in merge_keys:
+                getattr(self.encoder, key).update(value)
+            elif key in assign_keys:
+                setattr(self.encoder, key, value)
+            elif key in updaters:
+                updaters[key](value)
 
     # ------------------------------------------------------------------ transition lifecycle
     def begin_transition(
@@ -356,19 +373,19 @@ class ExperienceRecorder:
 
     # ------------------------------------------------------------------ handlers (observations only)
     async def _on_state_changed(self, event: StateChanged) -> None:
-        """Observe robot state transitions — updates encoder only."""
+        """Observe robot state transitions - updates encoder only."""
         self.encoder.update_state(event.current)
 
     async def _on_emotion_changed(self, event: EmotionChanged) -> None:
-        """Observe emotion changes — updates encoder only."""
+        """Observe emotion changes - updates encoder only."""
         self.encoder.update_emotion(event.current, event.intensity)
 
     async def _on_servo_moved(self, event: ServoMoved) -> None:
-        """Observe servo movements — updates encoder only."""
+        """Observe servo movements - updates encoder only."""
         self.encoder.update_servo(event.name, event.angle)
 
     async def _on_face_detected(self, event: FaceDetected) -> None:
-        """Observe face detection — updates encoder only, no transition."""
+        """Observe face detection - updates encoder only, no transition."""
         self.encoder.update_vision(
             face_detected=True,
             face_x=event.x,
@@ -376,16 +393,27 @@ class ExperienceRecorder:
             face_confidence=event.confidence,
             face_count=1,
         )
+        # A detected face means a person is present (teaching context flag).
+        self.encoder.update_person_present(True)
+
+    async def _on_gesture_detected(self, event: GestureDetected) -> None:
+        """Observe a gesture - updates encoder only, no transition.
+
+        The gesture one-hot and person-present flag are updated. This is
+        an observation, never an action; no transition is created here.
+        """
+        self.encoder.update_gesture(event.gesture)
+        self.encoder.update_person_present(True)
 
     async def _on_speech_recognized(self, event: SpeechRecognized) -> None:
-        """Observe speech recognition — updates encoder only, no transition."""
+        """Observe speech recognition - updates encoder only, no transition."""
         # Speech recognition is an observation, not an action.
         # The encoder does not have a direct speech field, but we can
         # mark interaction state.  No transition is created.
         pass
 
     async def _on_idle_timeout(self, event: IdleTimeout) -> None:
-        """Observe idle timeout — updates encoder only, no transition."""
+        """Observe idle timeout - updates encoder only, no transition."""
         self.encoder.update_idle(event.seconds_idle)
 
 

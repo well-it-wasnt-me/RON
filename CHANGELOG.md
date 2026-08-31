@@ -2,6 +2,151 @@
 
 <!-- version list -->
 
+## v2.2.0 (2026-08-31)
+
+### Bug Fixes
+
+- Event-bus lock, SQLite RLock, tool_calls in messages, face renderer div-by-zero, behavior drainer,
+  NaN gradient guard and much more
+  ([`8a04b9f`](https://github.com/well-it-wasnt-me/RON/commit/8a04b9ffab46aa52075a159b40e002d732bec0ba))
+
+- Mic chunks overlaps.
+  ([`8a04b9f`](https://github.com/well-it-wasnt-me/RON/commit/8a04b9ffab46aa52075a159b40e002d732bec0ba))
+
+- Teaching api, and friggin states....
+  ([`8a04b9f`](https://github.com/well-it-wasnt-me/RON/commit/8a04b9ffab46aa52075a159b40e002d732bec0ba))
+
+- **dev-brain-fart**: Yeah..i know...
+  ([`8a04b9f`](https://github.com/well-it-wasnt-me/RON/commit/8a04b9ffab46aa52075a159b40e002d732bec0ba))
+
+- **learning**: Now it collects proper experiences to train from
+  ([`8a04b9f`](https://github.com/well-it-wasnt-me/RON/commit/8a04b9ffab46aa52075a159b40e002d732bec0ba))
+
+- **security**: Add API key auth, restrict default bind address, mask all secrets, verify model
+  checksum
+  ([`8a04b9f`](https://github.com/well-it-wasnt-me/RON/commit/8a04b9ffab46aa52075a159b40e002d732bec0ba))
+
+### Chores
+
+- Lint and typecheck
+  ([`8a04b9f`](https://github.com/well-it-wasnt-me/RON/commit/8a04b9ffab46aa52075a159b40e002d732bec0ba))
+
+- Lint, typecheck and tests
+  ([`8a04b9f`](https://github.com/well-it-wasnt-me/RON/commit/8a04b9ffab46aa52075a159b40e002d732bec0ba))
+
+- Small improv
+  ([`8a04b9f`](https://github.com/well-it-wasnt-me/RON/commit/8a04b9ffab46aa52075a159b40e002d732bec0ba))
+
+- **infra**: Non-root Dockerfile with healthcheck, 127.0.0.1 compose binding, CI Python 3.12 +
+  required opencv, systemd hardening
+  ([`8a04b9f`](https://github.com/well-it-wasnt-me/RON/commit/8a04b9ffab46aa52075a159b40e002d732bec0ba))
+
+### Documentation
+
+- Mark multimodal as production-integrated; add config vars, API fields, and sub-encoder training
+  docs
+  ([`8a04b9f`](https://github.com/well-it-wasnt-me/RON/commit/8a04b9ffab46aa52075a159b40e002d732bec0ba))
+
+- Partial doc update
+  ([`8a04b9f`](https://github.com/well-it-wasnt-me/RON/commit/8a04b9ffab46aa52075a159b40e002d732bec0ba))
+
+- Small update
+  ([`8a04b9f`](https://github.com/well-it-wasnt-me/RON/commit/8a04b9ffab46aa52075a159b40e002d732bec0ba))
+
+### Features
+
+- Get audio from rtsp stream
+  ([`8a04b9f`](https://github.com/well-it-wasnt-me/RON/commit/8a04b9ffab46aa52075a159b40e002d732bec0ba))
+
+- Integrate on-device learning into runtime
+  ([`8a04b9f`](https://github.com/well-it-wasnt-me/RON/commit/8a04b9ffab46aa52075a159b40e002d732bec0ba))
+
+- Teaching and learning fix
+  ([`8a04b9f`](https://github.com/well-it-wasnt-me/RON/commit/8a04b9ffab46aa52075a159b40e002d732bec0ba))
+
+- **learning**: Wire MultimodalEncoder into LearningService with sub-encoder training and config
+  support
+  ([`8a04b9f`](https://github.com/well-it-wasnt-me/RON/commit/8a04b9ffab46aa52075a159b40e002d732bec0ba))
+
+- **web**: Add multimodal status to learning dashboard, API key support across all control panels
+  ([`8a04b9f`](https://github.com/well-it-wasnt-me/RON/commit/8a04b9ffab46aa52075a159b40e002d732bec0ba))
+
+### Refactoring
+
+- Replace `__import__("robot.eye_engine.animation")` with normal import
+  ([`8a04b9f`](https://github.com/well-it-wasnt-me/RON/commit/8a04b9ffab46aa52075a159b40e002d732bec0ba))
+
+### Testing
+
+- Update API config default test for 127.0.0.1 bind address
+  ([`8a04b9f`](https://github.com/well-it-wasnt-me/RON/commit/8a04b9ffab46aa52075a159b40e002d732bec0ba))
+
+
+## v2.1.0 (2026-08-31)
+
+### Bug Fixes
+
+- Event-bus lock, SQLite RLock, tool_calls in messages, face renderer div-by-zero, behavior drainer,
+  NaN gradient guard and much more
+  ([`bab0e06`](https://github.com/well-it-wasnt-me/RON/commit/bab0e0600d44e0476d95503c06e0c7f9f1cd7ba1))
+
+- Mic chunks overlaps.
+  ([`bab0e06`](https://github.com/well-it-wasnt-me/RON/commit/bab0e0600d44e0476d95503c06e0c7f9f1cd7ba1))
+
+- **learning**: Now it collects proper experiences to train from
+  ([`bab0e06`](https://github.com/well-it-wasnt-me/RON/commit/bab0e0600d44e0476d95503c06e0c7f9f1cd7ba1))
+
+- **security**: Add API key auth, restrict default bind address, mask all secrets, verify model
+  checksum
+  ([`bab0e06`](https://github.com/well-it-wasnt-me/RON/commit/bab0e0600d44e0476d95503c06e0c7f9f1cd7ba1))
+
+### Chores
+
+- Lint and typecheck
+  ([`bab0e06`](https://github.com/well-it-wasnt-me/RON/commit/bab0e0600d44e0476d95503c06e0c7f9f1cd7ba1))
+
+- Lint, typecheck and tests
+  ([`bab0e06`](https://github.com/well-it-wasnt-me/RON/commit/bab0e0600d44e0476d95503c06e0c7f9f1cd7ba1))
+
+- Small improv
+  ([`bab0e06`](https://github.com/well-it-wasnt-me/RON/commit/bab0e0600d44e0476d95503c06e0c7f9f1cd7ba1))
+
+- **infra**: Non-root Dockerfile with healthcheck, 127.0.0.1 compose binding, CI Python 3.12 +
+  required opencv, systemd hardening
+  ([`bab0e06`](https://github.com/well-it-wasnt-me/RON/commit/bab0e0600d44e0476d95503c06e0c7f9f1cd7ba1))
+
+### Documentation
+
+- Mark multimodal as production-integrated; add config vars, API fields, and sub-encoder training
+  docs
+  ([`bab0e06`](https://github.com/well-it-wasnt-me/RON/commit/bab0e0600d44e0476d95503c06e0c7f9f1cd7ba1))
+
+### Features
+
+- Get audio from rtsp stream
+  ([`bab0e06`](https://github.com/well-it-wasnt-me/RON/commit/bab0e0600d44e0476d95503c06e0c7f9f1cd7ba1))
+
+- Integrate on-device learning with runtime actions
+  ([`bab0e06`](https://github.com/well-it-wasnt-me/RON/commit/bab0e0600d44e0476d95503c06e0c7f9f1cd7ba1))
+
+- **learning**: Wire MultimodalEncoder into LearningService with sub-encoder training and config
+  support
+  ([`bab0e06`](https://github.com/well-it-wasnt-me/RON/commit/bab0e0600d44e0476d95503c06e0c7f9f1cd7ba1))
+
+- **web**: Add multimodal status to learning dashboard, API key support across all control panels
+  ([`bab0e06`](https://github.com/well-it-wasnt-me/RON/commit/bab0e0600d44e0476d95503c06e0c7f9f1cd7ba1))
+
+### Refactoring
+
+- Replace `__import__("robot.eye_engine.animation")` with normal import
+  ([`bab0e06`](https://github.com/well-it-wasnt-me/RON/commit/bab0e0600d44e0476d95503c06e0c7f9f1cd7ba1))
+
+### Testing
+
+- Update API config default test for 127.0.0.1 bind address
+  ([`bab0e06`](https://github.com/well-it-wasnt-me/RON/commit/bab0e0600d44e0476d95503c06e0c7f9f1cd7ba1))
+
+
 ## v2.0.2 (2026-08-21)
 
 ### Bug Fixes

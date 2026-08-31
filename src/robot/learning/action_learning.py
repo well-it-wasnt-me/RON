@@ -167,6 +167,46 @@ def deskbot_action_space() -> ActionSpace:
         action_type="look_around",
         params={"points": 3},
     )
+    # ----- Learnable interaction actions (teaching loop) -----
+    # These extend the action space from 10 -> 16. They map to real
+    # BehaviourActions executed through the ActionExecutor, so experiences
+    # from them carry a meaningful action identity for the Q-policy.
+    space.register(
+        "speak",
+        description="Speak a short phrase via TTS",
+        action_type="speak",
+        params={"text": "hello"},
+    )
+    space.register(
+        "change_emotion",
+        description="Change the facial emotion",
+        action_type="change_emotion",
+        params={"emotion": "happy", "intensity": 1.0},
+    )
+    space.register(
+        "set_state",
+        description="Set the robot behaviour state directly",
+        action_type="set_state",
+        params={"state": "idle"},
+    )
+    space.register(
+        "wave",
+        description="Wave the right arm",
+        action_type="wave",
+        params={},
+    )
+    space.register(
+        "move_left_arm",
+        description="Move the left arm servo to an angle",
+        action_type="move_arm",
+        params={"servo": "left_arm", "angle": 90.0},
+    )
+    space.register(
+        "move_right_arm",
+        description="Move the right arm servo to an angle",
+        action_type="move_arm",
+        params={"servo": "right_arm", "angle": 90.0},
+    )
     return space
 
 
@@ -342,14 +382,36 @@ class ActionLearner:
 
     def q_values(self, state: np.ndarray) -> np.ndarray:
         """Compute Q-values for all actions in the given state."""
+        state = np.asarray(state, dtype=np.float64)
+        if state.ndim != 1:
+            raise ValueError(f"state must be a 1-D vector, got shape {state.shape}")
+
+        if state.size != self.state_size:
+            raise ValueError(
+                f"state dimension mismatch: got {state.size}, expected {self.state_size}"
+            )
+
+        if not np.all(np.isfinite(state)):
+            raise ValueError("state contains NaN or infinite values")
+
         n_actions = self.action_space.size
-        inputs = np.zeros((n_actions, self.state_size + n_actions), dtype=np.float64)
-        # Broadcast state to all rows
-        inputs[:, : self.state_size] = state[np.newaxis, :]
+        inputs = np.zeros(
+            (n_actions, self.state_size + n_actions),
+            dtype=np.float64,
+        )
+        # Put the same state into every action row.
+        inputs[:, : self.state_size] = state
+
+        # my brain: "yes, you implemented that"
+        # reality hititng with a brick: no you didnt.
+
+        # Add one-hot action encoding.
         for i in range(n_actions):
             inputs[i, self.state_size + i] = 1.0
 
+        # Evaluate Q(s, a) for every action.
         pred = self.model.predict(Tensor(inputs))
+
         return pred.data.flatten()
 
     def q_value(self, state: np.ndarray, action_index: int) -> float:
@@ -369,6 +431,19 @@ class ActionLearner:
         np.ndarray
             Array of shape ``(batch, n_actions)``.
         """
+        states = np.asarray(states, dtype=np.float64)
+
+        if states.ndim != 2:
+            raise ValueError(f"states must be a 2-D array, got shape {states.shape}")
+
+        if states.shape[1] != self.state_size:
+            raise ValueError(
+                f"state dimension mismatch: got {states.shape[1]}, expected {self.state_size}"
+            )
+
+        if not np.all(np.isfinite(states)):
+            raise ValueError("states contain NaN or infinite values")
+
         batch_size = states.shape[0]
         n_actions = self.action_space.size
         inputs = np.zeros((batch_size * n_actions, self.state_size + n_actions), dtype=np.float64)
@@ -392,6 +467,16 @@ class ActionLearner:
         done: bool = False,
     ) -> float:
         """Run one Q-learning update."""
+        state = np.asarray(state, dtype=np.float64)
+        next_state = np.asarray(next_state, dtype=np.float64)
+
+        if state.ndim != 1 or state.size != self.state_size:
+            raise ValueError(f"state must have shape ({self.state_size},), got {state.shape}")
+
+        if next_state.ndim != 1 or next_state.size != self.state_size:
+            raise ValueError(
+                f"next_state must have shape ({self.state_size},), got {next_state.shape}"
+            )
         if done:
             target_q = reward
         else:

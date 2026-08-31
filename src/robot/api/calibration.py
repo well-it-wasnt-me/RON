@@ -92,8 +92,8 @@ def _servo_limits(name: str, servo: Any) -> tuple[float, float, float]:
     """Return the exact limits used by the active servo controller.
 
     Checks (in order):
-    1. ``servo.channel`` — the channel config object used by real servo drivers.
-    2. ``servo.min_angle`` / ``servo.max_angle`` — used by :class:`MockServo`.
+    1. ``servo.channel`` - the channel config object used by real servo drivers.
+    2. ``servo.min_angle`` / ``servo.max_angle`` - used by :class:`MockServo`.
     3. Hard-coded fallback ``0.0, 180.0, 90.0``.
     """
     channel = getattr(servo, "channel", None)

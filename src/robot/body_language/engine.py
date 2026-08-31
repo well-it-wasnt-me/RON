@@ -145,7 +145,7 @@ class BodyLanguageEngine:
     async def perform(self, request: BodyRequest) -> None:
         """Play a request on the servos."""
         if self._busy:
-            # Another request is already in flight — log the dropped request
+            # Another request is already in flight - log the dropped request
             # so it's visible rather than silently lost.
             _log.warning(
                 "body_language.request_dropped", request=getattr(request, "name", "unknown")

@@ -43,6 +43,7 @@ from robot.learning.experience import (
     ReplayBuffer,
     WorkingMemory,
 )
+from robot.learning.feedback_ledger import FeedbackLedger
 from robot.learning.multimodal import (
     MULTIMODAL_VERSION,
     MultimodalEncoder,
@@ -316,6 +317,12 @@ class LearningService:
     )
     episodic_memory: EpisodicMemory | None = None
     preference_learner: PreferenceLearner | None = None
+    #: Ledger of post-hoc human feedback keyed by transition id. When set,
+    #: :meth:`reward_for_transition` amends a transition's recorded reward with
+    #: the human's attributed feedback. ``None`` by default (no feedback yet);
+    #: wired to the shared ledger in :meth:`__post_init__`-adjacent setup by
+    #: the teaching controller (Phase 8) or tests.
+    feedback_ledger: FeedbackLedger | None = None
 
     current_world_model: WorldModel | None = field(default=None, init=False, repr=False)
     candidate_world_model: WorldModel | None = field(default=None, init=False, repr=False)
@@ -601,6 +608,14 @@ class LearningService:
             else:
                 self._rollback_model(evaluation.current_loss, evaluation.candidate_loss)
 
+            # Train the policy (ActionLearner) in-place. Unlike the world
+            # model, the policy trains online — there is no candidate/current
+            # promotion; execution is gated by the SafetyGate (Phase 8). The
+            # reward for each transition is amended with any post-hoc human
+            # feedback via reward_for_transition, so praised actions reinforce
+            # and corrected actions weaken — this is what makes Q(wave) rise.
+            self._train_action_learner()
+
             # Update status
             duration = time.monotonic() - start_time
             with self._lock:
@@ -645,12 +660,12 @@ class LearningService:
         # snapshots stored in experience metadata (if available) or
         # reconstruct from the state vector.
         # For the initial integration, we train on the current encoder
-        # state — the sub-encoders learn from whatever the robot is
+        # state - the sub-encoders learn from whatever the robot is
         # currently perceiving.  This is a lightweight online update.
         vision = self.multimodal_encoder.state_encoder.vision
         audio = self.multimodal_encoder.state_encoder.audio
 
-        # Vision sub-encoder: encode → decode reconstruction
+        # Vision sub-encoder: encode -> decode reconstruction
         try:
             vision_vec = np.array(vision.to_vector(), dtype=np.float64).reshape(1, -1)
             # Reconstruction target is the original input.
@@ -664,6 +679,72 @@ class LearningService:
             self.multimodal_encoder.audio_encoder.train_step(audio_vec, audio_vec)
         except Exception:
             _log.debug("learning.sub_encoder.audio_train_skipped")
+
+    def _train_action_learner(self) -> None:
+        """Train the policy (:class:`ActionLearner`) in-place on a fresh batch.
+
+        Resamples a fresh ``batch_size`` batch from the replay buffer (independent
+        of the world-model training/eval split) and runs one Q-learning update
+        per transition. The reward used for each transition is the
+        :meth:`reward_for_transition` amended reward — recorded reward plus any
+        post-hoc human feedback the ledger attributes to it. This is the update
+        that makes ``Q(state, wave)`` rise above unrelated actions when the human
+        praises the wave.
+
+        The policy trains **online in-place**: there is no candidate/current
+        promotion, so a bad update is not rolled back. This is a deliberate
+        known limitation — execution of learned actions is gated by the
+        :class:`SafetyGate` (Phase 8), so a degraded policy cannot drive the
+        hardware until it is validated.
+
+        Failures are logged and swallowed: a policy-training error must never
+        break the training cycle or the world-model promotion path.
+        """
+        assert self.action_learner is not None
+        try:
+            batch = self.replay_buffer.sample(self.resource_limits.batch_size)
+            if len(batch) < 1:
+                _log.debug("learning.action_train_skipped", reason="empty_batch")
+                return
+
+            states: list[list[float]] = []
+            action_indices: list[int] = []
+            rewards: list[float] = []
+            next_states: list[list[float]] = []
+            dones: list[bool] = []
+            for exp in batch:
+                meta = exp.metadata
+                idx = meta.get("action_index")
+                tid = meta.get("transition_id")
+                if idx is None or tid is None:
+                    # A transition without an action index or id cannot train
+                    # the policy; skip it rather than invent values.
+                    continue
+                states.append(list(exp.state))
+                action_indices.append(int(idx))
+                rewards.append(float(self.reward_for_transition(str(tid))))
+                next_states.append(list(exp.next_state))
+                dones.append(bool(meta.get("done", False)))
+
+            if not states:
+                _log.debug("learning.action_train_skipped", reason="no_labelled_transitions")
+                return
+
+            loss = self.action_learner.train_batch(
+                states=np.array(states, dtype=np.float64),
+                action_indices=action_indices,
+                rewards=np.array(rewards, dtype=np.float64),
+                next_states=np.array(next_states, dtype=np.float64),
+                dones=np.array(dones, dtype=np.float64),
+            )
+            _log.info(
+                "learning.action_train_complete",
+                batch_size=len(states),
+                loss=round(float(loss), 6),
+                epsilon=round(self.action_learner.epsilon, 4),
+            )
+        except Exception:
+            _log.exception("learning.action_train_failed")
 
     def _promote_model(self, candidate_loss: float, current_loss: float) -> None:
         """Promote the candidate model to current."""
@@ -759,6 +840,41 @@ class LearningService:
             assert self.current_world_model is not None
             return self.current_world_model
 
+    def get_current_learning_state(self) -> list[float]:
+        """Return the current state in the representation used by learning models."""
+        if self.multimodal_encoder is not None:
+            state = self.multimodal_encoder.encode()
+        else:
+            state = self.encoder.encode()
+
+        if len(state) != self.state_size:
+            raise RuntimeError(
+                "Learning state dimension mismatch: "
+                f"encoder produced {len(state)}, expected {self.state_size}"
+            )
+
+        return list(state)
+
+    def q_values(self, state: list[float] | np.ndarray) -> dict[str, float]:
+        """Q-values for every action in the configured learning state."""
+        with self._lock:
+            if self.action_learner is None:
+                raise RuntimeError("action_learner not initialised")
+
+            arr = np.asarray(state, dtype=np.float64)
+
+            if arr.ndim != 1:
+                raise ValueError(f"learning state must be 1-D, got shape {arr.shape}")
+
+            if arr.size != self.state_size:
+                raise ValueError(
+                    f"learning state dimension mismatch: got {arr.size}, expected {self.state_size}"
+                )
+
+            vec = self.action_learner.q_values(arr)
+
+        return {self.action_space.get(i).name: float(vec[i]) for i in range(self.action_space.size)}
+
     def get_candidate_world_model(self) -> WorldModel:
         """Return the candidate (training) world model."""
         with self._lock:
@@ -811,7 +927,7 @@ class LearningService:
         Opens a transition with the current encoder state and the given
         action index, then immediately completes it with the current
         encoder state as next_state.  This is the preferred way to
-        record experiences — it validates action identity and records
+        record experiences - it validates action identity and records
         execution metadata.
 
         For live use, prefer calling recorder.begin_transition()
@@ -833,6 +949,42 @@ class LearningService:
             execution_failure_reason=execution_failure_reason,
             metadata=metadata,
         )
+
+    def reward_for_transition(self, transition_id: str) -> float:
+        """The amended reward for a transition: recorded reward + human feedback.
+
+        Looks the transition up in ``working_memory.recent(256)`` by its
+        ``metadata["transition_id"]``, then adds any post-hoc human feedback the
+        :class:`~robot.learning.feedback_ledger.FeedbackLedger` has attributed
+        to it. The result is clamped to ``[-2, 2]``.
+
+        Returns ``0.0`` when the transition is not found in working memory, and
+        uses the recorded reward unchanged when no ledger is wired (no feedback
+        path). It never invents a reward: the ledger returns ``0.0`` for any
+        transition it has no feedback for.
+        """
+        recent = self.working_memory.recent(256)
+        exp: Experience | None = None
+        for candidate in recent:
+            tid = candidate.metadata.get("transition_id")
+            if tid is not None and str(tid) == transition_id:
+                exp = candidate
+                break
+
+        if exp is None:
+            return 0.0
+
+        base = float(exp.reward)
+        delta = 0.0
+        if self.feedback_ledger is not None:
+            delta = float(self.feedback_ledger.feedback_for_transition(transition_id))
+
+        total = base + delta
+        if total > 2.0:
+            return 2.0
+        if total < -2.0:
+            return -2.0
+        return total
 
     def load_latest_checkpoint(self) -> bool:
         """Try to load the latest checkpoint for the current model.
@@ -857,7 +1009,7 @@ class LearningService:
         for ``min_new_experiences`` fresh events.
 
         Historical experiences are **not** counted as "new since last
-        training" — only genuinely new events should trigger a
+        training" - only genuinely new events should trigger a
         training cycle.
 
         Returns the number of experiences restored.

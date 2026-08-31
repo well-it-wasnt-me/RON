@@ -2,8 +2,8 @@
 
 Supports subcommands:
 
-* ``deskbot``       — run the robot application (default)
-* ``deskbot chat``  — interactive text chat interface
+* ``deskbot``       - run the robot application (default)
+* ``deskbot chat``  - interactive text chat interface
 
 If no subcommand is recognised, the full application starts as before.
 """

@@ -89,7 +89,7 @@ def _serialise_event(event: object) -> dict[str, Any]:
             else:
                 result[f.name] = value
     except TypeError:
-        # Not a dataclass — fall back to dir()-walking with private attr filter.
+        # Not a dataclass - fall back to dir()-walking with private attr filter.
         for attr in dir(event):
             if attr.startswith("_"):
                 continue
@@ -130,7 +130,7 @@ class MqttBridge:
             ) from exc
 
         self._client = mqtt.Client(
-            callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+            callback_api_version=mqtt.CallbackAPIVersion.VERSION2,  # type: ignore[attr-defined]
             client_id="deskbot-bridge",
         )
 

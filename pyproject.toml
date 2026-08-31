@@ -1,6 +1,6 @@
 [project]
 name = "deskbot"
-version = "2.0.2"
+version = "2.2.0"
 description = "A modular desktop companion robot powered by a Raspberry Pi 5"
 readme = "README.md"
 license = { text = "MIT" }
@@ -72,6 +72,7 @@ audio = [
     "sounddevice>=0.4.6",
     "numpy>=1.26",
     "scipy>=1.13",
+    "av>=14",
 ]
 wakeword = [
     "openwakeword",

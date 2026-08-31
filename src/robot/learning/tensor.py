@@ -170,7 +170,7 @@ class Tensor:
         Because Tensor is mutable (has ``__setitem__``), ``__hash__`` is
         intentionally **not** defined. Python therefore treats instances as
         unhashable (``__hash__ = None``), preventing accidental use as dict
-        keys or set members — which would break when the underlying data
+        keys or set members - which would break when the underlying data
         is mutated.
         """
         if not isinstance(other, Tensor):

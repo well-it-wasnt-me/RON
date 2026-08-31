@@ -16,10 +16,10 @@ Dataset construction and validation for world model training:
 
 This module provides:
 
-* :class:`TransitionDataset` — validates and splits transitions.
-* :class:`WorldModelBaseline` — trivial persistence / mean predictor.
-* :class:`DatasetSplit` — the three-way train/val/test split.
-* :class:`DatasetStats` — statistics about the dataset.
+* :class:`TransitionDataset` - validates and splits transitions.
+* :class:`WorldModelBaseline` - trivial persistence / mean predictor.
+* :class:`DatasetSplit` - the three-way train/val/test split.
+* :class:`DatasetStats` - statistics about the dataset.
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ def validate_transition(  # noqa: PLR0911, PLR0912
     * impossible timestamps (completion < start)
     * corrupted observation vectors (wrong size)
     * transitions created without execution (execution_success == False
-      is allowed but flagged — the transition is still valid if data is
+      is allowed but flagged - the transition is still valid if data is
       intact)
     """
     if isinstance(transition, Transition):
@@ -292,7 +292,7 @@ class TransitionDataset:
         return split, stats
 
     def _split_time_based(self, experiences: list[Experience]) -> DatasetSplit:
-        """Split by time: earliest → train, middle → val, latest → test.
+        """Split by time: earliest -> train, middle -> val, latest -> test.
 
         This prevents temporal leakage of near-identical consecutive
         samples across splits.

@@ -321,13 +321,23 @@ class AudioConfig(BaseSettings):
 class MicrophoneConfig(BaseSettings):
     """Microphone capture configuration."""
 
-    model_config = SettingsConfigDict(env_prefix="DESKBOT_MICROPHONE__", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="DESKBOT_MICROPHONE__",
+        extra="ignore",
+    )
+
+    backend: Literal["usb", "rtsp"] = "usb"
 
     input_device: str = Field(default="default")
     sample_rate: int = Field(default=16_000, gt=0)
     channels: int = Field(default=1, ge=1, le=8)
     frame_ms: int = Field(default=30, gt=0)
     dtype: str = Field(default="int16")
+
+    rtsp_transport: Literal["tcp", "udp"] = Field(
+        default="tcp",
+        description="Transport used by the RTSP microphone backend.",
+    )
 
 
 class CameraConfig(BaseSettings):
@@ -557,7 +567,7 @@ class ApiConfig(BaseSettings):
 
     By default the API binds to ``127.0.0.1`` so it is only reachable
     from the local machine.  Set ``host`` to ``0.0.0.0`` to expose it
-    on the network — **only do this behind a reverse proxy or with
+    on the network - **only do this behind a reverse proxy or with
     ``api_key`` set**, since the control endpoints can drive servos
     and speakers.
 
@@ -973,6 +983,50 @@ class LearningConfig(BaseSettings):
     )
 
 
+class TeachingConfig(BaseSettings):
+    """Configuration for the human teaching loop (Phases 8-10).
+
+    Teaching is a *context flag*, not a :class:`RobotState` — it never appears
+    in the state one-hot, so ``STATE_SIZE`` (91 / 570 multimodal) is unchanged.
+    When ``enabled`` is ``False`` the teaching controller stays inactive and
+    no gesture triggers fire.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="DESKBOT_TEACHING__", extra="ignore")
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether the teaching loop is armed (gesture-triggered demonstrate/practice).",
+    )
+    feedback_window_s: float = Field(
+        default=5.0,
+        gt=0.0,
+        description="Maximum age (s) of a transition to be eligible for feedback attribution.",
+    )
+    staleness_s: float = Field(
+        default=30.0,
+        gt=0.0,
+        description="Broader staleness bound for applying recorded feedback to a transition.",
+    )
+    practice_epsilon: float = Field(
+        default=0.2,
+        ge=0.0,
+        le=1.0,
+        description="Exploration epsilon the policy uses in practice mode.",
+    )
+    cooldown_s: float = Field(
+        default=0.2,
+        gt=0.0,
+        description="Safety-gate cooldown (s) between the same action during teaching.",
+    )
+    min_experiences_for_practice: int = Field(
+        default=64,
+        ge=0,
+        description="Total experiences required before practice mode trusts a policy proposal; "
+        "below this it falls back to demonstration.",
+    )
+
+
 class TelegramConfig(BaseSettings):
     """Telegram bot bridge configuration.
 
@@ -1075,6 +1129,7 @@ class AppSettings(BaseSettings):
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     vector_memory: VectorMemoryConfig = Field(default_factory=VectorMemoryConfig)
     learning: LearningConfig = Field(default_factory=LearningConfig)
+    teaching: TeachingConfig = Field(default_factory=TeachingConfig)
     preferences: PreferencesConfig = Field(default_factory=PreferencesConfig)
     conversation: ConversationConfig = Field(default_factory=ConversationConfig)
     tools: ToolConfig = Field(default_factory=ToolConfig)

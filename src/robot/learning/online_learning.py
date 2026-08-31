@@ -1,6 +1,6 @@
 """Controlled online learning with separate robot and learning processes.
 
-Allow production data to update the learning system — but only after
+Allow production data to update the learning system - but only after
 all prior safety gates are in place.
 
 Key requirements:
@@ -11,7 +11,7 @@ Key requirements:
 * Persist experiences, training runs, model versions, evaluation
   results, safety events, policy decisions.
 * Warm the replay buffer from persistent storage after reboot.
-* No unrestricted epsilon-greedy exploration on the physical robot —
+* No unrestricted epsilon-greedy exploration on the physical robot -
   explore in simulation, offline replay, shadow mode, or constrained
   action subsets only.
 * Monitor: model version, replay size, training rate, training loss,
@@ -59,7 +59,7 @@ class OnlineLearningMonitor:
     inference_latency_ms: float = 0.0
     model_load_failures: int = 0
 
-    # Action distribution (action_index → count)
+    # Action distribution (action_index -> count)
     _action_counts: dict[int, int] = field(default_factory=dict, init=False, repr=False)
     # Recent inference latencies for averaging
     _recent_latencies: deque[float] = field(
@@ -181,7 +181,7 @@ class ReplayWarmer:
     for ``min_new_experiences`` fresh events.
 
     Historical experiences are **not** counted as "new since last
-    training" — only genuinely new events should trigger a training
+    training" - only genuinely new events should trigger a training
     cycle.
     """
 

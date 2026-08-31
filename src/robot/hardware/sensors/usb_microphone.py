@@ -362,7 +362,7 @@ class UsbMicrophone(Microphone):
         default_sample_rate = round(device_info.get("default_samplerate", 0) or 0)
 
         # Pre-flight check: verify the device can handle the requested
-        # settings.  This is advisory — on some ALSA/PipeWire setups
+        # settings.  This is advisory - on some ALSA/PipeWire setups
         # check_input_settings rejects rates that PortAudio can actually
         # resample at open time.  If the check fails we log a warning and
         # still attempt to open the stream; the InputStream call will raise

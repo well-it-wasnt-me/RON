@@ -47,10 +47,23 @@ async def test_emotion_change_propagates() -> None:
     async with app.run():
         for _ in range(5):
             await anyio.sleep(0)
+        # The legacy eye engine was removed; FaceAnimator is the production face
+        # path and subscribes to EmotionChanged. Capture the pre-event target,
+        # then confirm the HAPPY event retargets the animator to the HAPPY face.
+        # ``set_emotion`` sets ``_target`` synchronously (the run loop only
+        # advances ``_current`` toward it), so this is a reliable signal.
+        assert app.face_animator is not None
+        animator = app.face_animator
+        pre_target = animator._target
+
         await app.bus.publish(
             EmotionChanged(previous=EmotionName.NEUTRAL, current=EmotionName.HAPPY, intensity=1.0)
         )
         for _ in range(5):
             await anyio.sleep(0)
-        assert app.eye_animator is not None
-        assert app.eye_animator.eye.emotion is EmotionName.HAPPY
+
+        # The emotion change reached the animator: it now targets the HAPPY
+        # face. This is the new equivalent of the old
+        # ``eye_animator.eye.emotion is EmotionName.HAPPY`` check.
+        assert animator._target == animator.emotions.build(EmotionName.HAPPY.value)
+        assert animator._target != pre_target
