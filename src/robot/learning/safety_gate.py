@@ -457,7 +457,13 @@ class SafeActionExecutor:
             return result.action_index
 
         self._fallback_count += 1
-        actual = result.action_index
+
+        if result.fallback:
+            actual = result.action_index
+        else:
+            # A rejected model action must never reach the hardware executor.
+            actual = self.safety_gate.fallback_action
+
         self.executor(actual)
         return actual
 
