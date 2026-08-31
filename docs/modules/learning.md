@@ -262,14 +262,14 @@ A Q-learning policy with function approximation.
   `look_around`) plus the learnable interaction actions `speak`,
   `change_emotion`, `set_state`, `wave`, `move_left_arm`, `move_right_arm`
   (indices 10-15). A reverse `action_index -> BehaviorAction` mapping (`action_index_to_behavior_action`) resolves an
-  index back to the executable behaviour (see [Teaching Mode](#teaching--human-learning-loop)).
+  index back to the executable behaviour (see [Teaching Mode](#teaching-human-learning-loop)).
 - **`ActionLearner`** - an MLP mapping `[state, action_onehot] -> Q(s,a)`. Action selection is **epsilon-greedy** with
   exponential decay (`epsilon_start -> epsilon_end`, `epsilon_decay` per step) and a configurable `ActionValidator`
   gating. `train_step` / `train_batch`
   apply the Bellman update `target = r + γ·maxₐ Q(s', a')` (or just `r`
   when `done`). The learner is trained in each background training cycle on feedback-amended rewards
   (`reward_for_transition`) — see the
-  [teaching loop](#teaching--human-learning-loop) below.
+  [teaching loop](#teaching-human-learning-loop) below.
 - **`ActionLearningEnv`** - a simulation with a shaped reward structure (e.g. `celebrate` with a face -> `+1.0`;
   `sleep` -> `-0.5`; `look_center`
   with a face -> `+0.5`).

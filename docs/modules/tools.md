@@ -156,7 +156,7 @@ dispatch directly to the event bus and hardware controllers:
 When an `action_executor` **is** wired (the default once learning is enabled in
 `DeskBotApp`), the **learnable** builtins — `change_emotion`, `set_state`,
 `move_servo`, and `speak` — are routed through the canonical
-[`ActionExecutor`][robot.services.executor.ActionExecutor] instead of going
+[`ActionExecutor`](services.md#actionexecutor) instead of going
 directly to the bus/hardware. Each call is translated into the matching
 `BehaviorAction` (`ChangeEmotionAction`, `SetStateAction`,
 `RequestServoMoveAction`, `SpeakAction`) and dispatched via
