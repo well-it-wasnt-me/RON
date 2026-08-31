@@ -2,10 +2,10 @@
 
 Three safety layers:
 
-1. **Static validation** — action exists, parameters valid, servo/timing/rate limits.
-2. **Runtime safety** — calibrated servo range, cooldown, conflicting actions,
+1. **Static validation** - action exists, parameters valid, servo/timing/rate limits.
+2. **Runtime safety** - calibrated servo range, cooldown, conflicting actions,
    sensor availability, robot state restrictions.
-3. **Emergency override** — reliable mechanism to disable learned control.
+3. **Emergency override** - reliable mechanism to disable learned control.
 
 No HTTP endpoint, event handler, training component, or policy can bypass
 the safety validator.  Every hardware action uses the same execution path.
@@ -21,10 +21,13 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from robot.learning.action_learning import ActionSpace
 from robot.logging import get_logger
+
+if TYPE_CHECKING:
+    import numpy as np
 
 _log = get_logger("learning.safety_gate")
 
@@ -85,7 +88,7 @@ class SafetyResult:
 class SafetyGate:
     """Three-layer safety validator for all hardware actions.
 
-    No component — HTTP endpoint, event handler, training, or policy —
+    No component - HTTP endpoint, event handler, training, or policy -
     can bypass this validator.  Every hardware action uses the same
     execution path.
 
@@ -96,15 +99,15 @@ class SafetyGate:
     max_action_rate:
         Maximum actions per second.
     servo_limits:
-        Dict of servo name → (min_angle, max_angle).
+        Dict of servo name -> (min_angle, max_angle).
     cooldown_s:
         Minimum seconds between the same action.
     fallback_action:
         Action index to use when the policy fails.  Defaults to 0
-        (look_left) — a safe, non-destructive action.
+        (look_left) - a safe, non-destructive action.
     enabled:
         Whether the safety gate is active.  When False, all actions
-        pass (for testing only — never in production).
+        pass (for testing only - never in production).
     """
 
     action_space: ActionSpace
@@ -138,12 +141,12 @@ class SafetyGate:
         return self._override_active
 
     def activate_override(self) -> None:
-        """Activate the emergency override — disables learned control."""
+        """Activate the emergency override - disables learned control."""
         self._override_active = True
         _log.warning("safety_gate.override_activated")
 
     def deactivate_override(self) -> None:
-        """Deactivate the emergency override — re-enables learned control."""
+        """Deactivate the emergency override - re-enables learned control."""
         self._override_active = False
         _log.info("safety_gate.override_deactivated")
 
@@ -169,7 +172,7 @@ class SafetyGate:
                 layer="static",
             )
 
-        # Layer 3: Emergency override — always falls back to deterministic
+        # Layer 3: Emergency override - always falls back to deterministic
         if self._override_active:
             return SafetyResult(
                 result_type=SafetyResultType.FALLBACK,
@@ -189,6 +192,27 @@ class SafetyGate:
             return result
 
         return result
+
+    def is_valid(
+        self,
+        action_index: int,
+        state: list[float] | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> bool:
+        """Non-mutating validity check (static layer only).
+
+        This is the read-only counterpart of :meth:`validate`, intended for the
+        per-candidate loop in :meth:`ActionLearner.select_action`. ``validate``
+        mutates cooldown / rate-limit state and must NOT be called once per
+        candidate — that would both inflate the rate window and stall on
+        cooldown. ``is_valid`` only runs the static layer (action exists,
+        parameters and the action's own servo target are in range) and never
+        touches cooldown or timestamps, so it is safe to call many times.
+
+        Runtime layers (cooldown, rate limit) are enforced later, once, on the
+        single action that is actually selected for execution.
+        """
+        return self._static_validation(action_index, params).allowed
 
     def validate_or_fallback(
         self,
@@ -273,7 +297,7 @@ class SafetyGate:
         action_index: int,
         params: dict[str, Any] | None,
     ) -> SafetyResult:
-        """Layer 1: static validation — action exists, params valid."""
+        """Layer 1: static validation - action exists, params valid."""
         # Action exists in action space
         if not (0 <= action_index < self.action_space.size):
             return SafetyResult(
@@ -283,7 +307,7 @@ class SafetyGate:
                 layer="static",
             )
 
-        # Validate servo parameters — checks params whose keys match
+        # Validate servo parameters - checks params whose keys match
         # configured servo_limits (e.g. "pan", "tilt"). The built-in action
         # space uses param keys like "x", "y" which don't match servo names
         # directly; callers that pass servo-named params (e.g. from the
@@ -300,6 +324,31 @@ class SafetyGate:
                             layer="static",
                         )
 
+        # Defense-in-depth: look up the action's own target servo (e.g.
+        # ``move_left_arm`` carries ``{"servo": "left_arm", "angle": 90}``)
+        # and check the resolved angle against that servo's limits. The
+        # angle comes from the override ``params`` when present, else the
+        # action's registered defaults. This means a learned policy or a
+        # teaching demonstration that resolves to an out-of-range arm angle
+        # is rejected before it ever reaches the executor - regardless of
+        # what the caller passed.
+        servo_target = self._action_servo_target(action_index, params)
+        if servo_target is not None:
+            servo_name, angle = servo_target
+            limits = self.servo_limits.get(servo_name)
+            if limits is not None and isinstance(angle, (int, float)):
+                min_v, max_v = limits
+                if angle < min_v or angle > max_v:
+                    return SafetyResult(
+                        result_type=SafetyResultType.REJECT,
+                        action_index=action_index,
+                        reason=(
+                            f"action servo {servo_name} angle {angle} "
+                            f"out of range [{min_v}, {max_v}]"
+                        ),
+                        layer="static",
+                    )
+
         return SafetyResult(
             result_type=SafetyResultType.ALLOW,
             action_index=action_index,
@@ -307,13 +356,40 @@ class SafetyGate:
             layer="static",
         )
 
+    def _action_servo_target(
+        self,
+        action_index: int,
+        params: dict[str, Any] | None,
+    ) -> tuple[str, float] | None:
+        """Resolve the (servo_name, angle) an action targets, if any.
+
+        Returns ``None`` for actions that don't drive a servo (wave, speak,
+        look_*). The angle prefers an override in ``params`` over the action's
+        registered default, so demonstrations overriding the arm angle are
+        validated against the resolved value.
+        """
+        if not (0 <= action_index < self.action_space.size):
+            return None
+        action = self.action_space.get(action_index)
+        servo_name = action.params.get("servo")
+        if not isinstance(servo_name, str) or servo_name not in self.servo_limits:
+            return None
+        angle: Any = None
+        if params and "angle" in params:
+            angle = params["angle"]
+        elif "angle" in action.params:
+            angle = action.params["angle"]
+        if angle is None or not isinstance(angle, (int, float)):
+            return None
+        return servo_name, float(angle)
+
     def _runtime_safety(
         self,
         action_index: int,
         state: list[float] | None,
         params: dict[str, Any] | None,
     ) -> SafetyResult:
-        """Layer 2: runtime safety — rate limits, cooldown, state restrictions."""
+        """Layer 2: runtime safety - rate limits, cooldown, state restrictions."""
         now = time.monotonic()
 
         # Cooldown per action type
@@ -327,7 +403,7 @@ class SafetyGate:
                 layer="runtime",
             )
 
-        # Rate limit — only count actions that pass cooldown so rejected
+        # Rate limit - only count actions that pass cooldown so rejected
         # attempts don't inflate the rate window.
         self._action_timestamps.append(now)
         self._action_timestamps = [t for t in self._action_timestamps if now - t < 1.0]
@@ -406,7 +482,7 @@ class SafeActionExecutor:
             self.executor(action_index)
             return action_index
 
-        # Rejected or fallback — use the fallback action
+        # Rejected or fallback - use the fallback action
         self._rejection_count += 1
         if result.fallback:
             self._fallback_count += 1
@@ -462,9 +538,40 @@ class SafeActionExecutor:
         return actual
 
 
+# ---------------------------------------------------------------------------
+# ActionValidator adapter (for ActionLearner.select_action)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(slots=True)
+class SafetyGateValidator:
+    """Adapts :class:`SafetyGate` to the :class:`ActionValidator` protocol.
+
+    :meth:`ActionLearner.select_action` calls ``validator.is_valid(i, state,
+    action_space)`` for every candidate in its per-candidate loop. This adapter
+    forwards to :meth:`SafetyGate.is_valid` (the non-mutating static layer),
+    passing the action's own registered params so the defense-in-depth servo
+    check runs on each candidate. It never mutates cooldown / rate state.
+    """
+
+    safety_gate: SafetyGate
+
+    def is_valid(
+        self, action_index: int, state: np.ndarray, action_space: ActionSpace
+    ) -> bool:
+        # Resolve the candidate's registered params (for the servo-range
+        # defense-in-depth check); out-of-range indices are rejected by the
+        # gate's static layer, so fetch defensively.
+        params: dict[str, Any] | None = None
+        if 0 <= action_index < action_space.size:
+            params = action_space.get(action_index).params
+        return self.safety_gate.is_valid(action_index, params=params)
+
+
 __all__ = [
     "SafeActionExecutor",
     "SafetyGate",
+    "SafetyGateValidator",
     "SafetyResult",
     "SafetyResultType",
 ]

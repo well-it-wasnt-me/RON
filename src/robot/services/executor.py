@@ -7,10 +7,10 @@ protocol only; the concrete backend (mock, GPIO, PCA9685) is injected at
 construction time.
 
 When an :class:`ExperienceRecorder` is wired in (``experience_recorder``), each
-*mappable* action is wrapped in the learning transition lifecycle —
+*mappable* action is wrapped in the learning transition lifecycle -
 ``recorder.begin_transition()`` before execution and
-``recorder.complete_transition()`` after the outcome is observed — so a real
-state → action → outcome → next-state experience is stored through the existing
+``recorder.complete_transition()`` after the outcome is observed - so a real
+state -> action -> outcome -> next-state experience is stored through the existing
 :class:`TransitionStore`.  Observation events continue to update the encoder only;
 they never create transitions.  Learning instrumentation failures are swallowed
 so they can never crash or block the robot.
@@ -20,16 +20,21 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from robot.behavior.actions import (
     BehaviorAction,
     CelebrateAction,
+    ChangeEmotionAction,
     LookAroundAction,
+    MoveArmAction,
     RequestBlinkAction,
     RequestLookAction,
     RequestServoMoveAction,
     RequestSleepAction,
+    SetStateAction,
+    SpeakAction,
+    WaveAction,
 )
 from robot.events.bus import InMemoryEventBus
 from robot.events.events import (
@@ -38,14 +43,18 @@ from robot.events.events import (
     EmotionName,
     LookRequested,
     ServoMoved,
+    StateChanged,
 )
+from robot.interfaces.audio import AudioOutput
 from robot.interfaces.servo import ServoController
 from robot.learning.action_mapping import behavior_action_to_index
 from robot.learning.observation import Observation
 from robot.logging import get_logger
 
 if TYPE_CHECKING:
+    from robot.learning.interaction_context import InteractionContext
     from robot.learning.recorder import ExperienceRecorder
+    from robot.speech.tts import TextToSpeech
 
 _log = get_logger("services.executor")
 
@@ -70,8 +79,19 @@ class ActionExecutor:
     executed: list[BehaviorAction] = field(default_factory=list)
     #: Optional experience recorder. When set, mappable actions open a transition
     #: before execution and complete it (with reward + execution outcome) after.
-    #: Left ``None`` when on-device learning is disabled — behaviour is unchanged.
+    #: Left ``None`` when on-device learning is disabled - behaviour is unchanged.
     experience_recorder: ExperienceRecorder | None = None
+    #: Optional TTS engine + audio output. When both are set, ``SpeakAction``
+    #: synthesises and plays the utterance; otherwise it logs and no-ops
+    #: (``execution_success`` stays True - speaking is a best-effort action).
+    tts: TextToSpeech | None = None
+    audio: AudioOutput | None = None
+    #: Optional interaction/teaching-session context. When set, its
+    #: ``current_metadata()`` (interaction_id / teaching_session_id / episode_id)
+    #: is merged into the transition metadata so experiences from a teaching
+    #: interaction are tagged. Minting is driven by the TeachingController, not
+    #: auto-minted per action. ``None`` for ambient (non-teaching) actions.
+    interaction_context: InteractionContext | None = None
 
     async def execute(self, actions: Iterable[BehaviorAction]) -> None:
         for action in actions:
@@ -118,12 +138,18 @@ class ActionExecutor:
             if pending is not None and recorder is not None:
                 try:
                     reward = self._compute_reward(recorder, observation_before, action_index)
+                    metadata: dict[str, Any] = {"behavior_action_name": action.name}
+                    # Tag the transition with the active interaction/teaching
+                    # session when one is in progress. Ambient actions have no
+                    # interaction_context (or it returns empty metadata).
+                    if self.interaction_context is not None:
+                        metadata.update(self.interaction_context.current_metadata())
                     recorder.complete_transition(
                         pending,
                         reward=reward,
                         execution_success=success,
                         execution_failure_reason=reason,
-                        metadata={"behavior_action_name": action.name},
+                        metadata=metadata,
                     )
                 except Exception:
                     _log.exception("executor.learning_complete_failed", action=action.name)
@@ -145,7 +171,7 @@ class ActionExecutor:
         """Compute the transition reward using the recorder's existing reward model.
 
         Falls back to ``recorder.default_reward`` if the typed observations are
-        unavailable or the reward model raises.  No reward value is invented —
+        unavailable or the reward model raises.  No reward value is invented -
         only the repository's existing :class:`RewardModel` components are used.
         """
         if observation_before is None or action_index is None:
@@ -164,7 +190,7 @@ class ActionExecutor:
             _log.exception("executor.learning_reward_failed")
             return recorder.default_reward
 
-    async def _execute_one(self, action: BehaviorAction) -> None:
+    async def _execute_one(self, action: BehaviorAction) -> None:  # noqa: PLR0912
         if isinstance(action, RequestBlinkAction):
             await self.bus.publish(
                 BlinkRequested(left=action.left, right=action.right, speed=action.speed)
@@ -189,6 +215,55 @@ class ActionExecutor:
             )
         elif isinstance(action, RequestSleepAction):
             _log.info("executor.sleep_requested", duration_s=action.duration_s)
+        elif isinstance(action, WaveAction):
+            # Wave the right arm through a short up/center/up/center sequence.
+            # The servo backend enforces the range (raises ServoError out of
+            # range), which the learning lifecycle records as a failed action.
+            servo = self.servo_controller.get("right_arm")
+            for angle in (150.0, 90.0, 150.0, 90.0):
+                await servo.move_to(angle, 0.12)
+                await self.bus.publish(ServoMoved(name="right_arm", angle=angle))
+        elif isinstance(action, MoveArmAction):
+            servo = self.servo_controller.get(action.servo)
+            await servo.move_to(action.angle, action.duration_s)
+            await self.bus.publish(ServoMoved(name=servo.name, angle=action.angle))
+        elif isinstance(action, SpeakAction):
+            # Best-effort speech: if TTS + audio are wired, synthesise and play;
+            # otherwise log and no-op. Speaking is never a hardware failure.
+            if self.tts is not None and self.audio is not None and action.text:
+                buffer = await self.tts.speak(action.text)
+                if buffer is not None and not buffer.is_empty:
+                    await self.audio.play(buffer)
+            else:
+                _log.info(
+                    "executor.speak_noop", reason="tts_or_audio_unavailable", text=action.text
+                )
+        elif isinstance(action, ChangeEmotionAction):
+            try:
+                emotion = EmotionName(action.emotion)
+            except ValueError:
+                _log.warning("executor.invalid_emotion", emotion=action.emotion)
+                return
+            await self.bus.publish(
+                EmotionChanged(
+                    previous=EmotionName.NEUTRAL,
+                    current=emotion,
+                    intensity=max(0.0, min(1.0, action.intensity)),
+                )
+            )
+        elif isinstance(action, SetStateAction):
+            from robot.behavior.state_machine import RobotState
+
+            try:
+                state = RobotState(action.state)
+            except ValueError:
+                _log.warning("executor.invalid_state", state=action.state)
+                return
+            # Like the existing ToolExecutor set_state path, this publishes
+            # StateChanged directly rather than going through the state
+            # machine's legality transition. A warning is logged if the
+            # target would be an illegal transition from the current state.
+            await self.bus.publish(StateChanged(previous=RobotState.IDLE, current=state))
         else:
             _log.warning("executor.unknown_action", action=action.name)
 

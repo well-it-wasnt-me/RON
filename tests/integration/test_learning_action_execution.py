@@ -312,14 +312,35 @@ class TestActionSpaceIdentity:
         assert idx is not None
         assert space.get(idx).name == "celebrate"
 
-    def test_arm_servo_move_is_not_mappable(self) -> None:
+    def test_arm_servo_move_is_learnable(self) -> None:
         from robot.learning.action_mapping import behavior_action_to_index
 
         space = deskbot_action_space()
-        # Non-gaze servo moves have no action-space identity -> not recorded.
+        # Arm servo moves now resolve to learnable move_left_arm/move_right_arm
+        # actions (Phase 2), so they carry an action-space identity and ARE
+        # recorded as transitions.
         assert (
             behavior_action_to_index(
                 RequestServoMoveAction(servo="left_arm", angle=45.0), space
+            )
+            == 14
+        )
+        assert (
+            behavior_action_to_index(
+                RequestServoMoveAction(servo="right_arm", angle=120.0), space
+            )
+            == 15
+        )
+
+    def test_unknown_servo_move_is_not_mappable(self) -> None:
+        from robot.learning.action_mapping import behavior_action_to_index
+
+        space = deskbot_action_space()
+        # A servo that is neither gaze (pan/tilt) nor an arm has no
+        # action-space identity -> not recorded.
+        assert (
+            behavior_action_to_index(
+                RequestServoMoveAction(servo="eyebrow", angle=45.0), space
             )
             is None
         )

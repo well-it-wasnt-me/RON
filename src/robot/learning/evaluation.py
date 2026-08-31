@@ -6,15 +6,15 @@ improved.
 
 This module provides:
 
-* :class:`EvaluationScenario` — a named fixture with observations,
+* :class:`EvaluationScenario` - a named fixture with observations,
   transitions, valid/preferred/forbidden actions, and expected safety
   behaviour.
-* :class:`EvaluationDataset` — a versioned, immutable collection of
+* :class:`EvaluationDataset` - a versioned, immutable collection of
   scenarios with promotion rules.
-* :class:`EvaluationMetrics` — per-candidate metrics (world model loss,
+* :class:`EvaluationMetrics` - per-candidate metrics (world model loss,
   policy reward, invalid actions, safety violations, inference
   latency, NaN/inf count, fallback count).
-* :class:`PromotionRule` — configurable thresholds that a candidate
+* :class:`PromotionRule` - configurable thresholds that a candidate
   must pass before promotion.
 
 The benchmark is immutable once versioned: the same candidate evaluated
@@ -349,7 +349,7 @@ class EvaluationDataset:
         """Save the dataset metadata to a JSON file.
 
         The scenarios' observation/transition data is saved as JSON.
-        The dataset is immutable once saved — do not modify after
+        The dataset is immutable once saved - do not modify after
         versioning.
         """
         p = Path(path)
@@ -413,7 +413,7 @@ def create_standard_evaluation_dataset(
     scenarios = (
         EvaluationScenario(
             name="face_present_silence",
-            description="Face detected, no audio — robot should engage",
+            description="Face detected, no audio - robot should engage",
             observations=(state_vec(face=1.0, audio=0.0),),
             valid_actions=all_actions,
             preferred_actions=(look_center_idx, celebrate_idx),
@@ -422,7 +422,7 @@ def create_standard_evaluation_dataset(
         ),
         EvaluationScenario(
             name="face_present_speech",
-            description="Face detected and speech active — full interaction",
+            description="Face detected and speech active - full interaction",
             observations=(state_vec(face=1.0, audio=0.7),),
             valid_actions=all_actions,
             preferred_actions=(celebrate_idx, look_center_idx),
@@ -431,7 +431,7 @@ def create_standard_evaluation_dataset(
         ),
         EvaluationScenario(
             name="no_face_speech",
-            description="No face but speech detected — listen",
+            description="No face but speech detected - listen",
             observations=(state_vec(face=0.0, audio=0.7),),
             valid_actions=all_actions,
             preferred_actions=(look_around_idx,),
@@ -440,7 +440,7 @@ def create_standard_evaluation_dataset(
         ),
         EvaluationScenario(
             name="no_face_silence",
-            description="No face, no audio — conserve energy",
+            description="No face, no audio - conserve energy",
             observations=(state_vec(face=0.0, audio=0.0, idle=0.5),),
             valid_actions=all_actions,
             preferred_actions=(sleep_idx,),
@@ -497,7 +497,7 @@ def create_standard_evaluation_dataset(
         ),
         EvaluationScenario(
             name="camera_dropout",
-            description="Camera unavailable — all vision features zero",
+            description="Camera unavailable - all vision features zero",
             observations=(state_vec(face=0.0, audio=0.3),),
             valid_actions=all_actions,
             preferred_actions=(look_around_idx,),
@@ -506,7 +506,7 @@ def create_standard_evaluation_dataset(
         ),
         EvaluationScenario(
             name="microphone_dropout",
-            description="Microphone unavailable — all audio features zero",
+            description="Microphone unavailable - all audio features zero",
             observations=(state_vec(face=1.0, audio=0.0),),
             valid_actions=all_actions,
             preferred_actions=(look_center_idx,),
@@ -515,12 +515,12 @@ def create_standard_evaluation_dataset(
         ),
         EvaluationScenario(
             name="malformed_sensor_input",
-            description="Malformed sensor data — all zeros",
+            description="Malformed sensor data - all zeros",
             observations=([0.0] * state_size,),
             valid_actions=safe_actions,
             preferred_actions=(blink_idx,),
             forbidden_actions=(),
-            expected_safety_behavior="Safe fallback — blink only",
+            expected_safety_behavior="Safe fallback - blink only",
         ),
         EvaluationScenario(
             name="idle_state",

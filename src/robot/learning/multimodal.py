@@ -565,11 +565,22 @@ class MultimodalEnvironment:
             "celebrate",
             "sleep",
             "look_around",
+            # Learnable interaction actions (teaching loop). Kept in sync with
+            # deskbot_action_space() so the simulation's action dimensions match
+            # the production space. The step() dynamics below do not model
+            # these yet - they fall through to a neutral 0.0 reward - but the
+            # action-space width is consistent for downstream consumers.
+            "speak",
+            "change_emotion",
+            "set_state",
+            "wave",
+            "move_left_arm",
+            "move_right_arm",
         ]
 
     @property
     def action_size(self) -> int:
-        return 10
+        return 16
 
     def __post_init__(self) -> None:
         self._rng = np.random.default_rng(self.seed)
@@ -593,7 +604,7 @@ class MultimodalEnvironment:
 
         Layout matches the :class:`StateEncoder` layout:
         [emotions(10), state(8), personality(5), servos(10),
-         vision(6), audio(3), flags(4), rewards(5), reserved(40)]
+         vision(6), audio(3), flags(4), rewards(5), teaching_context(14), reserved(30)]
 
         .. warning::
             The index constants below (33, 39, 42, etc.) must mirror the
@@ -706,7 +717,7 @@ class MultimodalEnvironment:
         face = self._face_detected > 0.5
         audio = self._audio_energy > 0.3
         if face:
-            # Face is present — reset idle time (user is interacting).
+            # Face is present - reset idle time (user is interacting).
             self._idle_time = 0.0
             # Face might drift slightly
             self._face_x += noise[2] * 0.05

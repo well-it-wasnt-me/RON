@@ -2,7 +2,7 @@
 
 The adapter subscribes to the event bus and translates meaningful signals
 into preference observations. It does NOT blindly turn every event into a
-preference — only events that carry user-preference information are
+preference - only events that carry user-preference information are
 forwarded to the learner.
 
 Explicit preferences are extracted from speech events using the

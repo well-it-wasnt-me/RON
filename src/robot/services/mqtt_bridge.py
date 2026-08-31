@@ -89,7 +89,7 @@ def _serialise_event(event: object) -> dict[str, Any]:
             else:
                 result[f.name] = value
     except TypeError:
-        # Not a dataclass — fall back to dir()-walking with private attr filter.
+        # Not a dataclass - fall back to dir()-walking with private attr filter.
         for attr in dir(event):
             if attr.startswith("_"):
                 continue

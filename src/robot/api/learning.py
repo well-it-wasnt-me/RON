@@ -44,7 +44,8 @@ async def learning_status(request: Request) -> LearningStatusResponse:
     svc = _get_learning_service(request)
     status = svc.status
     return LearningStatusResponse(
-        enabled=True,
+        enabled=bool(getattr(request.app.state.settings, "learning", None) is not None
+        and request.app.state.settings.learning.enabled),
         total_experiences=status.total_experiences,
         new_experiences_since_train=status.new_experiences_since_train,
         training_cycles_completed=status.training_cycles_completed,

@@ -3,18 +3,18 @@
 Deploy learned models gradually and reversibly.
 
 Features:
-* **Model registry** — every model has metadata (version, schema,
+* **Model registry** - every model has metadata (version, schema,
   encoder version, action space version, git commit, dataset version,
   validation metrics).
-* **Atomic deployment** — never overwrite the active checkpoint
+* **Atomic deployment** - never overwrite the active checkpoint
   directly.  Write a temp file, flush, then atomically replace the
   active pointer.  On startup, validate schema, dimensions, checksum,
   finite weights, action-space version, encoder version.  If invalid,
   load the previous known-good model.
-* **Canary stages** — candidate → offline evaluation → shadow →
-  small action subset → limited active use → full approved deployment.
-* **Rollback** — single operation.  Keep the previous known-good model.
-* **Promotion criteria** — zero safety violations, zero invalid
+* **Canary stages** - candidate -> offline evaluation -> shadow ->
+  small action subset -> limited active use -> full approved deployment.
+* **Rollback** - single operation.  Keep the previous known-good model.
+* **Promotion criteria** - zero safety violations, zero invalid
   actions, no crashes, latency within limit, benchmark pass, real-world
   metrics not worse than baseline.
 """

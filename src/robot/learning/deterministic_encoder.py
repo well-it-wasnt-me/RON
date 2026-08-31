@@ -1,17 +1,17 @@
-"""Deterministic multimodal encoder: same input → identical output, every time.
+"""Deterministic multimodal encoder: same input -> identical output, every time.
 
 The multimodal encoder is a **reproducible representation function**.
 The previous :class:`MultimodalEncoder` mutated its internal history
 buffer on every ``encode()`` call, which means calling ``encode()`` twice
-on the same observation could produce different outputs — fatal for replay,
+on the same observation could produce different outputs - fatal for replay,
 debugging, and evaluation.
 
 This module provides:
 
-* :class:`ObservationContext` — an immutable bundle of the current
+* :class:`ObservationContext` - an immutable bundle of the current
   observation plus a fixed-size history tuple.  History management lives
   **outside** the encoder.
-* :class:`DeterministicMultimodalEncoder` — a stateless encoder that
+* :class:`DeterministicMultimodalEncoder` - a stateless encoder that
   takes an :class:`ObservationContext` and always produces the same
   vector.  No internal mutation.  No trainable parameters.  Vision and
   audio are deterministic feature normalisation; robot state is the
@@ -61,8 +61,8 @@ _log = get_logger("learning.deterministic_encoder")
 DETERMINISTIC_ENCODER_VERSION = 1
 
 # Deterministic sub-encoder output sizes (fixed, no training)
-DETERMINISTIC_VISION_OUTPUT = 6  # = VisionFeatures.to_vector() — normalised
-DETERMINISTIC_AUDIO_OUTPUT = 3  # = AudioFeatures.to_vector() — normalised
+DETERMINISTIC_VISION_OUTPUT = 6  # = VisionFeatures.to_vector() - normalised
+DETERMINISTIC_AUDIO_OUTPUT = 3  # = AudioFeatures.to_vector() - normalised
 
 # Temporal encoder: MLP over flattened history, fixed seed for determinism
 TEMPORAL_HIDDEN_SIZES: list[int] = [64]
@@ -134,11 +134,11 @@ class DeterministicMultimodalEncoder:
 
     The encoder uses:
 
-    * **Robot state**: :class:`StateEncoder` layout (91 elements) —
+    * **Robot state**: :class:`StateEncoder` layout (91 elements) -
       deterministic hand-crafted features.
-    * **Vision**: raw :class:`VisionFeatures` vector (6 elements) —
+    * **Vision**: raw :class:`VisionFeatures` vector (6 elements) -
       deterministic normalisation only.
-    * **Audio**: raw :class:`AudioFeatures` vector (3 elements) —
+    * **Audio**: raw :class:`AudioFeatures` vector (3 elements) -
       deterministic normalisation only.
     * **Temporal context**: a fixed-seed MLP over the flattened history
       window, producing a 64-element latent state.
@@ -154,7 +154,7 @@ class DeterministicMultimodalEncoder:
     _temporal_mlp: MLP = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
-        """Build the fixed-seed temporal MLP (not trained — deterministic init)."""
+        """Build the fixed-seed temporal MLP (not trained - deterministic init)."""
         temporal_input = STATE_SIZE * self.history_length
         self._temporal_mlp = MLP(
             input_size=temporal_input,
@@ -196,10 +196,10 @@ class DeterministicMultimodalEncoder:
         # 1. Robot state (deterministic StateEncoder layout)
         robot_state = context.current.to_vector()
 
-        # 2. Vision (deterministic normalisation — raw features)
+        # 2. Vision (deterministic normalisation - raw features)
         vision_vec = context.current.vision.features.to_vector()
 
-        # 3. Audio (deterministic normalisation — raw features)
+        # 3. Audio (deterministic normalisation - raw features)
         audio_vec = context.current.audio.features.to_vector()
 
         # 4. Temporal context (fixed-seed MLP over flattened history)

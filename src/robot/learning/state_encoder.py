@@ -34,7 +34,13 @@ Vector layout (v0 - 91 elements total):
     [44]     Interaction flag (1.0 if face detected OR speech active)
     [45]     Idle seconds (normalised by 60.0, capped at 1.0)
     [46..50] Recent reward history (5 most recent reward values)
-    [51..90] Reserved for future features (zeros)
+    [51]     Teaching context (0/1 - teaching mode active)
+    [52]     Interaction active (0/1 - inside a teaching interaction/episode)
+    [53]     Person present (0/1 - a face is present)
+    [54..58] Gesture one-hot (none/wave/point/open_hand/other)
+    [59]     Conversation turn count (normalised, capped at 10)
+    [60]     Last action index (normalised by action_space_size)
+    [61..90] Reserved for future features (zeros)
 
 The encoder is **deterministic**: given the same inputs, it always
 produces the same output.  This is critical for training stability.
@@ -57,8 +63,11 @@ _log = get_logger("learning.state_encoder")
 # ---------------------------------------------------------------------------
 
 # Version of the encoding layout.  Increment this when the vector
-# layout changes incompatibly.
-ENCODER_VERSION = 1
+# layout changes incompatibly. v2: the former zero-filled reserved block
+# [51..64) now carries teaching/gesture/conversation context. STATE_SIZE
+# and the 570-dim multimodal vector are unchanged (the slots merely carry
+# meaning instead of zeros).
+ENCODER_VERSION = 2
 
 # Total size of the state vector.
 STATE_SIZE = 91
@@ -80,8 +89,27 @@ _FLAGS_START = 42
 _FLAGS_END = 46  # 4 flags (speaking, listening, interaction, idle_time)
 _REWARD_START = 46
 _REWARD_END = 51  # 5 recent rewards
-_RESERVED_START = 51
-_RESERVED_END = 91  # 40 reserved
+
+# Teaching / conversation / gesture context (carved out of the former
+# 40-slot reserved block). Repurposing these slots does NOT change
+# STATE_SIZE (still 91) or the multimodal 570-dim vector (history is just
+# repeated 91-vectors). ENCODER_VERSION is bumped because the layout
+# semantics of [51..64] change (was zeros, now meaningful).
+_TEACHING_CONTEXT = 51  # 0/1 - teaching mode active
+_INTERACTION_ACTIVE = 52  # 0/1 - inside a teaching interaction/episode
+_PERSON_PRESENT = 53  # 0/1 - a person (face) is present
+_GESTURE_START = 54  # 5-slot gesture one-hot: none/wave/point/open_hand/other
+_GESTURE_END = 59  # exclusive
+_CONVERSATION_TURN = 59  # normalized recent conversation turn count [0,1]
+_LAST_ACTION_INDEX = 60  # last executed action index / action_space_size
+_RESERVED2_START = 61  # remaining reserved (kept zero)
+_RESERVED2_END = 91
+
+# Recognised gesture names, one-hot encoded at [_GESTURE_START .. _GESTURE_END).
+_GESTURE_NAMES: tuple[str, ...] = ("none", "wave", "point", "open_hand", "other")
+# Default action-space size used to normalise ``last_action_index``. Matches
+# the expanded 16-action :func:`deskbot_action_space`.
+_DEFAULT_ACTION_SPACE_SIZE = 16
 
 # Named servo slots in the vector.
 _SERVO_SLOTS: dict[str, int] = {
@@ -299,6 +327,24 @@ class StateEncoder:
     idle_seconds: float = 0.0
     recent_rewards: list[float] = field(default_factory=list)
 
+    # ----- Teaching / conversation / gesture context -----
+    # teaching_context: 0/1 - teaching mode active (NOT a RobotState; the
+    #   flag rides in the repurposed reserved block to keep STATE_SIZE=91
+    #   and the 8-wide state one-hot intact).
+    # interaction_active: 0/1 - inside a teaching interaction/episode.
+    # person_present: 0/1 - a person (face) is currently present.
+    # gesture: one of _GESTURE_NAMES (one-hot encoded).
+    # conversation_turn: count of recent conversation turns (normalised).
+    # last_action_index: index of the last executed action (normalised).
+    # action_space_size: size used to normalise last_action_index.
+    teaching_context: bool = False
+    interaction_active: bool = False
+    person_present: bool = False
+    gesture: str = "none"
+    conversation_turn: int = 0
+    last_action_index: int = -1
+    action_space_size: int = _DEFAULT_ACTION_SPACE_SIZE
+
     def encode(self) -> list[float]:
         """Produce the fixed-size state vector.
 
@@ -315,6 +361,7 @@ class StateEncoder:
         self._encode_audio(vec)
         self._encode_flags(vec)
         self._encode_rewards(vec)
+        self._encode_teaching_context(vec)
         # Sanity: no NaN or inf
         for i, v in enumerate(vec):
             if math.isnan(v) or math.isinf(v):
@@ -396,6 +443,33 @@ class StateEncoder:
             else:
                 vec[_REWARD_START + i] = 0.0
 
+    def _encode_teaching_context(self, vec: list[float]) -> None:
+        """Encode teaching/conversation/gesture context (slots [51..61]).
+
+        These slots were previously zero-filled reserved space. They now
+        carry the human-teaching context so the policy can condition on
+        whether a teaching interaction is active, whether a person is
+        present, and which gesture was observed - without changing
+        ``STATE_SIZE`` or the multimodal 570-dim vector.
+        """
+        vec[_TEACHING_CONTEXT] = 1.0 if self.teaching_context else 0.0
+        vec[_INTERACTION_ACTIVE] = 1.0 if self.interaction_active else 0.0
+        vec[_PERSON_PRESENT] = 1.0 if self.person_present else 0.0
+        # Gesture one-hot: default to "none" for an unknown gesture name.
+        try:
+            gidx = _GESTURE_NAMES.index(self.gesture)
+        except ValueError:
+            gidx = 0
+        vec[_GESTURE_START + gidx] = 1.0
+        # Normalised conversation turn count (cap at 10 turns -> 1.0).
+        vec[_CONVERSATION_TURN] = min(self.conversation_turn / 10.0, 1.0)
+        # Last action index normalised to [0, 1]; -1 (none) -> 0.0.
+        if self.last_action_index < 0:
+            vec[_LAST_ACTION_INDEX] = 0.0
+        else:
+            size = max(self.action_space_size, 1)
+            vec[_LAST_ACTION_INDEX] = min(self.last_action_index / size, 1.0)
+
     # ----- Updaters (called by event handlers or simulation) -----
 
     def update_emotion(self, emotion: EmotionName, intensity: float = 1.0) -> None:
@@ -443,6 +517,47 @@ class StateEncoder:
         if len(self.recent_rewards) > 5:
             self.recent_rewards = self.recent_rewards[-5:]
 
+    # ----- Teaching / conversation / gesture updaters -----
+
+    def update_teaching_context(self, active: bool) -> None:
+        """Set whether teaching mode is active."""
+        self.teaching_context = active
+
+    def update_interaction_active(self, active: bool) -> None:
+        """Set whether a teaching interaction/episode is in progress."""
+        self.interaction_active = active
+
+    def update_person_present(self, present: bool) -> None:
+        """Set whether a person (face) is present."""
+        self.person_present = present
+
+    def update_gesture(self, gesture: str) -> None:
+        """Set the observed gesture name.
+
+        Unknown names are stored as-is but encode to the ``"none"`` slot.
+        """
+        self.gesture = gesture
+
+    def update_conversation_turn(self, turn: int) -> None:
+        """Set the recent conversation turn count."""
+        self.conversation_turn = max(0, int(turn))
+
+    def update_last_action(self, action_index: int, action_space_size: int | None = None) -> None:
+        """Set the last executed action index (and optional action-space size)."""
+        self.last_action_index = int(action_index)
+        if action_space_size is not None and action_space_size > 0:
+            self.action_space_size = int(action_space_size)
+
+    def reset_teaching_context(self) -> None:
+        """Clear only the teaching/gesture context (state stays)."""
+        self.teaching_context = False
+        self.interaction_active = False
+        self.person_present = False
+        self.gesture = "none"
+        self.conversation_turn = 0
+        self.last_action_index = -1
+        self.action_space_size = _DEFAULT_ACTION_SPACE_SIZE
+
     def reset(self) -> None:
         """Reset all context to defaults."""
         self.emotions.clear()
@@ -459,6 +574,7 @@ class StateEncoder:
         self.audio = AudioFeatures.no_audio()
         self.idle_seconds = 0.0
         self.recent_rewards.clear()
+        self.reset_teaching_context()
 
 
 # ---------------------------------------------------------------------------
@@ -486,7 +602,13 @@ def state_layout() -> dict[str, tuple[int, int]]:
         "audio": (_AUDIO_START, _AUDIO_END),
         "flags": (_FLAGS_START, _FLAGS_END),
         "rewards": (_REWARD_START, _REWARD_END),
-        "reserved": (_RESERVED_START, _RESERVED_END),
+        "teaching_context": (_TEACHING_CONTEXT, _TEACHING_CONTEXT + 1),
+        "interaction_active": (_INTERACTION_ACTIVE, _INTERACTION_ACTIVE + 1),
+        "person_present": (_PERSON_PRESENT, _PERSON_PRESENT + 1),
+        "gesture": (_GESTURE_START, _GESTURE_END),
+        "conversation_turn": (_CONVERSATION_TURN, _CONVERSATION_TURN + 1),
+        "last_action_index": (_LAST_ACTION_INDEX, _LAST_ACTION_INDEX + 1),
+        "reserved": (_RESERVED2_START, _RESERVED2_END),
     }
 
 

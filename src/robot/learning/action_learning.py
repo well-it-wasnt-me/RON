@@ -167,6 +167,46 @@ def deskbot_action_space() -> ActionSpace:
         action_type="look_around",
         params={"points": 3},
     )
+    # ----- Learnable interaction actions (teaching loop) -----
+    # These extend the action space from 10 -> 16. They map to real
+    # BehaviourActions executed through the ActionExecutor, so experiences
+    # from them carry a meaningful action identity for the Q-policy.
+    space.register(
+        "speak",
+        description="Speak a short phrase via TTS",
+        action_type="speak",
+        params={"text": "hello"},
+    )
+    space.register(
+        "change_emotion",
+        description="Change the facial emotion",
+        action_type="change_emotion",
+        params={"emotion": "happy", "intensity": 1.0},
+    )
+    space.register(
+        "set_state",
+        description="Set the robot behaviour state directly",
+        action_type="set_state",
+        params={"state": "idle"},
+    )
+    space.register(
+        "wave",
+        description="Wave the right arm",
+        action_type="wave",
+        params={},
+    )
+    space.register(
+        "move_left_arm",
+        description="Move the left arm servo to an angle",
+        action_type="move_arm",
+        params={"servo": "left_arm", "angle": 90.0},
+    )
+    space.register(
+        "move_right_arm",
+        description="Move the right arm servo to an angle",
+        action_type="move_arm",
+        params={"servo": "right_arm", "angle": 90.0},
+    )
     return space
 
 

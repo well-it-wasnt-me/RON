@@ -40,6 +40,7 @@ from robot.api.routes import commands, conversations, health, state
 from robot.api.settings import router as settings_router
 from robot.api.state_bridge import StateBridge
 from robot.api.system import router as system_router
+from robot.api.teaching import router as teaching_router
 from robot.api.ws import router as ws_router
 from robot.config import AppSettings, load_settings
 
@@ -90,6 +91,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     app.include_router(calibration_router, prefix="/api/v1", tags=["calibration"])
     app.include_router(preferences_router, prefix="/api/v1", tags=["preferences"])
     app.include_router(learning_router, prefix="/api/v1", tags=["learning"])
+    app.include_router(teaching_router, prefix="/api/v1", tags=["teaching"])
     app.include_router(config_validation_router, prefix="/api/v1", tags=["config"])
     app.include_router(performance_router, prefix="/api/v1", tags=["performance"])
     app.include_router(settings_router, prefix="/api/v1", tags=["settings"])
@@ -106,6 +108,8 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     _mount_static(app, "/settings", _PACKAGE_ROOT / "web" / "settings", "settings")
     # Serve the learning dashboard from web/learning/ if it exists.
     _mount_static(app, "/learning", _PACKAGE_ROOT / "web" / "learning", "learning")
+    # Serve the teaching dashboard from web/teaching/ if it exists.
+    _mount_static(app, "/teaching", _PACKAGE_ROOT / "web" / "teaching", "teaching")
 
     # Serve the main web dashboard from web/ if it exists.
     _mount_static(app, "", _PACKAGE_ROOT / "web", "web")
