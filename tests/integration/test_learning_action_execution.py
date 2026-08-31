@@ -124,8 +124,10 @@ class TestRealActionCreatesExperience:
         self, bus: InMemoryEventBus, executor: ActionExecutor, tmp_path: Path
     ) -> None:
         service = _make_service(bus=bus, tmp_path=tmp_path)
-        executor.experience_recorder = service.recorder
-        service.recorder.attach()
+        recorder = service.recorder
+        assert recorder is not None
+        executor.experience_recorder = recorder
+        recorder.attach()
         try:
             assert service.status.total_experiences == 0
             await executor.execute_one(CelebrateAction(intensity=1.0))
@@ -136,7 +138,7 @@ class TestRealActionCreatesExperience:
             assert len(service.replay_buffer) == 1
             assert service.status.new_experiences_since_train == 1
         finally:
-            service.recorder.detach()
+            recorder.detach()
 
 
 class TestObservationAloneCreatesNoExperience:
@@ -146,8 +148,10 @@ class TestObservationAloneCreatesNoExperience:
         self, bus: InMemoryEventBus, executor: ActionExecutor, tmp_path: Path
     ) -> None:
         service = _make_service(bus=bus, tmp_path=tmp_path)
-        executor.experience_recorder = service.recorder
-        service.recorder.attach()
+        recorder = service.recorder
+        assert recorder is not None
+        executor.experience_recorder = recorder
+        recorder.attach()
         try:
             await bus.publish(FaceDetected(x=0.4, y=0.3, confidence=0.9))
             await bus.publish(SpeechRecognized(text="hello there"))
@@ -162,7 +166,7 @@ class TestObservationAloneCreatesNoExperience:
             assert len(service.working_memory) == 0
             assert len(service.replay_buffer) == 0
         finally:
-            service.recorder.detach()
+            recorder.detach()
 
 
 class TestNextStateIsPostActionState:
@@ -172,8 +176,10 @@ class TestNextStateIsPostActionState:
         self, bus: InMemoryEventBus, executor: ActionExecutor, tmp_path: Path
     ) -> None:
         service = _make_service(bus=bus, tmp_path=tmp_path)
-        executor.experience_recorder = service.recorder
-        service.recorder.attach()
+        recorder = service.recorder
+        assert recorder is not None
+        executor.experience_recorder = recorder
+        recorder.attach()
         try:
             # A CelebrateAction publishes EmotionChanged(HAPPY); the recorder's
             # observation handler updates the encoder, so the post-action state
@@ -186,7 +192,7 @@ class TestNextStateIsPostActionState:
             assert exp.state[_HAPPY_INDEX] == 0.0
             assert exp.next_state[_HAPPY_INDEX] > 0.0
         finally:
-            service.recorder.detach()
+            recorder.detach()
 
 
 class TestFailedHardwareAction:
@@ -196,8 +202,10 @@ class TestFailedHardwareAction:
         self, bus: InMemoryEventBus, executor: ActionExecutor, tmp_path: Path
     ) -> None:
         service = _make_service(bus=bus, tmp_path=tmp_path)
-        executor.experience_recorder = service.recorder
-        service.recorder.attach()
+        recorder = service.recorder
+        assert recorder is not None
+        executor.experience_recorder = recorder
+        recorder.attach()
         try:
             # pan servo range is [-90, 90]; 200 is out of range -> ServoError.
             with pytest.raises(ServoError):
@@ -217,7 +225,7 @@ class TestFailedHardwareAction:
             ok_exp = service.working_memory.recent(1)[-1]
             assert ok_exp.metadata["execution_success"] is True
         finally:
-            service.recorder.detach()
+            recorder.detach()
 
 
 class TestTrainingThresholdFromRealActions:
@@ -227,8 +235,10 @@ class TestTrainingThresholdFromRealActions:
         self, bus: InMemoryEventBus, executor: ActionExecutor, tmp_path: Path
     ) -> None:
         service = _make_service(bus=bus, tmp_path=tmp_path, min_experiences_for_training=8)
-        executor.experience_recorder = service.recorder
-        service.recorder.attach()
+        recorder = service.recorder
+        assert recorder is not None
+        executor.experience_recorder = recorder
+        recorder.attach()
         try:
             # Drive a variety of real actions through the runtime path.
             actions = [
@@ -262,7 +272,7 @@ class TestTrainingThresholdFromRealActions:
             assert service.status.training_cycles_completed >= 1
             assert math.isfinite(service.status.current_model_loss)
         finally:
-            service.recorder.detach()
+            recorder.detach()
 
 
 class TestMultimodalStaysFunctional:
@@ -272,8 +282,10 @@ class TestMultimodalStaysFunctional:
         self, bus: InMemoryEventBus, executor: ActionExecutor, tmp_path: Path
     ) -> None:
         service = _make_service(bus=bus, tmp_path=tmp_path, use_multimodal=True)
-        executor.experience_recorder = service.recorder
-        service.recorder.attach()
+        recorder = service.recorder
+        assert recorder is not None
+        executor.experience_recorder = recorder
+        recorder.attach()
         try:
             assert service.status.multimodal_state_size == 570
             assert service.status.use_multimodal is True
@@ -286,7 +298,7 @@ class TestMultimodalStaysFunctional:
             assert len(exp.next_state) == 570
             assert exp.state != exp.next_state
         finally:
-            service.recorder.detach()
+            recorder.detach()
 
 
 class TestActionSpaceIdentity:

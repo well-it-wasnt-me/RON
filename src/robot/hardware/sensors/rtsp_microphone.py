@@ -466,7 +466,7 @@ class RtspMicrophone(Microphone):
         else:
             raise RuntimeError(f"unexpected RTSP audio ndarray shape: {array.shape!r}")
 
-        return samples.astype("<i2", copy=False).tobytes()
+        return samples.astype("<i2", copy=False).tobytes()  # type: ignore[no-any-return]
 
     def _frame_samples(self) -> int:
         """Return the number of output samples in each chunk."""
