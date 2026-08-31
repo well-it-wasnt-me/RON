@@ -4,13 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DeskBot</title>
+<link rel="stylesheet" href="/assets/css/app.css">
 <style>
-:root{--bg:#0f1117;--bg2:#161821;--card:#1a1d27;--border:#2a2d3a;--border2:#353846;--text:#e4e6ed;--muted:#8b8fa3;--muted2:#6b6f82;--accent:#6c63ff;--accent2:#00d4aa;--red:#ff5757;--orange:#ff9f43;--blue:#4fc3f7;--yellow:#ffd93d;--green:#6bcf7f;--sidebar-w:220px}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%}
-body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);display:flex;overflow:hidden}
-a{color:var(--accent);text-decoration:none}
-
+:root{--sidebar-w:220px}
+body{display:flex;overflow:hidden}
 /* Sidebar */
 #sidebar{width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;position:fixed;top:0;left:0;bottom:0;z-index:100;transition:transform .25s ease}
 #sidebar .logo{padding:1.2rem 1rem;font-size:1.1rem;font-weight:700;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.5rem}
@@ -22,7 +19,6 @@ a{color:var(--accent);text-decoration:none}
 #sidebar nav a .nav-icon{font-size:1.1rem;width:1.5rem;text-align:center}
 #sidebar nav .nav-sep{border-top:1px solid var(--border);margin:.5rem 1rem}
 #sidebar .sidebar-footer{padding:.75rem 1rem;border-top:1px solid var(--border);font-size:.75rem;color:var(--muted2)}
-
 /* Main */
 #main{flex:1;margin-left:var(--sidebar-w);display:flex;flex-direction:column;height:100vh;overflow:hidden}
 #topbar{padding:.75rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--bg2);flex-shrink:0}
@@ -32,9 +28,7 @@ a{color:var(--accent);text-decoration:none}
 #conn-status.online .dot{background:var(--green);box-shadow:0 0 6px var(--green)}
 #conn-status.offline .dot{background:var(--red)}
 #conn-status.reconnecting .dot{background:var(--yellow);animation:pulse 1s infinite}
-@keyframes pulse{50%{opacity:.4}}
 #content{flex:1;overflow-y:auto;padding:1.5rem;max-width:1200px;width:100%}
-
 /* Mobile toggle */
 #menu-toggle{display:none;background:var(--border);border:none;color:var(--text);padding:.4rem .6rem;border-radius:.4rem;font-size:1.2rem;cursor:pointer}
 #menu-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99}
@@ -45,29 +39,11 @@ a{color:var(--accent);text-decoration:none}
 #menu-toggle{display:block}
 #menu-overlay.show{display:block}
 }
-
-/* Cards */
-.card{background:var(--card);border:1px solid var(--border);border-radius:.5rem;padding:1rem;margin-bottom:1rem}
-.card-title{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.75rem;font-weight:600}
-.card-row{display:flex;justify-content:space-between;align-items:center;padding:.3rem 0;font-size:.85rem}
-.card-row .label{color:var(--muted)}
-.card-row .value{font-weight:600}
-.grid{display:grid;gap:1rem;grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
-.mono{font-family:'SF Mono',Consolas,monospace;font-size:.82rem}
-.badge{display:inline-flex;align-items:center;gap:.3rem;padding:.15rem .6rem;border-radius:9999px;font-size:.72rem;font-weight:600}
-.badge.ok{background:rgba(0,212,170,.12);color:var(--accent2)}
-.badge.err{background:rgba(255,87,87,.12);color:var(--red)}
-.badge.warn{background:rgba(255,217,61,.12);color:var(--yellow)}
-.badge.mock{background:rgba(255,149,71,.12);color:var(--orange)}
-.badge.neutral{background:rgba(139,143,163,.12);color:var(--muted)}
-
 /* Logs */
 #log-controls{display:flex;gap:.5rem;margin-bottom:.75rem;flex-wrap:wrap;align-items:center}
 #log-controls select,#log-controls input{background:var(--bg);border:1px solid var(--border);border-radius:.4rem;padding:.4rem .6rem;color:var(--text);font-size:.82rem}
 #log-controls input{flex:1;min-width:150px}
-#log-controls button{background:var(--border);border:none;color:var(--text);padding:.4rem .8rem;border-radius:.4rem;font-size:.82rem;cursor:pointer}
-#log-controls button:hover{background:var(--border2)}
-#log-list{max-height:calc(100vh - 250px);overflow-y:auto;font-family:'SF Mono',Consolas,monospace;font-size:.78rem;line-height:1.6}
+#log-list{max-height:calc(100vh - 250px);overflow-y:auto;font-family:ui-monospace,'SF Mono',Consolas,monospace;font-size:.78rem;line-height:1.6}
 .log-entry{display:grid;grid-template-columns:90px 60px 120px 1fr;gap:.5rem;padding:.15rem .5rem;border-bottom:1px solid rgba(42,45,58,.3);white-space:nowrap}
 .log-entry .l-time{color:var(--muted2)}
 .log-entry .l-level{font-weight:600}
@@ -79,9 +55,7 @@ a{color:var(--accent);text-decoration:none}
 .log-entry .l-event{color:var(--text);overflow:hidden;text-overflow:ellipsis}
 .log-entry .l-event .l-data{color:var(--muted)}
 .log-entry.raw{white-space:pre-wrap;word-break:break-all}
-.loading{color:var(--muted);text-align:center;padding:2rem}
-
-/* Config */
+/* Config viewer */
 .config-group{margin-bottom:1.5rem}
 .config-group h3{font-size:.85rem;color:var(--accent);margin-bottom:.5rem;padding-bottom:.3rem;border-bottom:1px solid var(--border)}
 .config-field{display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;font-size:.85rem}
@@ -89,24 +63,12 @@ a{color:var(--accent);text-decoration:none}
 .config-field .cf-desc{color:var(--muted);font-size:.75rem;margin-top:.1rem}
 .config-field .cf-value{color:var(--accent2);font-family:monospace;font-size:.82rem;text-align:right}
 .config-field .cf-value.masked{color:var(--muted2)}
-
-/* Controls */
-button.action{background:var(--accent);color:#fff;border:none;border-radius:.4rem;padding:.5rem 1rem;font-size:.85rem;cursor:pointer;transition:opacity .2s}
-button.action:hover{opacity:.85}
-button.action:disabled{opacity:.4;cursor:not-allowed}
-button.action.danger{background:var(--red)}
-button.action.success{background:var(--accent2);color:#000}
-.row{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:.5rem}
-input[type="text"],input[type="number"],select,textarea{background:var(--bg);border:1px solid var(--border);border-radius:.4rem;padding:.4rem .6rem;color:var(--text);font-size:.85rem;font-family:inherit}
-textarea{min-height:40px;resize:vertical;width:100%}
-
 /* Event log (dashboard) */
 #event-feed{max-height:200px;overflow-y:auto}
 .ev-entry{display:flex;gap:.5rem;padding:.2rem 0;font-size:.78rem;border-bottom:1px solid rgba(42,45,58,.3)}
 .ev-entry .ev-time{color:var(--muted2);min-width:65px}
 .ev-entry .ev-type{color:var(--accent);font-weight:600;min-width:100px}
 .ev-entry .ev-data{color:var(--muted)}
-
 .state-display{font-size:1.5rem;font-weight:700;color:var(--accent)}
 .state-display .emotion{font-size:1rem;color:var(--muted);font-weight:400}
 </style>
@@ -120,13 +82,15 @@ textarea{min-height:40px;resize:vertical;width:100%}
     <a href="#/logs"><span class="nav-icon">&#9776;</span> Logs</a>
     <a href="#/audio"><span class="nav-icon">&#9835;</span> Audio</a>
     <a href="#/bluetooth"><span class="nav-icon">&#128225;</span> Bluetooth</a>
-    <a href="#/config"><span class="nav-icon">&#9881;</span> Config</a>
+    <a href="#/config"><span class="nav-icon">&#9881;</span> Config Viewer</a>
     <a href="#/system"><span class="nav-icon">&#128187;</span> System</a>
     <div class="nav-sep"></div>
     <a href="#/controls"><span class="nav-icon">&#127919;</span> Controls</a>
-    <a href="/learning" target="_blank"><span class="nav-icon">&#129504;</span> Local Brain</a>
-    <a href="/calibration" target="_blank"><span class="nav-icon">&#9881;</span> Calibration</a>
-    <a href="/settings" target="_blank"><span class="nav-icon">&#128295;</span> Hardware Test</a>
+    <a href="/learning"><span class="nav-icon">&#129504;</span> Local Brain</a>
+    <a href="/teaching"><span class="nav-icon">&#128218;</span> Teaching</a>
+    <a href="/calibration"><span class="nav-icon">&#9881;</span> Calibration</a>
+    <a href="/config"><span class="nav-icon">&#128221;</span> Config Validator</a>
+    <a href="/settings"><span class="nav-icon">&#128295;</span> Hardware Test</a>
   </nav>
   <div class="sidebar-footer">DeskBot</div>
 </aside>
@@ -141,6 +105,7 @@ textarea{min-height:40px;resize:vertical;width:100%}
   <div id="content"></div>
 </div>
 
+<script src="/assets/js/app.js"></script>
 <script>
 const API = '/api/v1';
 const $content = document.getElementById('content');
@@ -158,21 +123,6 @@ const PAGES = {
   '/system': { title: 'System', render: renderSystem },
   '/controls': { title: 'Robot Controls', render: renderControls },
 };
-
-// ---- Utils ----
-async function api(path) {
-  try { const r = await fetch(API + path); if (!r.ok) return null; return await r.json(); }
-  catch(e) { return null; }
-}
-async function apiPost(path, body) {
-  try { const r = await fetch(API + path, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body||{})}); return await r.json(); }
-  catch(e) { return null; }
-}
-function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function badge(text, cls) { return `<span class="badge ${cls||'neutral'}">${esc(text)}</span>`; }
-function fmtUptime(s) { if(!s) return '-'; if(s<60) return Math.round(s)+'s'; const m=Math.floor(s/60); if(m<60) return m+'m'; const h=Math.floor(s/3600); if(h<24) return h+'h '+Math.floor((s%3600)/60)+'m'; return Math.floor(h/24)+'d '+(h%24)+'h'; }
-function card(title, inner) { return `<div class="card"><div class="card-title">${title}</div>${inner}</div>`; }
-function infoRow(label, value) { return `<div class="card-row"><span class="label">${esc(label)}</span><span class="value">${value}</span></div>`; }
 
 // ---- Routing ----
 function route() {
@@ -206,7 +156,6 @@ let _eventFeed = [];
 function handleEvent(msg) {
   _eventFeed.unshift({type: msg.type, data: msg.data, time: new Date().toLocaleTimeString()});
   if (_eventFeed.length > 50) _eventFeed.pop();
-  // Update state display if on dashboard
   const $state = document.getElementById('robot-state');
   const $emotion = document.getElementById('robot-emotion');
   if ($state && msg.type === 'StateChanged') $state.textContent = (msg.data.current||'-').toUpperCase();
@@ -222,10 +171,10 @@ function handleEvent(msg) {
 // ---- Pages ----
 async function renderDashboard() {
   const [sys, settings, state, health] = await Promise.all([
-    api('/system/info'), api('/settings/info'), api('/state'), api('/health')
+    apiGet(API + '/system/info', {safe:true}), apiGet(API + '/settings/info', {safe:true}),
+    apiGet(API + '/state', {safe:true}), apiGet(API + '/health', {safe:true})
   ]);
   let html = '<div class="grid">';
-  // System
   if (sys) {
     const statusBadge = (health && health.status === 'degraded') ? badge('Degraded','warn') : badge('Online','ok');
     html += card('System', `
@@ -236,14 +185,12 @@ async function renderDashboard() {
       ${infoRow('Environment', esc(sys.env))}
     `);
   }
-  // Robot state
   if (state) {
     html += card('Robot', `
       <div class="state-display" id="robot-state">${esc((state.state||'-').toUpperCase())}</div>
       <div class="state-display emotion" id="robot-emotion">-</div>
     `);
   }
-  // Audio
   if (settings && settings.audio) {
     const a = settings.audio;
     html += card('Audio', `
@@ -253,7 +200,6 @@ async function renderDashboard() {
       ${infoRow('Channels', a.channels || '-')}
     `);
   }
-  // Camera
   if (settings && settings.camera) {
     const c = settings.camera;
     html += card('Camera', `
@@ -261,7 +207,6 @@ async function renderDashboard() {
       ${infoRow('Resolution', c.width ? `${c.width}×${c.height}` : '-')}
     `);
   }
-  // Microphone
   if (settings && settings.microphone) {
     const m = settings.microphone;
     html += card('Microphone', `
@@ -269,14 +214,12 @@ async function renderDashboard() {
       ${infoRow('Sample Rate', m.sample_rate ? m.sample_rate + ' Hz' : '-')}
     `);
   }
-  // Degradation
   if (health && health.status === 'degraded') {
     const comps = health.components || {};
     const compHtml = Object.entries(comps).map(([k,v]) => infoRow(k, badge(v.status, v.status==='ok'?'ok':v.status==='degraded'?'warn':'err'))).join('');
     html += card('Component Health', compHtml || '<div class="loading">No details</div>');
   }
   html += '</div>';
-  // Recent events
   html += card('Recent Events', '<div id="event-feed">' + (_eventFeed.length ? _eventFeed.slice(0,20).map(e => `<div class="ev-entry"><span class="ev-time">${e.time}</span><span class="ev-type">${e.type}</span><span class="ev-data">${esc(JSON.stringify(e.data)).slice(0,80)}</span></div>`).join('') : '<div class="loading">No events yet</div>') + '</div>');
   $content.innerHTML = html;
 }
@@ -301,7 +244,7 @@ async function renderLogs() {
     if (level) params.set('level', level);
     if (search) params.set('search', search);
     params.set('limit', '200');
-    const data = await api('/system/logs?' + params.toString());
+    const data = await apiGet(API + '/system/logs?' + params.toString(), {safe:true});
     const $list = document.getElementById('log-list');
     if (!data || !data.entries) { $list.innerHTML = '<div class="loading">No logs available</div>'; return; }
     if (data.entries.length === 0) { $list.innerHTML = '<div class="loading">No matching entries</div>'; return; }
@@ -319,7 +262,7 @@ async function renderLogs() {
   document.getElementById('log-search').addEventListener('input', loadLogs);
   document.getElementById('log-raw').addEventListener('change', loadLogs);
   document.getElementById('log-clear').addEventListener('click', async () => {
-    await fetch(API + '/system/logs', {method:'DELETE'});
+    await apiDelete(API + '/system/logs');
     loadLogs();
   });
   loadLogs();
@@ -327,7 +270,7 @@ async function renderLogs() {
 
 async function renderAudio() {
   const [info, audioInfo, conv] = await Promise.all([
-    api('/settings/info'), api('/settings/audio/info'), api('/conversation')
+    apiGet(API + '/settings/info', {safe:true}), apiGet(API + '/settings/audio/info', {safe:true}), apiGet(API + '/conversation', {safe:true})
   ]);
   let html = '<div class="grid">';
   if (conv) {
@@ -347,8 +290,6 @@ async function renderAudio() {
     `);
   }
   html += '</div>';
-
-  // Test controls
   html += card('Audio Test', `
     <div class="row">
       <label>Frequency: <input type="number" id="aud-freq" value="440" min="20" max="20000" style="width:80px"> Hz</label>
@@ -368,19 +309,19 @@ async function renderAudio() {
     const freq = parseFloat(document.getElementById('aud-freq').value) || 440;
     const dur = parseFloat(document.getElementById('aud-dur').value) || 1;
     const vol = parseInt(document.getElementById('aud-vol').value) / 100;
-    await apiPost('/settings/audio/tone', {frequency_hz: freq, duration_s: dur, volume: vol});
+    await apiPost(API + '/settings/audio/tone', {frequency_hz: freq, duration_s: dur, volume: vol}, {safe:true});
   });
   document.getElementById('aud-stop-btn').addEventListener('click', async () => {
-    await apiPost('/settings/audio/stop');
+    await apiPost(API + '/settings/audio/stop', {}, {safe:true});
   });
   document.getElementById('aud-tts-btn').addEventListener('click', async () => {
     const text = document.getElementById('aud-tts-text').value.trim();
-    if (text) await apiPost('/settings/tts/test', {text, direct: true});
+    if (text) await apiPost(API + '/settings/tts/test', {text, direct: true}, {safe:true});
   });
 }
 
 async function renderBluetooth() {
-  const bt = await api('/system/bluetooth');
+  const bt = await apiGet(API + '/system/bluetooth', {safe:true});
   if (!bt) { $content.innerHTML = card('Bluetooth', '<div class="loading">No data available</div>'); return; }
   let html = '<div class="grid">';
   if (!bt.available) {
@@ -403,20 +344,18 @@ async function renderBluetooth() {
       ${infoRow('Sample Rate', bt.sample_rate ? bt.sample_rate + ' Hz' : '-')}
       ${infoRow('Channels', bt.channels || '-')}
     `);
-    html += card('Actions', `
-      <button class="action" id="bt-test-btn">Play Test Tone</button>
-    `);
+    html += card('Actions', `<button class="action" id="bt-test-btn">Play Test Tone</button>`);
   }
   html += '</div>';
   $content.innerHTML = html;
   const btBtn = document.getElementById('bt-test-btn');
   if (btBtn) btBtn.addEventListener('click', async () => {
-    await apiPost('/settings/audio/tone', {frequency_hz: 440, duration_s: 1, volume: 0.5});
+    await apiPost(API + '/settings/audio/tone', {frequency_hz: 440, duration_s: 1, volume: 0.5}, {safe:true});
   });
 }
 
 async function renderConfig() {
-  const cfg = await api('/config');
+  const cfg = await apiGet(API + '/config', {safe:true});
   if (!cfg) { $content.innerHTML = card('Configuration', '<div class="loading">No data available</div>'); return; }
   const groups = {};
   for (const [key, value] of Object.entries(cfg)) {
@@ -441,7 +380,7 @@ function _configGroup(key) {
   if (key.startsWith('audio') || key.startsWith('microphone') || key.startsWith('camera') || key.startsWith('sounds')) return 'Audio / Hardware';
   if (key.startsWith('display') || key.startsWith('servos') || key.startsWith('face')) return 'Robot / Display';
   if (key.startsWith('api') || key.startsWith('mqtt') || key.startsWith('home_assistant')) return 'Network / Integration';
-  if (key.startsWith('perception') || key.startsWith('memory') || key.startsWith('preferences') || key.startsWith('conversation') || key.startsWith('tools') || key.startsWith('plugins') || key.startsWith('performance') || key.startsWith('learning')) return 'AI / Behavior';
+  if (key.startsWith('perception') || key.startsWith('memory') || key.startsWith('preferences') || key.startsWith('conversation') || key.startsWith('tools') || key.startsWith('plugins') || key.startsWith('performance') || key.startsWith('learning') || key.startsWith('teaching')) return 'AI / Behavior';
   return 'Other';
 }
 function _formatConfigVal(key, value) {
@@ -456,7 +395,7 @@ function _formatConfigVal(key, value) {
 }
 
 async function renderSystem() {
-  const sys = await api('/system/info');
+  const sys = await apiGet(API + '/system/info', {safe:true});
   if (!sys) { $content.innerHTML = card('System', '<div class="loading">No data available</div>'); return; }
   let html = '<div class="grid">';
   html += card('System', `
@@ -486,7 +425,7 @@ async function renderSystem() {
 }
 
 async function renderControls() {
-  const state = await api('/state');
+  const state = await apiGet(API + '/state', {safe:true});
   let stateHtml = state ? `<div class="state-display">${esc((state.state||'-').toUpperCase())}</div>` : '<div class="loading">-</div>';
   let html = '<div class="grid">';
   html += card('Robot State', stateHtml + `
@@ -520,10 +459,10 @@ async function renderControls() {
   `);
   html += '</div>';
   $content.innerHTML = html;
-  document.querySelectorAll('[data-state]').forEach(b => b.addEventListener('click', () => apiPost('/state', {state: b.dataset.state})));
-  document.getElementById('emo-btn').addEventListener('click', () => apiPost('/emotion', {emotion: document.getElementById('emo-select').value, intensity: 1.0}));
-  document.getElementById('speak-btn').addEventListener('click', () => { const t = document.getElementById('speak-text').value.trim(); if(t) apiPost('/speak', {text: t}); });
-  document.getElementById('speak-direct-btn').addEventListener('click', () => { const t = document.getElementById('speak-text').value.trim(); if(t) apiPost('/speak-direct', {text: t}); });
+  document.querySelectorAll('[data-state]').forEach(b => b.addEventListener('click', () => apiPost(API + '/state', {state: b.dataset.state}, {safe:true})));
+  document.getElementById('emo-btn').addEventListener('click', () => apiPost(API + '/emotion', {emotion: document.getElementById('emo-select').value, intensity: 1.0}, {safe:true}));
+  document.getElementById('speak-btn').addEventListener('click', () => { const t = document.getElementById('speak-text').value.trim(); if(t) apiPost(API + '/speak', {text: t}, {safe:true}); });
+  document.getElementById('speak-direct-btn').addEventListener('click', () => { const t = document.getElementById('speak-text').value.trim(); if(t) apiPost(API + '/speak-direct', {text: t}, {safe:true}); });
 }
 
 // ---- Mobile sidebar ----
@@ -539,7 +478,6 @@ document.getElementById('menu-overlay').addEventListener('click', () => {
 // ---- Init ----
 route();
 connectWS();
-// Auto-refresh dashboard
 setInterval(() => { if (location.hash === '' || location.hash === '#/') renderDashboard(); }, 5000);
 </script>
 </body>

@@ -4,80 +4,28 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DeskBot Teaching - Human Teaching Loop</title>
+<link rel="stylesheet" href="/assets/css/app.css">
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#0f1117;--card:#1a1d27;--border:#2a2d3a;--text:#e4e6ed;--muted:#8b8fa3;--accent:#6c63ff;--accent2:#00d4aa;--red:#ff5757;--orange:#ff9f43;--blue:#4fc3f7;--yellow:#ffd93d;--green:#6bcf7f}
-body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-header{padding:1rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--bg);z-index:10;flex-wrap:wrap;gap:.5rem}
-header h1{font-size:1.25rem;font-weight:700;display:flex;align-items:center;gap:.5rem}
-header h1 .pulse{width:10px;height:10px;border-radius:50%;background:var(--muted);display:inline-block}
-header h1 .pulse.live{background:var(--accent2);box-shadow:0 0 8px var(--accent2);animation:pulse 1.2s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-header nav{display:flex;gap:1rem;flex-wrap:wrap}
-header nav a{color:var(--muted);text-decoration:none;font-size:.85rem}
-header nav a:hover{color:var(--accent)}
-main{max-width:1100px;margin:0 auto;padding:1.5rem;display:flex;flex-direction:column;gap:1.25rem}
-.card{background:var(--card);border:1px solid var(--border);border-radius:.75rem;padding:1.25rem}
-.card h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.75rem;display:flex;align-items:center;gap:.5rem;justify-content:space-between}
-.card h2 .badge{font-size:.65rem;padding:.15rem .5rem;border-radius:9999px;background:var(--border);color:var(--muted);text-transform:none;letter-spacing:0;font-weight:600}
-.badge.ok{background:rgba(0,212,170,.15);color:var(--accent2)}
-.badge.err{background:rgba(255,87,87,.15);color:var(--red)}
-.badge.warn{background:rgba(255,149,67,.15);color:var(--orange)}
-.info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.75rem}
-.info-item label{font-size:.72rem;color:var(--muted);display:block;margin-bottom:.15rem}
-.info-item .val{font-size:1.05rem;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
-.info-item .val.good{color:var(--accent2)}
-.info-item .val.muted{color:var(--muted)}
-.row{display:flex;gap:1rem;flex-wrap:wrap}
-.col{flex:1;min-width:220px}
-button{background:var(--accent);color:#fff;border:none;border-radius:.5rem;padding:.55rem 1.1rem;font-size:.85rem;font-weight:600;cursor:pointer;transition:opacity .2s,transform .05s;white-space:nowrap}
-button:hover{opacity:.85}
-button:active{transform:scale(.97)}
-button:disabled{opacity:.4;cursor:not-allowed}
-button.success{background:var(--accent2);color:#000}
-button.secondary{background:var(--border);color:var(--text)}
-input,select{background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:.4rem;padding:.45rem .6rem;font-size:.85rem;font-family:inherit}
-input.wide{width:100%}
-.btn-row{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.25rem;align-items:center}
-.hint{font-size:.75rem;color:var(--muted);margin-top:.3rem}
-table{width:100%;border-collapse:collapse;font-size:.82rem}
-th,td{padding:.45rem .55rem;text-align:left;border-bottom:1px solid var(--border);vertical-align:top}
-th{color:var(--muted);font-weight:600;font-size:.7rem;text-transform:uppercase;letter-spacing:.04em}
-td .chip{font-size:.68rem;padding:.1rem .45rem;border-radius:9999px;background:var(--border);color:var(--muted)}
-td .chip.good{background:rgba(0,212,170,.15);color:var(--accent2)}
-td .chip.bad{background:rgba(255,87,87,.15);color:var(--red)}
-td .chip.gest{background:rgba(108,99,255,.18);color:var(--accent)}
-td .chip.fb{background:rgba(255,217,61,.15);color:var(--yellow)}
-.mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+/* Page-specific: Q-value bars, refresh bar */
 .qbar-row{display:flex;align-items:center;gap:.5rem;margin-bottom:.3rem}
 .qbar-row .name{width:130px;font-size:.8rem;color:var(--text)}
 .qbar-track{flex:1;height:14px;background:var(--bg);border:1px solid var(--border);border-radius:.3rem;overflow:hidden}
 .qbar-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--blue))}
 .qbar-row .qv{width:64px;text-align:right;font-size:.78rem;font-variant-numeric:tabular-nums;color:var(--muted)}
-#toast{position:fixed;bottom:1.25rem;left:50%;transform:translateX(-50%);padding:.6rem 1.1rem;border-radius:.5rem;background:var(--card);border:1px solid var(--border);color:var(--text);font-size:.85rem;opacity:0;transition:opacity .25s;pointer-events:none;z-index:50}
-#toast.show{opacity:1}
-#toast.ok{border-color:var(--accent2)}
-#toast.err{border-color:var(--red)}
 .refresh-bar{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem}
-.empty{color:var(--muted);font-size:.85rem;padding:.5rem 0}
 </style>
 </head>
 <body>
-<header>
-  <h1><span class="pulse" id="live-dot"></span> DeskBot Teaching</h1>
-  <nav>
-    <a href="/">Home</a>
-    <a href="/learning">Learning</a>
-    <a href="/settings">Settings</a>
-  </nav>
-</header>
-<main>
-  <div class="refresh-bar">
-    <input id="api-key-input" type="password" placeholder="API key (for POST endpoints)" size="22">
-    <label style="font-size:.8rem;color:var(--muted)"><input type="checkbox" id="auto-refresh" checked> auto-refresh</label>
+<header class="app-bar">
+  <div class="app-brand"><span class="brand-icon pulse" id="live-dot"></span> DeskBot Teaching</div>
+  <nav class="app-nav" data-active="teaching"></nav>
+  <div class="app-bar-right">
+    <input id="api-key-input" type="password" class="api-key" placeholder="API key (for POST endpoints)" title="Set when DESKBOT_API__API_KEY is configured">
+    <label class="toggle-row"><input type="checkbox" id="auto-refresh" checked> auto-refresh</label>
     <button class="secondary" onclick="refresh()">Refresh</button>
   </div>
-
+</header>
+<main>
   <div class="card">
     <h2>Teaching status <span class="badge" id="status-badge">loading…</span></h2>
     <div class="info-grid" id="status-grid"><div class="empty">loading…</div></div>
@@ -122,38 +70,10 @@ td .chip.fb{background:rgba(255,217,61,.15);color:var(--yellow)}
 </main>
 <div id="toast"></div>
 
+<script src="/assets/js/app.js"></script>
 <script>
 const API = window.location.origin + '/api/v1/teaching';
-const $ = (id) => document.getElementById(id);
 let timer = null;
-
-function toast(msg, ok = true) {
-  const t = $('toast');
-  t.textContent = msg;
-  t.className = 'show ' + (ok ? 'ok' : 'err');
-  clearTimeout(toast._t);
-  toast._t = setTimeout(() => t.className = '', 2600);
-}
-
-async function apiGet(path) {
-  const r = await fetch(API + path);
-  if (!r.ok) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
-  return await r.json();
-}
-async function apiPost(path, body) {
-  const headers = {'Content-Type': 'application/json'};
-  const key = $('api-key-input').value.trim();
-  if (key) headers['Authorization'] = 'Bearer ' + key;
-  const r = await fetch(API + path, {method: 'POST', headers, body: JSON.stringify(body || {})});
-  const data = await r.json().catch(() => null);
-  if (!r.ok) { const e = new Error('HTTP ' + r.status); e.body = data; throw e; }
-  return data;
-}
-
-function fmtTime(iso) {
-  if (!iso) return '-';
-  try { return new Date(iso).toLocaleTimeString(); } catch { return iso; }
-}
 
 function renderStatus(s) {
   const badge = $('status-badge');
@@ -208,9 +128,9 @@ function renderUnavailable() {
 async function refresh() {
   try {
     const [status, trans, q] = await Promise.all([
-      apiGet('/status'),
-      apiGet('/transitions?limit=20'),
-      apiGet('/qvalues').catch(() => ({ q_values: {} })),
+      apiGet(API + '/status'),
+      apiGet(API + '/transitions?limit=20'),
+      apiGet(API + '/qvalues').catch(() => ({ q_values: {} })),
     ]);
     renderStatus(status);
     renderTransitions(trans);
@@ -225,7 +145,7 @@ async function armSession() {
   const instruction = $('instruction').value.trim();
   if (!instruction) { toast('enter an instruction', false); return; }
   try {
-    const r = await apiPost('/demonstration', { instruction, mode: $('mode').value });
+    const r = await apiPost(API + '/demonstration', { instruction, mode: $('mode').value });
     toast(r.session_id ? 'armed session ' + r.session_id.slice(0, 8) : 'armed', true);
     refresh();
   } catch (e) { toast('arm failed: ' + (e.body?.detail || e.message), false); }
@@ -235,7 +155,7 @@ async function injectGesture() {
   const gesture = $('gesture').value.trim();
   if (!gesture) { toast('enter a gesture', false); return; }
   try {
-    const r = await apiPost('/demonstration', { gesture });
+    const r = await apiPost(API + '/demonstration', { gesture });
     toast(r.executed_action ? 'executed ' + r.executed_action : 'no trigger', !!r.executed_action_index || r.executed_action);
     refresh();
   } catch (e) { toast('trigger failed: ' + (e.body?.detail || e.message), false); }
@@ -243,7 +163,7 @@ async function injectGesture() {
 
 async function sendFeedback() {
   try {
-    const r = await apiPost('/feedback', {
+    const r = await apiPost(API + '/feedback', {
       polarity: parseInt($('polarity').value, 10),
       magnitude: parseFloat($('magnitude').value) || 1.0,
       source: 'dashboard',

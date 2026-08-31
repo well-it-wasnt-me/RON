@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DeskBot Config Validator</title>
+<link rel="stylesheet" href="/assets/css/app.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
@@ -11,73 +12,57 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; background: #1a1a2e; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; }
-header { background: #16213e; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #0f3460; }
-header h1 { font-size: 20px; font-weight: 600; color: #e94560; }
-header .subtitle { font-size: 13px; color: #888; margin-left: 12px; }
-.btn-group { display: flex; gap: 8px; }
-button { padding: 8px 18px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: background 0.2s; }
-.btn-load { background: #0f3460; color: #e0e0e0; }
-.btn-load:hover { background: #1a4a8a; }
-.btn-validate { background: #e94560; color: #fff; }
-.btn-validate:hover { background: #c73650; }
-.btn-export { background: #0f3460; color: #e0e0e0; }
-.btn-export:hover { background: #1a4a8a; }
-.main { display: flex; flex: 1; overflow: hidden; }
-.panel { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-.panel-left { border-right: 1px solid #0f3460; }
-.panel-header { padding: 10px 16px; background: #16213e; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #888; border-bottom: 1px solid #0f3460; }
-.editor-wrap { flex: 1; overflow: auto; }
-.CodeMirror { height: 100% !important; font-size: 13px; line-height: 1.5; }
-.results { flex: 1; overflow: auto; padding: 16px; }
-.result-card { background: #16213e; border-radius: 8px; padding: 16px; margin-bottom: 12px; border-left: 4px solid #333; }
-.result-card.valid { border-left-color: #4caf50; }
-.result-card.invalid { border-left-color: #e94560; }
-.result-card h3 { font-size: 15px; margin-bottom: 8px; }
-.result-card.valid h3 { color: #4caf50; }
-.result-card.invalid h3 { color: #e94560; }
-.error-list { list-style: none; }
-.error-item { padding: 8px 12px; background: #1a1a2e; border-radius: 4px; margin-bottom: 6px; font-size: 13px; }
-.error-field { color: #e94560; font-weight: 600; font-family: monospace; }
-.error-msg { color: #ccc; margin-top: 2px; }
-.error-type { color: #888; font-size: 11px; }
-.schema-section { margin-bottom: 20px; }
-.schema-section h4 { font-size: 14px; color: #e94560; margin-bottom: 8px; cursor: pointer; }
-.schema-section h4:hover { color: #ff6b81; }
-.schema-fields { display: none; }
-.schema-fields.open { display: block; }
-.schema-field { padding: 6px 12px; background: #1a1a2e; border-radius: 4px; margin-bottom: 4px; font-size: 13px; }
-.schema-field .field-name { color: #4fc3f7; font-family: monospace; }
-.schema-field .field-type { color: #888; font-size: 11px; }
-.schema-field .field-default { color: #81c784; font-size: 11px; }
-.schema-field .field-desc { color: #aaa; font-size: 12px; margin-top: 2px; }
-.schema-field .field-enum { color: #ffb74d; font-size: 11px; }
-.tabs { display: flex; border-bottom: 1px solid #0f3460; }
-.tab { padding: 8px 16px; cursor: pointer; font-size: 13px; color: #888; border-bottom: 2px solid transparent; }
-.tab.active { color: #e94560; border-bottom-color: #e94560; }
-.tab:hover { color: #e0e0e0; }
-.tab-content { display: none; flex: 1; overflow: auto; padding: 16px; }
-.tab-content.active { display: flex; flex-direction: column; }
-.loading { color: #888; font-style: italic; }
-.toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 20px; border-radius: 8px; font-size: 13px; z-index: 1000; animation: fadeIn 0.3s, fadeOut 0.3s 2s forwards; }
-.toast.success { background: #4caf50; color: #fff; }
-.toast.error { background: #e94560; color: #fff; }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+  body { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  /* Two-pane layout */
+  .main { display: flex; flex: 1; overflow: hidden; }
+  .panel { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .panel-left { border-right: 1px solid var(--border); }
+  .panel-header { padding: .6rem 1rem; background: var(--bg2); font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); border-bottom: 1px solid var(--border); }
+  .editor-wrap { flex: 1; overflow: auto; }
+  .CodeMirror { height: 100% !important; font-size: 13px; line-height: 1.5; }
+  .results { flex: 1; overflow: auto; padding: 1rem; }
+  /* Result cards */
+  .result-card { background: var(--card); border: 1px solid var(--border); border-radius: .5rem; padding: 1rem; margin-bottom: .75rem; border-left: 4px solid var(--border2); }
+  .result-card.valid { border-left-color: var(--accent2); }
+  .result-card.invalid { border-left-color: var(--red); }
+  .result-card h3 { font-size: .95rem; margin-bottom: .5rem; }
+  .result-card.valid h3 { color: var(--accent2); }
+  .result-card.invalid h3 { color: var(--red); }
+  .error-list { list-style: none; }
+  .error-item { padding: .5rem .75rem; background: var(--bg); border: 1px solid var(--border); border-radius: .4rem; margin-bottom: .4rem; font-size: .82rem; }
+  .error-field { color: var(--red); font-weight: 600; font-family: ui-monospace, monospace; }
+  .error-msg { color: var(--text); margin-top: .15rem; }
+  .error-type { color: var(--muted); font-size: .72rem; }
+  /* Schema reference */
+  .schema-section { margin-bottom: 1.25rem; }
+  .schema-section h4 { font-size: .85rem; color: var(--accent); margin-bottom: .5rem; cursor: pointer; }
+  .schema-section h4:hover { color: var(--accent2); }
+  .schema-fields { display: none; }
+  .schema-fields.open { display: block; }
+  .schema-field { padding: .4rem .75rem; background: var(--bg); border: 1px solid var(--border); border-radius: .4rem; margin-bottom: .3rem; font-size: .82rem; }
+  .schema-field .field-name { color: var(--blue); font-family: ui-monospace, monospace; }
+  .schema-field .field-type { color: var(--muted); font-size: .72rem; }
+  .schema-field .field-default { color: var(--accent2); font-size: .72rem; }
+  .schema-field .field-desc { color: var(--muted); font-size: .78rem; margin-top: .15rem; }
+  .schema-field .field-enum { color: var(--orange); font-size: .72rem; }
+  /* Tabs */
+  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg2); }
+  .tab { padding: .5rem 1rem; cursor: pointer; font-size: .82rem; color: var(--muted); border-bottom: 2px solid transparent; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab:hover { color: var(--text); }
+  .tab-content { display: none; flex: 1; overflow: auto; padding: 1rem; }
+  .tab-content.active { display: flex; flex-direction: column; }
 </style>
 </head>
 <body>
-<header>
-  <div style="display:flex;align-items:baseline;">
-    <h1>DeskBot Config Validator</h1>
-    <span class="subtitle">Inspect, validate, and export configuration</span>
-  </div>
-  <div class="btn-group">
-    <button class="btn-load" onclick="loadCurrentConfig()">Load Current Config</button>
-    <button class="btn-validate" onclick="validateConfig()">Validate</button>
-    <button class="btn-export" onclick="exportEnv()">Export .env</button>
-    <button class="btn-export" onclick="exportYaml()">Export YAML</button>
+<header class="app-bar">
+  <div class="app-brand"><span class="brand-icon">&#128221;</span> DeskBot Config Validator</div>
+  <nav class="app-nav" data-active="config"></nav>
+  <div class="app-bar-right">
+    <button class="secondary" onclick="loadCurrentConfig()">Load Current Config</button>
+    <button onclick="validateConfig()">Validate</button>
+    <button class="secondary" onclick="exportEnv()">Export .env</button>
+    <button class="secondary" onclick="exportYaml()">Export YAML</button>
   </div>
 </header>
 <div class="main">
@@ -105,6 +90,7 @@ button { padding: 8px 18px; border: none; border-radius: 6px; cursor: pointer; f
   </div>
 </div>
 
+<script src="/assets/js/app.js"></script>
 <script>
 let editor;
 let currentSchema = null;
@@ -124,20 +110,14 @@ document.addEventListener('DOMContentLoaded', function() {
   loadSchema();
 });
 
-var API_BASE = window.location.origin + '/api/v1';
-
 function loadCurrentConfig() {
-  fetch(API_BASE + '/config')
-    .then(function(resp) {
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      return resp.json();
-    })
+  apiGet(API_BASE + '/config')
     .then(function(config) {
       editor.setValue(JSON.stringify(config, null, 2));
-      showToast('Config loaded', 'success');
+      toast('Config loaded', true);
     })
     .catch(function(err) {
-      showToast('Failed to load config: ' + err.message, 'error');
+      toast('Failed to load config: ' + err.message, false);
     });
 }
 
@@ -151,56 +131,47 @@ function validateConfig() {
   } catch (e) {
     resultsEl.innerHTML = '<div class="result-card invalid">' +
       '<h3>&#10007; Invalid JSON</h3>' +
-      '<div class="error-item"><div class="error-msg">' + escapeHtml(e.message) + '</div></div>' +
+      '<div class="error-item"><div class="error-msg">' + esc(e.message) + '</div></div>' +
       '</div>';
     return;
   }
 
-  fetch(API_BASE + '/config/validate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  })
-    .then(function(resp) { return resp.json(); })
+  apiPost(API_BASE + '/config/validate', data, { auth: false })
     .then(function(result) {
       if (result.valid) {
         resultsEl.innerHTML = '<div class="result-card valid">' +
           '<h3>&#10003; Configuration is valid</h3>' +
-          '<p style="color:#aaa;font-size:13px;">All fields passed validation. This config can be used with DeskBot.</p>' +
+          '<p class="hint">All fields passed validation. This config can be used with DeskBot.</p>' +
           '</div>';
-        showToast('Config is valid!', 'success');
+        toast('Config is valid!', true);
       } else {
         var errors = result.errors || [];
         var errorItems = errors.map(function(e) {
           return '<li class="error-item">' +
-            '<div class="error-field">' + escapeHtml(e.field) + '</div>' +
-            '<div class="error-msg">' + escapeHtml(e.message) + '</div>' +
-            '<div class="error-type">Type: ' + escapeHtml(e.type) + ' | Input: ' + escapeHtml(String(e.input != null ? e.input : '')) + '</div>' +
+            '<div class="error-field">' + esc(e.field) + '</div>' +
+            '<div class="error-msg">' + esc(e.message) + '</div>' +
+            '<div class="error-type">Type: ' + esc(e.type) + ' | Input: ' + esc(String(e.input != null ? e.input : '')) + '</div>' +
             '</li>';
         }).join('');
         resultsEl.innerHTML = '<div class="result-card invalid">' +
           '<h3>&#10007; Validation failed (' + errors.length + ' error' + (errors.length !== 1 ? 's' : '') + ')</h3>' +
           '<ul class="error-list">' + errorItems + '</ul>' +
           '</div>';
-        showToast(errors.length + ' validation error(s)', 'error');
+        toast(errors.length + ' validation error(s)', false);
       }
     })
     .catch(function(err) {
       resultsEl.innerHTML = '<div class="result-card invalid">' +
         '<h3>&#10007; Request failed</h3>' +
-        '<div class="error-item"><div class="error-msg">' + escapeHtml(err.message) + '</div></div>' +
+        '<div class="error-item"><div class="error-msg">' + esc(err.message) + '</div></div>' +
         '</div>';
-      showToast('Validation request failed', 'error');
+      toast('Validation request failed', false);
     });
 }
 
 function loadSchema() {
   var schemaView = document.getElementById('schemaView');
-  fetch(API_BASE + '/config/schema')
-    .then(function(resp) {
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      return resp.json();
-    })
+  apiGet(API_BASE + '/config/schema')
     .then(function(schema) {
       currentSchema = schema;
       renderSchema(schema, schemaView);
@@ -208,7 +179,7 @@ function loadSchema() {
     .catch(function(err) {
       schemaView.innerHTML = '<div class="result-card invalid">' +
         '<h3>Failed to load schema</h3>' +
-        '<div class="error-msg">' + escapeHtml(err.message) + '</div>' +
+        '<div class="error-msg">' + esc(err.message) + '</div>' +
         '</div>';
     });
 }
@@ -235,7 +206,7 @@ function renderSchema(schema, container) {
     if (Object.keys(fields).length === 0 && !sectionRef) continue;
 
     html += '<div class="schema-section">' +
-      '<h4 onclick="this.nextElementSibling.classList.toggle(\'open\')">&#9654; ' + escapeHtml(sectionName) + '</h4>' +
+      '<h4 onclick="this.nextElementSibling.classList.toggle(\'open\')">&#9654; ' + esc(sectionName) + '</h4>' +
       '<div class="schema-fields">';
 
     for (var fieldName in fields) {
@@ -249,13 +220,13 @@ function renderSchema(schema, container) {
       var isRequired = required.indexOf(fieldName) >= 0;
 
       html += '<div class="schema-field">' +
-        '<span class="field-name">' + escapeHtml(fieldName) + '</span>' +
-        (isRequired ? '<span style="color:#e94560;font-size:11px;"> required</span>' : '') +
-        ' <span class="field-type">' + escapeHtml(fieldType) + '</span>' +
-        (fieldDefault !== undefined ? ' <span class="field-default">default: ' + escapeHtml(JSON.stringify(fieldDefault)) + '</span>' : '') +
-        (enumVals.length ? ' <span class="field-enum">enum: ' + escapeHtml(enumVals.join(', ')) + '</span>' : '') +
-        '<div class="field-desc">' + escapeHtml(description) + '</div>' +
-        '<div style="color:#555;font-size:11px;font-family:monospace;">' + escapeHtml(envKey) + '</div>' +
+        '<span class="field-name">' + esc(fieldName) + '</span>' +
+        (isRequired ? '<span style="color:var(--red);font-size:.72rem;"> required</span>' : '') +
+        ' <span class="field-type">' + esc(fieldType) + '</span>' +
+        (fieldDefault !== undefined ? ' <span class="field-default">default: ' + esc(JSON.stringify(fieldDefault)) + '</span>' : '') +
+        (enumVals.length ? ' <span class="field-enum">enum: ' + esc(enumVals.join(', ')) + '</span>' : '') +
+        '<div class="field-desc">' + esc(description) + '</div>' +
+        '<div style="color:var(--muted2);font-size:.72rem;font-family:ui-monospace,monospace;">' + esc(envKey) + '</div>' +
         '</div>';
     }
 
@@ -287,13 +258,13 @@ function exportEnv() {
   try {
     data = JSON.parse(editor.getValue());
   } catch (e) {
-    showToast('Cannot export: invalid JSON', 'error');
+    toast('Cannot export: invalid JSON', false);
     return;
   }
   var lines = flattenToEnv(data, 'DESKBOT');
   var blob = new Blob([lines.join('\n')], { type: 'text/plain' });
   downloadBlob(blob, 'deskbot.env');
-  showToast('Exported .env file', 'success');
+  toast('Exported .env file', true);
 }
 
 function exportYaml() {
@@ -301,13 +272,13 @@ function exportYaml() {
   try {
     data = JSON.parse(editor.getValue());
   } catch (e) {
-    showToast('Cannot export: invalid JSON', 'error');
+    toast('Cannot export: invalid JSON', false);
     return;
   }
   var yaml = jsonToYaml(data, 0);
   var blob = new Blob([yaml], { type: 'text/plain' });
   downloadBlob(blob, 'deskbot-config.yaml');
-  showToast('Exported YAML file', 'success');
+  toast('Exported YAML file', true);
 }
 
 function flattenToEnv(obj, prefix) {
@@ -354,20 +325,6 @@ function downloadBlob(blob, filename) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-}
-
-function escapeHtml(str) {
-  var div = document.createElement('div');
-  div.appendChild(document.createTextNode(str));
-  return div.innerHTML;
-}
-
-function showToast(message, type) {
-  var toast = document.createElement('div');
-  toast.className = 'toast ' + type;
-  toast.textContent = message;
-  document.body.appendChild(toast);
-  setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3000);
 }
 </script>
 </body>

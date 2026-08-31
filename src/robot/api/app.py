@@ -101,8 +101,8 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     # Serve the calibration UI from web/calibration/ if it exists.
     _mount_static(app, "/calibration", _PACKAGE_ROOT / "web" / "calibration", "calibration")
 
-    # Serve the config validator UI from web/config-validator/ if it exists.
-    _mount_static(app, "/config", _PACKAGE_ROOT / "web" / "config-validator", "config-validator")
+    # Serve the config validator UI from web/config/ if it exists.
+    _mount_static(app, "/config", _PACKAGE_ROOT / "web" / "config", "config-validator")
 
     # Serve the settings UI from web/settings/ if it exists.
     _mount_static(app, "/settings", _PACKAGE_ROOT / "web" / "settings", "settings")
