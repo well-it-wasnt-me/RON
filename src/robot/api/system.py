@@ -9,7 +9,13 @@ import time
 from fastapi import APIRouter, Depends, Query, Request
 
 from robot import __version__
-from robot.api.schemas import BluetoothResponse, LogsResponse, OkResponse, SystemInfoResponse
+from robot.api.schemas import (
+    BluetoothResponse,
+    LogsFiltersResponse,
+    LogsResponse,
+    OkResponse,
+    SystemInfoResponse,
+)
 from robot.api.security import require_api_key
 from robot.logging import get_ring_buffer
 
@@ -17,6 +23,14 @@ router = APIRouter(prefix="/system", tags=["system"])
 
 # Process start time (set on first import).
 _START_TIME = time.time()
+
+
+def _split_csv(value: str | None) -> list[str] | None:
+    """Split a comma-separated query value into a trimmed list (or ``None``)."""
+    if value is None:
+        return None
+    parts = [p.strip() for p in value.split(",")]
+    return [p for p in parts if p] or None
 
 
 @router.get("/info", summary="System information", response_model=SystemInfoResponse)
@@ -49,19 +63,49 @@ async def system_info(request: Request) -> SystemInfoResponse:
 @router.get("/logs", summary="Recent log entries", response_model=LogsResponse)
 async def system_logs(
     level: str | None = Query(
-        default=None, description="Filter by level (DEBUG, INFO, WARNING, ERROR)"
+        default=None, description="Filter by level (DEBUG, INFO, WARNING, ERROR); 'ALL' = no filter"
     ),
-    search: str | None = Query(default=None, description="Text search"),
+    search: str | None = Query(
+        default=None, description="Case-insensitive text search across event/logger/data"
+    ),
+    logger: str | None = Query(
+        default=None, description="Case-insensitive substring filter on logger name"
+    ),
+    event: str | None = Query(
+        default=None, description="Case-insensitive substring filter on event name"
+    ),
+    exclude: str | None = Query(
+        default=None,
+        description="Comma-separated event names to omit (e.g. 'DisplayUpdated,LookRequested')",
+    ),
+    since: float | None = Query(
+        default=None,
+        ge=0.0,
+        description="Only entries with created_epoch >= this POSIX timestamp (for live tailing)",
+    ),
     limit: int = Query(default=200, ge=1, le=500),
 ) -> LogsResponse:
-    """Return recent log entries from the in-memory ring buffer."""
+    """Return recent log entries from the in-memory ring buffer.
+
+    Filters apply server-side; the client can combine level/search/logger/
+    event/exclude/since to drill into the buffer without pulling everything.
+    """
     rb = get_ring_buffer()
-    entries = rb.get_entries(level=level, search=search, limit=limit)
+    entries = rb.get_entries(
+        level=level,
+        search=search,
+        logger=logger,
+        event=event,
+        exclude=_split_csv(exclude),
+        since_epoch=since,
+        limit=limit,
+    )
     return LogsResponse(
         count=len(entries),
         entries=[
             {
                 "timestamp": e.timestamp,
+                "created_epoch": e.created_epoch,
                 "level": e.level,
                 "logger": e.logger_name,
                 "event": e.event,
@@ -69,6 +113,30 @@ async def system_logs(
             }
             for e in entries
         ],
+    )
+
+
+@router.get(
+    "/logs/filters",
+    summary="Distinct log filter values",
+    response_model=LogsFiltersResponse,
+)
+async def system_logs_filters(request: Request) -> LogsFiltersResponse:
+    """Return the distinct levels, logger names, and event names in the buffer.
+
+    Also returns the server-configured ``noisy_events`` hide list
+    (``LoggingConfig.noisy_events``) so the dashboard can mirror the same
+    default in its Recent Events feed and ``/#/logs`` exclude toggle
+    without hardcoding it in JS.
+    """
+    filters = get_ring_buffer().distinct_filters()
+    settings = getattr(request.app.state, "settings", None)
+    noisy = list(getattr(getattr(settings, "logging", None), "noisy_events", []) or [])
+    return LogsFiltersResponse(
+        levels=filters["levels"],
+        loggers=filters["loggers"],
+        events=filters["events"],
+        noisy_events=noisy,
     )
 
 

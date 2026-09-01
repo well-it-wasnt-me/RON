@@ -145,8 +145,27 @@ async def teaching_status(request: Request) -> TeachingStatusResponse:
 async def teaching_transitions(
     request: Request,
     limit: int = Query(default=20, ge=1, le=256),
+    action: str | None = Query(
+        default=None,
+        description="Case-insensitive substring filter on action name",
+    ),
+    success: bool | None = Query(
+        default=None, description="Filter on execution_success (true/false)"
+    ),
+    feedback: bool | None = Query(
+        default=None,
+        description="true = only transitions with attributed feedback; false = none",
+    ),
+    interaction_id: str | None = Query(
+        default=None, description="Exact interaction_id filter"
+    ),
 ) -> TeachingTransitionsResponse:
-    """Return recent transitions with a conversation-free state summary."""
+    """Return recent transitions with a conversation-free state summary.
+
+    Filters apply server-side against a larger working-memory pool (256) so
+    that narrowing the result doesn't empty the limited row window. The
+    ``total`` field is the count *after* filtering but *before* ``limit``.
+    """
     svc = _get_learning_service(request)
     if svc is None:
         raise HTTPException(status_code=404, detail="Learning service not available")
@@ -155,8 +174,10 @@ async def teaching_transitions(
         return TeachingTransitionsResponse(total=0, limit=limit, transitions=[])
     action_space = getattr(svc, "action_space", None)
     ledger = getattr(svc, "feedback_ledger", None)
-    recent = working.recent(limit)
+    # Pull a larger pool so filters don't starve the limited result window.
+    recent = working.recent(256)
     items: list[TeachingTransitionItem] = []
+    action_lower = action.lower() if action else None
     for exp in recent:
         meta = exp.metadata
         action_index = int(meta.get("action_index", -1))
@@ -170,6 +191,19 @@ async def teaching_transitions(
             entry = ledger.get(tid_str)
             if entry is not None:
                 feedback_source = entry.source
+        exec_success = bool(meta.get("execution_success", True))
+        exp_interaction = (
+            str(meta["interaction_id"]) if meta.get("interaction_id") else None
+        )
+        # --- server-side filters ---
+        if action_lower is not None and action_lower not in action_name.lower():
+            continue
+        if success is not None and exec_success != success:
+            continue
+        if feedback is not None and (feedback_source is not None) != feedback:
+            continue
+        if interaction_id is not None and (exp_interaction or "") != interaction_id:
+            continue
         reward = float(exp.reward)
         if tid_str is not None and hasattr(svc, "reward_for_transition"):
             with contextlib.suppress(Exception):
@@ -180,17 +214,20 @@ async def teaching_transitions(
                 transition_id=tid_str,
                 action_name=action_name,
                 action_index=action_index,
-                execution_success=bool(meta.get("execution_success", True)),
+                execution_success=exec_success,
                 reward=reward,
                 feedback_source=feedback_source,
-                interaction_id=str(meta["interaction_id"]) if meta.get("interaction_id") else None,
+                interaction_id=exp_interaction,
                 teaching_session_id=str(meta["teaching_session_id"])
                 if meta.get("teaching_session_id")
                 else None,
                 state_summary=_state_summary(list(exp.state)),
             )
         )
-    return TeachingTransitionsResponse(total=len(items), limit=limit, transitions=items)
+    total = len(items)
+    return TeachingTransitionsResponse(
+        total=total, limit=limit, transitions=items[-limit:]
+    )
 
 
 @router.post(

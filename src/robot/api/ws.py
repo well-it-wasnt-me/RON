@@ -20,6 +20,28 @@ Example::
     {"type": "StateChanged", "data": {"previous": "idle", "current": "curious"}}
     {"type": "EmotionChanged", "data": {"previous": "neutral", "current": "happy", "intensity": 0.8}}
     {"type": "FaceDetected", "data": {"x": 0.45, "y": 0.32, "confidence": 0.92}}
+
+Per-connection filtering
+~~~~~~~~~~~~~~~~~~~~~~~~
+The event bus itself stays unfiltered (every subscriber still receives
+every event); only **per-client delivery** is filtered, so a browser can
+opt out of the high-frequency firehose without affecting other clients.
+
+Filters are set in two ways:
+
+1. **Query params on connect**::
+
+       ws://<host>:8000/api/v1/ws/events?exclude=DisplayUpdated,LookRequested
+       ws://<host>:8000/api/v1/ws/events?include=StateChanged,EmotionChanged
+
+   ``include`` wins over ``exclude`` when both are given: only the listed
+   event types are delivered.
+
+2. **Runtime update message** (after connect, alongside ``ping``)::
+
+       {"filter": {"include": ["StateChanged"], "exclude": ["DisplayUpdated"]}}
+
+   Either field may be omitted or null to clear it.
 """
 
 from __future__ import annotations
@@ -27,7 +49,7 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import json
-from dataclasses import fields
+from dataclasses import dataclass, fields
 from datetime import date, datetime
 from enum import Enum
 from typing import Any
@@ -55,36 +77,78 @@ def _event_to_dict(event: object) -> dict[str, Any]:
     return result
 
 
+def _split_csv(value: str | None) -> set[str] | None:
+    """Split a comma-separated value into a set (or ``None`` if empty)."""
+    if value is None:
+        return None
+    parts = {p.strip() for p in value.split(",")}
+    parts.discard("")
+    return parts or None
+
+
+@dataclass
+class EventFilter:
+    """Per-connection event type filter.
+
+    ``include`` and ``exclude`` are sets of event type names (the
+    ``type(event).__name__`` value). When ``include`` is set, only those
+    types are delivered (``exclude`` is ignored). Otherwise everything
+    except the ``exclude`` set is delivered. Both ``None`` means deliver
+    everything.
+    """
+
+    include: set[str] | None = None
+    exclude: set[str] | None = None
+
+    def matches(self, event_type: str) -> bool:
+        """Return whether *event_type* passes this filter."""
+        if self.include is not None:
+            return event_type in self.include
+        if self.exclude is not None:
+            return event_type not in self.exclude
+        return True
+
+
 class EventStreamer:
     """Bridge between the event bus and WebSocket clients.
 
     Subscribes to all events on the bus and forwards them as JSON
-    messages to every connected WebSocket.
+    messages to every connected WebSocket, honouring each connection's
+    :class:`EventFilter`.
     """
 
     def __init__(self) -> None:
-        self._connections: list[WebSocket] = []
+        # (websocket, filter) tuples so delivery can be filtered per client.
+        self._connections: list[tuple[WebSocket, EventFilter]] = []
 
-    async def connect(self, websocket: WebSocket) -> None:
+    async def connect(self, websocket: WebSocket, event_filter: EventFilter | None = None) -> None:
         """Accept a WebSocket connection and start streaming events."""
         await websocket.accept()
-        self._connections.append(websocket)
+        self._connections.append((websocket, event_filter or EventFilter()))
         _log.info("ws.client_connected", clients=len(self._connections))
 
     def disconnect(self, websocket: WebSocket) -> None:
         """Remove a WebSocket connection."""
         with contextlib.suppress(ValueError):
-            self._connections.remove(websocket)
+            self._connections = [(ws, f) for ws, f in self._connections if ws is not websocket]
         _log.info("ws.client_disconnected", clients=len(self._connections))
 
+    def set_filter(self, websocket: WebSocket, event_filter: EventFilter) -> None:
+        """Update the filter for an existing connection (runtime update)."""
+        self._connections = [
+            (ws, event_filter if ws is websocket else f) for ws, f in self._connections
+        ]
+
     async def broadcast(self, event_type: str, data: dict[str, Any]) -> None:
-        """Send a JSON message to all connected clients."""
+        """Send a JSON message to all connected clients whose filter matches."""
         message = json.dumps(
             {"type": event_type, "data": data},
             default=_json_default,
         )
         stale: list[WebSocket] = []
-        for ws in self._connections:
+        for ws, event_filter in self._connections:
+            if not event_filter.matches(event_type):
+                continue
             try:
                 await ws.send_text(message)
             except Exception:
@@ -121,28 +185,67 @@ def get_streamer() -> EventStreamer:
     return _streamer
 
 
+def _parse_filter_message(payload: str) -> EventFilter | None:
+    """Parse a runtime ``{"filter": {...}}`` update message.
+
+    Returns ``None`` if *payload* is not a filter-update message.
+    """
+    try:
+        obj = json.loads(payload)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(obj, dict) or "filter" not in obj:
+        return None
+    spec = obj["filter"]
+    if not isinstance(spec, dict):
+        return None
+    include_raw = spec.get("include")
+    exclude_raw = spec.get("exclude")
+    include = {str(t) for t in include_raw} if isinstance(include_raw, list) else None
+    exclude = {str(t) for t in exclude_raw} if isinstance(exclude_raw, list) else None
+    return EventFilter(include=include, exclude=exclude)
+
+
 @router.websocket("/ws/events")
 async def websocket_events(websocket: WebSocket) -> None:
-    """Stream all events from the robot's event bus as JSON.
+    """Stream events from the robot's event bus as JSON.
 
     Connect a WebSocket client to ``ws://<host>:8000/api/v1/ws/events``
     to receive a live feed of state changes, emotions, face detections,
-    wake words, and more.
+    wake words, and more. Optional ``include``/``exclude`` query params
+    filter which event types are delivered to this connection; a runtime
+    ``{"filter": {...}}`` message updates the filter after connect.
     """
     streamer = get_streamer()
-    await streamer.connect(websocket)
+
+    # Parse the initial filter from query params.
+    include = _split_csv(websocket.query_params.get("include"))
+    exclude = _split_csv(websocket.query_params.get("exclude"))
+    initial_filter = EventFilter(include=include, exclude=exclude)
+
+    await streamer.connect(websocket, initial_filter)
     try:
         # Keep the connection alive. The client can send "ping" messages
-        # and we echo them back; this also detects disconnections.
+        # (echoed back), or a {"filter": {...}} message to update its
+        # event-type filter at runtime.
         while True:
             try:
                 data = await websocket.receive_text()
-                if data.strip() == "ping":
-                    await websocket.send_text("pong")
             except WebSocketDisconnect:
                 break
+            if data.strip() == "ping":
+                await websocket.send_text("pong")
+                continue
+            new_filter = _parse_filter_message(data)
+            if new_filter is not None:
+                streamer.set_filter(websocket, new_filter)
+                _log.info(
+                    "ws.filter_updated",
+                    include=sorted(new_filter.include) if new_filter.include else None,
+                    exclude=sorted(new_filter.exclude) if new_filter.exclude else None,
+                )
     finally:
         streamer.disconnect(websocket)
 
 
-__all__ = ["EventStreamer", "get_streamer", "router"]
+__all__ = ["EventFilter", "EventStreamer", "get_streamer", "router"]
