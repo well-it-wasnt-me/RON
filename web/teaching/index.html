@@ -60,6 +60,21 @@
 
   <div class="card">
     <h2>Recent transitions <span class="badge" id="trans-count">0</span></h2>
+    <div class="refresh-bar" id="trans-filters">
+      <select id="filter-action"><option value="">any action</option></select>
+      <select id="filter-success">
+        <option value="">any success</option>
+        <option value="true">success only</option>
+        <option value="false">failed only</option>
+      </select>
+      <select id="filter-feedback">
+        <option value="">any feedback</option>
+        <option value="true">with feedback</option>
+        <option value="false">no feedback</option>
+      </select>
+      <input id="filter-interaction" placeholder="interaction id" style="width:120px">
+      <span class="hint" id="trans-pool-hint" style="margin-left:auto"></span>
+    </div>
     <div style="overflow-x:auto">
       <table id="trans-table">
         <thead><tr><th>time</th><th>action</th><th>state summary</th><th>reward</th><th>feedback</th><th>interaction</th></tr></thead>
@@ -105,8 +120,18 @@ function renderQ(q) {
 
 function renderTransitions(t) {
   $('trans-count').textContent = String(t.total || 0);
+  const $hint = $('trans-pool-hint');
+  if ($hint) $hint.textContent = t.total != null ? `${t.transitions.length}/${t.total} shown` : '';
+  // Populate the action filter dropdown from the seen action names.
+  const $act = $('filter-action');
+  if ($act) {
+    const cur = $act.value;
+    const names = [...new Set((t.transitions || []).map(x => x.action_name).filter(Boolean))].sort();
+    $act.innerHTML = '<option value="">any action</option>' + names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    $act.value = cur;
+  }
   const body = $('trans-body');
-  if (!t.transitions || !t.transitions.length) { body.innerHTML = '<tr><td colspan="6" class="empty">no transitions yet</td></tr>'; return; }
+  if (!t.transitions || !t.transitions.length) { body.innerHTML = '<tr><td colspan="6" class="empty">no transitions match</td></tr>'; return; }
   body.innerHTML = t.transitions.map((x) => {
     const ss = x.state_summary || {};
     const gest = `<span class="chip gest">${ss.gesture || 'none'}</span>`;
@@ -125,11 +150,25 @@ function renderUnavailable() {
   $('status-grid').innerHTML = '<div class="empty">Teaching loop not wired (learning or teaching disabled).</div>';
 }
 
+function transParams() {
+  const params = new URLSearchParams();
+  params.set('limit', '20');
+  const action = $('filter-action') && $('filter-action').value;
+  const success = $('filter-success') && $('filter-success').value;
+  const feedback = $('filter-feedback') && $('filter-feedback').value;
+  const inter = $('filter-interaction') && $('filter-interaction').value.trim();
+  if (action) params.set('action', action);
+  if (success) params.set('success', success);
+  if (feedback) params.set('feedback', feedback);
+  if (inter) params.set('interaction_id', inter);
+  return params.toString();
+}
+
 async function refresh() {
   try {
     const [status, trans, q] = await Promise.all([
       apiGet(API + '/status'),
-      apiGet(API + '/transitions?limit=20'),
+      apiGet(API + '/transitions?' + transParams()),
       apiGet(API + '/qvalues').catch(() => ({ q_values: {} })),
     ]);
     renderStatus(status);
@@ -174,7 +213,17 @@ async function sendFeedback() {
   } catch (e) { toast('feedback failed: ' + (e.body?.detail || e.message), false); }
 }
 
-if ($('auto-refresh').checked) timer = setInterval(refresh, 3000);
+function startTimer() { if (!timer) timer = setInterval(refresh, 3000); }
+function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
+$('auto-refresh').addEventListener('change', (e) => { if (e.target.checked) startTimer(); else stopTimer(); });
+// Re-fetch immediately when a filter changes so the table doesn't jump after a delay.
+['filter-action','filter-success','filter-feedback'].forEach(id => {
+  const el = $(id);
+  if (el) el.addEventListener('change', refresh);
+});
+const $fi = $('filter-interaction');
+if ($fi) $fi.addEventListener('input', refresh);
+if ($('auto-refresh').checked) startTimer();
 refresh();
 </script>
 </body>

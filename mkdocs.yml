@@ -59,6 +59,7 @@ nav:
     - Teaching Mode: modules/teaching_mode.md
   - Infrastructure:
     - Events: modules/events.md
+    - Logging: modules/logging.md
     - Interfaces: modules/interfaces.md
     - Lifecycle & Degradation: modules/lifecycle.md
     - Services: modules/services.md

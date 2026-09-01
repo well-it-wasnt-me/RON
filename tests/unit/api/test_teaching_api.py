@@ -9,6 +9,7 @@ so the data paths are genuine.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -20,8 +21,8 @@ from robot.config import AppSettings
 from robot.events.bus import InMemoryEventBus
 from robot.hardware.servos.adapter import wrap_servo_controller
 from robot.hardware.servos.mock_servo import MockServo, MockServoBus
-from robot.learning.experience import ReplayBuffer, WorkingMemory
-from robot.learning.feedback_ledger import FeedbackLedger
+from robot.learning.experience import Experience, ReplayBuffer, WorkingMemory
+from robot.learning.feedback_ledger import FeedbackEntry, FeedbackLedger
 from robot.learning.feedback_service import FeedbackService
 from robot.learning.interaction_context import InteractionContext
 from robot.learning.learning_service import (
@@ -303,3 +304,145 @@ async def test_status_404_when_no_learning_service(
     async with _client(app) as client:
         assert (await client.get("/api/v1/teaching/transitions")).status_code == 404
         assert (await client.get("/api/v1/teaching/qvalues")).status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# /teaching/transitions server-side filtering
+# ---------------------------------------------------------------------------
+
+
+def _add_exp(
+    service: LearningService,
+    ledger: FeedbackLedger,
+    *,
+    action_index: int,
+    success: bool,
+    interaction_id: str | None,
+    transition_id: str,
+    with_feedback: bool = False,
+    n: int = 1,
+) -> None:
+    """Append crafted experiences straight into working memory."""
+    zero = [0.0] * STATE_SIZE
+    for k in range(n):
+        exp = Experience(
+            timestamp=datetime.now(tz=UTC),
+            state=list(zero),
+            action=[0.0],
+            reward=0.0,
+            next_state=list(zero),
+            metadata={
+                "action_index": action_index,
+                "execution_success": success,
+                "transition_id": f"{transition_id}-{k}",
+                "interaction_id": interaction_id,
+                "teaching_session_id": "sess-1",
+            },
+        )
+        service.working_memory.add(exp)
+        if with_feedback:
+            ledger.record(
+                FeedbackEntry(
+                    transition_id=f"{transition_id}-{k}",
+                    polarity=1,
+                    magnitude=1.0,
+                    source="test",
+                )
+            )
+
+
+async def _transition_filter_setup(
+    settings: AppSettings, bus: InMemoryEventBus, tmp_path: Path
+) -> FastAPI:
+    """Wire an app whose working memory holds a known mix of transitions."""
+    service = _make_service(bus, tmp_path)
+    app, _controller, _feedback, ledger = _wire_app(settings=settings, service=service)
+    # action_index 13 = wave, 0 = look_left
+    _add_exp(service, ledger, action_index=13, success=True, interaction_id="int-A",
+             transition_id="t-wave", with_feedback=True, n=2)
+    _add_exp(service, ledger, action_index=13, success=False, interaction_id="int-B",
+             transition_id="t-wave-fail")
+    _add_exp(service, ledger, action_index=0, success=True, interaction_id="int-A",
+             transition_id="t-look")
+    _add_exp(service, ledger, action_index=0, success=True, interaction_id="int-C",
+             transition_id="t-look-nofb")
+    return app
+
+
+async def test_transitions_filter_by_action(
+    settings: AppSettings, bus: InMemoryEventBus, tmp_path: Path
+) -> None:
+    app = await _transition_filter_setup(settings, bus, tmp_path)
+    async with _client(app) as client:
+        r = await client.get("/api/v1/teaching/transitions?action=wave&limit=100")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["total"] == 3  # 2 wave-success + 1 wave-fail
+        assert all(t["action_name"] == "wave" for t in data["transitions"])
+
+
+async def test_transitions_filter_by_success(
+    settings: AppSettings, bus: InMemoryEventBus, tmp_path: Path
+) -> None:
+    app = await _transition_filter_setup(settings, bus, tmp_path)
+    async with _client(app) as client:
+        r = await client.get("/api/v1/teaching/transitions?success=false&limit=100")
+        data = r.json()
+        assert data["total"] == 1
+        assert data["transitions"][0]["execution_success"] is False
+
+
+async def test_transitions_filter_by_feedback(
+    settings: AppSettings, bus: InMemoryEventBus, tmp_path: Path
+) -> None:
+    app = await _transition_filter_setup(settings, bus, tmp_path)
+    async with _client(app) as client:
+        # Only transitions with attributed feedback.
+        r = await client.get("/api/v1/teaching/transitions?feedback=true&limit=100")
+        data = r.json()
+        assert data["total"] == 2
+        assert all(t["feedback_source"] == "test" for t in data["transitions"])
+
+        # Only transitions without feedback.
+        r2 = await client.get("/api/v1/teaching/transitions?feedback=false&limit=100")
+        data2 = r2.json()
+        assert data2["total"] == 3
+        assert all(t["feedback_source"] is None for t in data2["transitions"])
+
+
+async def test_transitions_filter_by_interaction_id(
+    settings: AppSettings, bus: InMemoryEventBus, tmp_path: Path
+) -> None:
+    app = await _transition_filter_setup(settings, bus, tmp_path)
+    async with _client(app) as client:
+        r = await client.get("/api/v1/teaching/transitions?interaction_id=int-A&limit=100")
+        data = r.json()
+        # int-A: 2 wave + 1 look = 3
+        assert data["total"] == 3
+        assert all(t["interaction_id"] == "int-A" for t in data["transitions"])
+
+
+async def test_transitions_limit_applied_after_filter(
+    settings: AppSettings, bus: InMemoryEventBus, tmp_path: Path
+) -> None:
+    """limit takes the most recent N after filtering (not before)."""
+    app = await _transition_filter_setup(settings, bus, tmp_path)
+    async with _client(app) as client:
+        r = await client.get("/api/v1/teaching/transitions?action=wave&limit=2")
+        data = r.json()
+        # total reflects the full filtered set (3), but only 2 are returned.
+        assert data["total"] == 3
+        assert len(data["transitions"]) == 2
+
+
+async def test_transitions_combined_filters(
+    settings: AppSettings, bus: InMemoryEventBus, tmp_path: Path
+) -> None:
+    app = await _transition_filter_setup(settings, bus, tmp_path)
+    async with _client(app) as client:
+        r = await client.get(
+            "/api/v1/teaching/transitions?action=wave&success=true&limit=100"
+        )
+        data = r.json()
+        assert data["total"] == 2
+        assert all(t["action_name"] == "wave" and t["execution_success"] for t in data["transitions"])

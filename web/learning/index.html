@@ -25,6 +25,7 @@
 .legend{display:flex;gap:1rem;font-size:.72rem;color:var(--muted);margin-top:.3rem;flex-wrap:wrap}
 .legend span{display:flex;align-items:center;gap:.3rem}
 .legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.pref-filters select,.pref-filters input{background:var(--bg);border:1px solid var(--border);border-radius:.4rem;padding:.4rem .6rem;color:var(--text);font-size:.82rem}
 </style>
 </head>
 <body>
@@ -110,6 +111,12 @@
   <!-- Preferences -->
   <div class="card">
     <h2><span class="left">&#10084; Learned Preferences</span><span class="badge" id="pref-badge">-</span></h2>
+    <div class="pref-filters" id="pref-filters" style="display:flex;gap:.5rem;margin-bottom:.75rem;flex-wrap:wrap;align-items:center">
+      <select id="pref-filter-category"><option value="">All categories</option></select>
+      <select id="pref-filter-source"><option value="">All sources</option></select>
+      <input type="text" id="pref-filter-search" placeholder="Filter by value…" style="flex:1;min-width:160px">
+      <span class="hint" id="pref-filter-count" style="margin:0"></span>
+    </div>
     <div id="pref-table-wrap">
       <table id="pref-table">
         <thead><tr><th>Category</th><th>Value</th><th>Confidence</th><th>Obs</th><th>Avg reward</th><th>Source</th></tr></thead>
@@ -295,16 +302,35 @@ function renderConfig(c) {
 // ---------------------------------------------------------------------------
 // Preferences
 // ---------------------------------------------------------------------------
-function renderPreferences(p) {
-  const prefs = p.preferences || [];
-  $('pref-badge').textContent = prefs.length + ' learned · ' + (p.total_patterns || 0) + ' tracked';
-  $('pref-badge').className = 'badge ' + (prefs.length ? 'ok' : '');
-  const tb = $('pref-table').querySelector('tbody');
-  tb.innerHTML = '';
-  if (!prefs.length) { $('pref-empty').style.display = 'block'; return; }
-  $('pref-empty').style.display = 'none';
+let _allPrefs = [];   // last fetched full preference list (client-side filtering)
+
+function fillPrefFilterOptions() {
+  const cats = Array.from(new Set(_allPrefs.map(p => p.category).filter(Boolean))).sort();
+  const srcs = Array.from(new Set(_allPrefs.map(p => p.source).filter(Boolean))).sort();
+  const $c = $('pref-filter-category'), $s = $('pref-filter-source');
+  const cv = $c.value, sv = $s.value;
+  $c.innerHTML = '<option value="">All categories</option>' + cats.map(c => '<option value="' + esc(c) + '">' + esc(c) + '</option>').join('');
+  $s.innerHTML = '<option value="">All sources</option>' + srcs.map(s => '<option value="' + esc(s) + '">' + esc(s) + '</option>').join('');
+  $c.value = cv; $s.value = sv;
+}
+
+function renderPrefTable() {
+  const cat = $('pref-filter-category').value;
+  const src = $('pref-filter-source').value;
+  const q = ($('pref-filter-search').value || '').trim().toLowerCase();
+  let prefs = _allPrefs.slice();
+  if (cat) prefs = prefs.filter(p => p.category === cat);
+  if (src) prefs = prefs.filter(p => p.source === src);
+  if (q) prefs = prefs.filter(p => String(p.value || '').toLowerCase().includes(q) || String(p.category || '').toLowerCase().includes(q));
   // sort by confidence desc
   prefs.sort((a, b) => b.confidence - a.confidence);
+  const tb = $('pref-table').querySelector('tbody');
+  tb.innerHTML = '';
+  const $count = $('pref-filter-count');
+  if ($count) $count.textContent = _allPrefs.length ? (prefs.length + ' / ' + _allPrefs.length + ' shown') : '';
+  if (!_allPrefs.length) { $('pref-empty').style.display = 'block'; return; }
+  $('pref-empty').style.display = 'none';
+  if (!prefs.length) { tb.innerHTML = '<tr><td colspan="6" class="empty">No preferences match the current filters.</td></tr>'; return; }
   for (const pref of prefs) {
     const tr = document.createElement('tr');
     const pct = Math.round(pref.confidence * 100);
@@ -317,6 +343,14 @@ function renderPreferences(p) {
       '<td><span class="chip ' + esc(pref.source) + '">' + esc(pref.source) + '</span></td>';
     tb.appendChild(tr);
   }
+}
+
+function renderPreferences(p) {
+  _allPrefs = p.preferences || [];
+  $('pref-badge').textContent = _allPrefs.length + ' learned · ' + (p.total_patterns || 0) + ' tracked';
+  $('pref-badge').className = 'badge ' + (_allPrefs.length ? 'ok' : '');
+  fillPrefFilterOptions();
+  renderPrefTable();
 }
 
 // ---------------------------------------------------------------------------
@@ -366,6 +400,12 @@ $('btn-train').addEventListener('click', async () => {
   refresh();
 });
 $('auto-refresh').addEventListener('change', setupAutoRefresh);
+// Preference filters (client-side): re-render the table without refetching.
+['change', 'input'].forEach(ev => {
+  $('pref-filter-category').addEventListener(ev, renderPrefTable);
+  $('pref-filter-source').addEventListener(ev, renderPrefTable);
+  $('pref-filter-search').addEventListener(ev, renderPrefTable);
+});
 
 // first load
 refresh();
