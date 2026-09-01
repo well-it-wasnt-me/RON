@@ -301,3 +301,19 @@ class TestFallbackValidationRegression:
 
         assert actual == 0
         assert executed_actions == [2, 0]
+
+
+class TestModelOutputSafetyRegression:
+    """Regression tests for model-output safety enforcement."""
+
+    def test_invalid_model_output_never_reaches_hardware(
+        self,
+        safe_executor: SafeActionExecutor,
+        executed_actions: list[int],
+    ) -> None:
+        """A rejected model action must never reach the hardware executor."""
+        actual = safe_executor.execute_model_output(999)
+
+        assert actual == safe_executor.safety_gate.fallback_action
+        assert executed_actions == [safe_executor.safety_gate.fallback_action]
+        assert 999 not in executed_actions
