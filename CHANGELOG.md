@@ -2,6 +2,23 @@
 
 <!-- version list -->
 
+## v2.4.1 (2026-09-01)
+
+### Bug Fixes
+
+- **logger**: Better management and filtering system.
+  ([#14](https://github.com/well-it-wasnt-me/RON/pull/14),
+  [`dc2a475`](https://github.com/well-it-wasnt-me/RON/commit/dc2a475e4d6310448a652e7dd99e68d699bb085c))
+
+### Chores
+
+- Deepwiki badge [skip ci]
+  ([`82393fe`](https://github.com/well-it-wasnt-me/RON/commit/82393fe5cd6fb4f7c17eaf6785a4840735057de7))
+
+- Well. thats your problem. me.
+  ([`ab30382`](https://github.com/well-it-wasnt-me/RON/commit/ab30382c0c2420fe30e0518dbff35442d4cbd871))
+
+
 ## v2.4.0 (2026-08-31)
 
 ### Bug Fixes
