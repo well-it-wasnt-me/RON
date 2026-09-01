@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v2.5.0 (2026-09-01)
+
+### Features
+
+- Ron live view ([#15](https://github.com/well-it-wasnt-me/RON/pull/15),
+  [`e86b580`](https://github.com/well-it-wasnt-me/RON/commit/e86b580a7be966be6f0fbf4e17ee0d7eb23c25e8))
+
+
 ## v2.4.1 (2026-09-01)
 
 ### Bug Fixes
