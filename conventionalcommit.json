@@ -1,0 +1,131 @@
+{
+  "title": "RON (DeskBot) conventional commits",
+  "types": {
+    "feat": {
+      "description": "Add or expand user-visible robot functionality",
+      "scopes": {
+        "api": { "description": "REST API, WebSocket endpoints, and API integration" },
+        "behavior": { "description": "State machine, reactions, idle behavior, and action execution" },
+        "body-language": { "description": "Head pan/tilt, arm gestures, and body-language behavior" },
+        "conversation": { "description": "LLM conversation, memory, tools, and streaming" },
+        "face": { "description": "Face model, rendering, animation, emotions, themes, and gaze" },
+        "learning": { "description": "On-device learning, multimodal models, training, and teaching" },
+        "perception": { "description": "Camera input, face detection, gaze tracking, and perception events" },
+        "plugins": { "description": "Plugin and entry-point integration" },
+        "services": { "description": "MQTT, Home Assistant, Telegram, and other service bridges" },
+        "speech": { "description": "STT, TTS, wake-word detection, audio streaming, and sound effects" },
+        "web": { "description": "Browser dashboards and web UI" }
+      }
+    },
+    "fix": {
+      "description": "Correct a defect in existing functionality",
+      "scopes": {
+        "api": { "description": "REST API, WebSocket endpoints, and API integration" },
+        "behavior": { "description": "State machine, reactions, idle behavior, and action execution" },
+        "body-language": { "description": "Head pan/tilt, arm gestures, and body-language behavior" },
+        "camera": { "description": "Camera devices, streams, and RTSP handling" },
+        "conversation": { "description": "LLM conversation, memory, tools, and streaming" },
+        "face": { "description": "Face model, rendering, animation, emotions, themes, and gaze" },
+        "face-renderer": { "description": "Low-level face rendering and drawing logic" },
+        "learning": { "description": "On-device learning, models, training, and teaching" },
+        "logger": { "description": "Logging, filtering, and observability behavior" },
+        "perception": { "description": "Camera input, face detection, gaze tracking, and perception events" },
+        "security": { "description": "Authentication, secret handling, bind restrictions, and integrity checks" },
+        "speech": { "description": "STT, TTS, wake-word detection, audio streaming, and sound effects" },
+        "telegram": { "description": "Telegram bridge and command parsing" },
+        "web": { "description": "Browser dashboards and web UI" }
+      }
+    },
+    "refactor": {
+      "description": "Restructure code without changing intended behavior",
+      "scopes": {
+        "api": { "description": "API structure and internals" },
+        "behavior": { "description": "Behavior engine structure and execution flow" },
+        "face": { "description": "Face engine structure and rendering internals" },
+        "learning": { "description": "Learning subsystem structure" },
+        "perception": { "description": "Perception subsystem structure" },
+        "speech": { "description": "Speech subsystem structure" },
+        "web": { "description": "Web UI structure" }
+      }
+    },
+    "test": {
+      "description": "Add or modify tests",
+      "scopes": {
+        "api": { "description": "API tests" },
+        "behavior": { "description": "Behavior and state-machine tests" },
+        "face": { "description": "Face rendering and animation tests" },
+        "learning": { "description": "Learning and model tests" },
+        "perception": { "description": "Perception and camera tests" },
+        "speech": { "description": "Speech and audio tests" },
+        "web": { "description": "Web UI and dashboard tests" }
+      }
+    },
+    "docs": {
+      "description": "Change documentation",
+      "scopes": {
+        "api": { "description": "API documentation" },
+        "architecture": { "description": "Architecture documentation" },
+        "cli": { "description": "CLI documentation" },
+        "modules": { "description": "Module documentation" },
+        "reference": { "description": "Configuration and reference documentation" }
+      }
+    },
+    "chore": {
+      "description": "Maintenance changes that do not alter product behavior",
+      "scopes": {
+        "deps": { "description": "Dependency and package maintenance" },
+        "infra": { "description": "Docker, systemd, deployment, and infrastructure" },
+        "release": { "description": "Release and versioning maintenance" },
+        "repo": { "description": "Repository metadata and housekeeping" }
+      }
+    },
+    "ci": {
+      "description": "Continuous integration and automation changes",
+      "scopes": {
+        "release": { "description": "Semantic release workflow and automation" },
+        "tests": { "description": "CI test execution" },
+        "validation": { "description": "Linting, type checking, and validation jobs" }
+      }
+    },
+    "perf": {
+      "description": "Improve performance without changing intended behavior",
+      "scopes": {
+        "audio": { "description": "Audio capture, streaming, and processing performance" },
+        "face": { "description": "Face rendering and animation performance" },
+        "learning": { "description": "Learning and inference performance" },
+        "perception": { "description": "Vision and perception performance" },
+        "web": { "description": "Dashboard and API presentation performance" }
+      }
+    },
+    "build": {
+      "description": "Changes to build, packaging, and distribution" ,
+      "scopes": {
+        "python": { "description": "Python packaging and build configuration" },
+        "docker": { "description": "Docker image build configuration" },
+        "dependencies": { "description": "Dependency resolution and packaging metadata" }
+      }
+    },
+    "revert": {
+      "description": "Revert a previous commit"
+    }
+  },
+  "commonScopes": {
+    "config": { "description": "Application configuration and environment settings" },
+    "events": { "description": "Shared event definitions and event bus" },
+    "hardware": { "description": "Hardware abstraction and physical-device interfaces" },
+    "infra": { "description": "Infrastructure and deployment" },
+    "security": { "description": "Cross-cutting authentication, secrets, and hardening" },
+    "web": { "description": "Cross-cutting web dashboard and frontend changes" }
+  },
+  "footerTypes": {
+    "BREAKING CHANGE": {
+      "description": "Introduces an incompatible public or behavioral change"
+    },
+    "Refs": {
+      "description": "Reference an issue, PR, or other tracked item"
+    },
+    "Reviewed-by": {
+      "description": "Record a reviewer attribution"
+    }
+  }
+}
