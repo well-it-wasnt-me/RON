@@ -65,6 +65,10 @@ class OpenWakeWordChecker(WakeWordChecker):
     _buffer: bytearray = field(default_factory=bytearray, init=False, repr=False)
     _frames_processed: int = field(default=0, init=False)
     _prediction_keys_logged: bool = field(default=False, init=False)
+    #: One-shot guard so the phrase-not-found warning fires once, not every
+    #: frame (the score is 0.0 for every frame when the phrase is wrong, so
+    #: without this the mismatch would log thousands of times per minute).
+    _phrase_mismatch_warned: bool = field(default=False, init=False)
 
     def _get_model(self) -> _OpenWakeWordModel:
         """Lazy-load the openWakeWord model on first use."""
@@ -168,6 +172,28 @@ class OpenWakeWordChecker(WakeWordChecker):
             model_phrase = _normalise_phrase(key)
             if target == model_phrase or target in model_phrase or model_phrase in target:
                 return float(value) if isinstance(value, (int, float)) else 0.0
+
+        # No prediction key matches the configured phrase. The score is
+        # structurally 0.0 for every frame, so the wake word can never fire.
+        # Warn once (loudly) with the available model names and the
+        # remediation: this is the failure mode that silently disabled voice
+        # wake when DESKBOT_WAKEWORD__PHRASE was set to a name with no
+        # matching openWakeWord model.
+        if not self._phrase_mismatch_warned:
+            self._phrase_mismatch_warned = True
+            _log.warning(
+                "openwakeword.phrase_not_found",
+                phrase=self.phrase,
+                available=sorted(str(key) for key in predictions),
+                message=(
+                    "configured wake phrase does not match any loaded "
+                    "openWakeWord model; score will always be 0.0 and the "
+                    "wake word will never trigger. Set "
+                    "DESKBOT_WAKEWORD__PHRASE to a loaded model name (e.g. "
+                    "hey_mycroft, hey_jarvis, alexa) or point "
+                    "DESKBOT_WAKEWORD__MODEL_PATH at a custom .onnx model."
+                ),
+            )
         return 0.0
 
     def reset(self) -> None:

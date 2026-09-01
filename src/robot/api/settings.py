@@ -429,6 +429,32 @@ async def mic_level(request: Request) -> MicLevelResponse:
     return MicLevelResponse.model_validate({"level": 0.0, "source": "unavailable"})
 
 
+@router.get("/mic/diagnostics", summary="Microphone runtime diagnostics")
+async def mic_diagnostics(request: Request) -> dict[str, Any]:
+    """Return the active microphone's runtime counters.
+
+    Exposes the chunk production / drop counters that every microphone
+    backend tracks but that ``/mic/info`` omits. This is the "how many
+    chunks are being dropped?" endpoint: the shape varies per backend
+    (``UsbMicrophone.runtime_stats`` vs ``RtspMicrophone.diagnostics``) but
+    every backend reports ``chunks_emitted`` and ``chunks_dropped``. A
+    backend without ``runtime_stats``/``diagnostics`` falls back to its
+    type name only.
+    """
+    bridge = _bridge(request)
+    mic = getattr(bridge, "microphone", None) if bridge else None
+    if mic is None:
+        raise HTTPException(status_code=503, detail="No microphone available")
+
+    stats = getattr(mic, "runtime_stats", None)
+    if callable(stats):
+        return cast("dict[str, Any]", stats())
+    diag = getattr(mic, "diagnostics", None)
+    if callable(diag):
+        return cast("dict[str, Any]", diag())
+    return {"type": type(mic).__name__}
+
+
 @router.post("/mic/test", summary="Record and play back a mic test")
 async def mic_test(
     request: Request, body: MicTestRequest, _: None = Depends(require_api_key)
@@ -454,9 +480,14 @@ async def mic_test(
     if temp_mic is None:
         raise HTTPException(status_code=503, detail="Could not create test microphone")
 
+    # Use the temp mic's actual output format (some backends clamp values,
+    # e.g. RtspMicrophone is always mono) so the WAV header matches the PCM.
+    out_sample_rate = int(getattr(temp_mic, "sample_rate", sample_rate))
+    out_channels = int(getattr(temp_mic, "channels", channels))
+
     try:
         pcm = bytearray()
-        target_samples = int(sample_rate * body.duration_s)
+        target_samples = int(out_sample_rate * body.duration_s)
         collected = 0
 
         async for chunk in temp_mic.stream():
@@ -470,7 +501,7 @@ async def mic_test(
             await temp_mic.close()
         raise HTTPException(status_code=500, detail=f"Recording failed: {exc}") from exc
 
-    wav_bytes = _pcm_to_wav(bytes(pcm), sample_rate, channels=channels)
+    wav_bytes = _pcm_to_wav(bytes(pcm), out_sample_rate, channels=out_channels)
 
     # Optionally play back through the audio output.
     if body.play_back:
@@ -479,9 +510,9 @@ async def mic_test(
             try:
                 await audio.play(
                     AudioBuffer(
-                        pcm=bytes(pcm[: target_samples * 2 * channels]),
-                        sample_rate=sample_rate,
-                        channels=channels,
+                        pcm=bytes(pcm[: target_samples * 2 * out_channels]),
+                        sample_rate=out_sample_rate,
+                        channels=out_channels,
                     )
                 )
             except Exception as exc:
@@ -497,51 +528,64 @@ def _create_temp_mic(
     channels: int,
     frame_ms: int,
 ) -> Any:
-    """Create a temporary microphone mirroring the active one's config."""
+    """Create a temporary microphone mirroring the active one's config.
+
+    Each backend mirrors the active mic so the live ears / mic-test hear real
+    audio. ``RtspMicrophone`` is handled explicitly: without that branch it
+    fell through to the mock fallback, so ``/mic/stream`` advertised
+    ``RtspMicrophone`` / ``is_mock=false`` while pumping all-zero frames.
+    """
+    from robot.hardware.sensors.mock_microphone import MockMicrophone
+
+    def _mock() -> MockMicrophone:
+        return MockMicrophone(sample_rate=sample_rate, channels=channels, frame_ms=frame_ms)
+
     mic_type = type(original).__name__
+    temp: Any = None
 
     if mic_type == "MockMicrophone":
-        from robot.hardware.sensors.mock_microphone import MockMicrophone
-
-        return MockMicrophone(
-            sample_rate=sample_rate,
-            channels=channels,
-            frame_ms=frame_ms,
-        )
-
-    if mic_type == "UsbMicrophone":
+        temp = _mock()
+    elif mic_type == "UsbMicrophone":
         try:
             from robot.hardware.sensors.usb_microphone import UsbMicrophone
 
-            input_device = getattr(original, "input_device", "default")
-            return UsbMicrophone(
-                input_device=input_device,
+            temp = UsbMicrophone(
+                input_device=getattr(original, "input_device", "default"),
                 _sample_rate_field=sample_rate,
                 channels=channels,
                 frame_ms=frame_ms,
             )
         except Exception as exc:
             _log.warning("settings.temp_mic_failed", error=str(exc))
-            # Fall back to mock so the test still returns (silence).
-            from robot.hardware.sensors.mock_microphone import MockMicrophone
+            temp = _mock()
+    elif mic_type == "RtspMicrophone":
+        # Open a second connection to the same RTSP stream so the live ears
+        # / mic-test hear real audio. RtspMicrophone decodes to mono; force
+        # channels=1 so a stereo config doesn't make the temp mic raise and
+        # fall back to silence.
+        try:
+            from robot.hardware.sensors.rtsp_microphone import RtspMicrophone
 
-            return MockMicrophone(
-                sample_rate=sample_rate,
-                channels=channels,
+            url = getattr(original, "url", "")
+            if not url:
+                raise ValueError("RTSP microphone has no url")
+            temp = RtspMicrophone(
+                url=url,
+                output_sample_rate=sample_rate,
+                channels=1,
                 frame_ms=frame_ms,
+                transport=getattr(original, "transport", "tcp"),
             )
-
-    # Unknown type - try mock.
-    try:
-        from robot.hardware.sensors.mock_microphone import MockMicrophone
-
-        return MockMicrophone(
-            sample_rate=sample_rate,
-            channels=channels,
-            frame_ms=frame_ms,
-        )
-    except Exception:
-        return None
+        except Exception as exc:
+            _log.warning("settings.temp_mic_failed", backend="rtsp", error=str(exc))
+            temp = _mock()
+    else:
+        # Unknown type - try mock.
+        try:
+            temp = _mock()
+        except Exception:
+            temp = None
+    return temp
 
 
 @router.websocket("/mic/stream")
@@ -591,14 +635,21 @@ async def mic_stream_ws(websocket: WebSocket) -> None:
             await websocket.close()
         return
 
+    # The header must describe the *temp* mic's actual output, not the
+    # requested format: some backends clamp values (e.g. RtspMicrophone is
+    # always mono). The browser plays raw bytes with no per-frame format, so
+    # a mismatch here would play garbage.
+    out_sample_rate = int(getattr(temp_mic, "sample_rate", sample_rate))
+    out_channels = int(getattr(temp_mic, "channels", channels))
+    out_frame_ms = int(getattr(temp_mic, "frame_ms", frame_ms))
     await websocket.send_text(
         json.dumps(
             {
-                "sample_rate": sample_rate,
-                "channels": channels,
-                "frame_ms": frame_ms,
+                "sample_rate": out_sample_rate,
+                "channels": out_channels,
+                "frame_ms": out_frame_ms,
                 "type": type(mic).__name__,
-                "is_mock": type(mic).__name__ == "MockMicrophone",
+                "is_mock": type(temp_mic).__name__ == "MockMicrophone",
             }
         )
     )

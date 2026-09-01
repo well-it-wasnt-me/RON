@@ -107,14 +107,30 @@ The settings router backs the hardware test page at `/settings/`.
 ### Microphone
 
 - `GET /api/v1/settings/mic/info` - Microphone info
-- `GET /api/v1/settings/mic/level` - Current microphone input level
+- `GET /api/v1/settings/mic/level` - Current microphone input level (RMS
+  0..1). Reads the capture-thread RMS for `UsbMicrophone` and the
+  decode-thread `_last_rms_value` for `RtspMicrophone`; `0.0` /
+  `source: "unavailable"` when the active mic does not track RMS.
+- `GET /api/v1/settings/mic/diagnostics` - Active microphone runtime
+  counters — the "how many chunks are being dropped?" endpoint. Exposes
+  `runtime_stats()` (`UsbMicrophone`) or `diagnostics()`
+  (`RtspMicrophone`); every backend reports `chunks_emitted` and
+  `chunks_dropped`. For `RtspMicrophone` the counters are
+  `input_frames_decoded` (PyAV input frames — *not* output chunks; resampling
+  changes the count, so this is not a drop signal), `chunks_produced`
+  (output chunks built; ≈ `chunks_emitted` + `chunks_dropped`), and
+  `reconnect_attempts`. A backend without either method falls back to its
+  type name only.
 - `POST /api/v1/settings/mic/test` - Record and play back a mic test
 - `WS /api/v1/settings/mic/stream` - Live microphone audio stream (see
   [WebSocket](#websocket)). Backs the Live View "RON's Ears" card: the first
   frame is a text header `{"sample_rate","channels","frame_ms","type","is_mock"}`
   (or `{"error":"no_microphone"}`), then continuous binary frames of raw
-  signed-16-bit little-endian PCM. A **temporary** microphone is created per
-  connection so the conversation audio loop is undisturbed. Send `"stop"` to
+  signed-16-bit little-endian PCM. A **temporary** microphone mirroring the
+  active one's backend is created per connection (Mock / USB / RTSP) so the
+  conversation audio loop is undisturbed. The header describes the *temp*
+  mic's actual output and `is_mock` reflects the temp mic's type, so a
+  backend that falls back to silence is reported honestly. Send `"stop"` to
   end.
 
 ### Audio output
@@ -225,8 +241,14 @@ The first frame is a **text** message with the audio format:
 or `{"error": "no_microphone"}` (then the socket closes). Every following frame
 is **binary**: raw signed-16-bit little-endian PCM, `frame_ms` long. The client
 plays them with the Web Audio API. Send the text message `"stop"` to end the
-stream; closing the socket also tears it down. A temporary microphone is
-created per connection so the conversation audio loop is never disturbed.
+stream; closing the socket also tears it down.
+
+A **temporary** microphone mirroring the active backend (Mock / USB / RTSP)
+is created per connection so the conversation audio loop is never disturbed.
+The header describes the temp mic's actual output (e.g. `RtspMicrophone` is
+always mono) and `is_mock` reflects the temp mic's real type — so if a
+backend fails to construct and falls back to silence, the header says
+`is_mock: true` rather than pretending all is well.
 
 ## OpenAPI
 

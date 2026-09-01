@@ -270,7 +270,23 @@ class ConversationService:
                 # drained and to avoid self-triggering on TTS output.
                 if state in _WAKE_ALLOWED_STATES:
                     assert self.wake_checker is not None
-                    wake_event = self.wake_checker.check(wake_chunk.pcm, wake_chunk.timestamp)
+                    # Run the wake check synchronously. On the Pi 5 an
+                    # openWakeWord predict is ~7 ms -- cheap enough to run
+                    # inline without yielding. Yielding per chunk (e.g. via
+                    # ``run_in_executor``) was tried and *caused* drops: it
+                    # forced the audio loop to re-schedule on every chunk,
+                    # and event-loop congestion (perception / display /
+                    # event subscribers) delayed each continuation by ~50
+                    # ms, throttling the drain to ~16 chunks/s while the
+                    # paced producer delivers 33/s -- so the queue
+                    # saturated and ~50% of audio was dropped. Sync check
+                    # drains at full realtime speed with zero drops. If a
+                    # future wake backend ever exceeds realtime here, the
+                    # fix is to decouple wake detection onto its own
+                    # consumer task (not to await an executor per chunk).
+                    wake_event = self.wake_checker.check(
+                        wake_chunk.pcm, wake_chunk.timestamp
+                    )
                     if wake_event is not None:
                         self._in_listening = True
                         self._recording_buffer.clear()

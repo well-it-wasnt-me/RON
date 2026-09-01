@@ -62,3 +62,57 @@ class TestOpenWakeWordCheckerMissingLibrary:
             pytest.raises(ImportError, match="openwakeword"),
         ):
             checker._get_model()
+
+
+class _FakeModel:
+    """Stand-in for openwakeword's Model returning a fixed prediction dict."""
+
+    def __init__(self, predictions: dict[str, float]) -> None:
+        self._predictions = predictions
+
+    def predict(self, samples: object) -> dict[str, float]:
+        return dict(self._predictions)
+
+
+class TestOpenWakeWordCheckerPhraseMismatch:
+    """A configured phrase with no matching model key can never fire.
+
+    Regression for the silent failure that disabled voice wake on the Pi:
+    ``DESKBOT_WAKEWORD__PHRASE=hey ron`` loaded only the built-in models
+    (alexa, hey_mycroft, ...), so the score was 0.0 for every frame and
+    the wake word never triggered -- with no warning. The checker must
+    now flag this once, loudly.
+    """
+
+    def test_mismatched_phrase_warns_once_and_scores_zero(self) -> None:
+        import struct
+
+        # Configured phrase "hey ron" but the model only scores "hey_mycroft".
+        checker = OpenWakeWordChecker(phrase="hey ron", threshold=0.5)
+        checker._model = _FakeModel({"hey_mycroft": 0.9})
+        checker._warmup_chunks = 10  # skip warmup
+
+        frame = struct.pack(f"<{1280}h", *([0] * 1280))
+
+        # First mismatched frame: no detection, and the one-shot warning arms.
+        assert checker.check(frame, 0.08) is None
+        assert checker._phrase_mismatch_warned is True
+
+        # Subsequent frames must not re-warn (the guard is one-shot).
+        assert checker.check(frame, 0.16) is None
+        assert checker.check(frame, 0.24) is None
+        # Still armed, never reset -- the flag is monotonic.
+        assert checker._phrase_mismatch_warned is True
+
+    def test_matching_phrase_does_not_warn(self) -> None:
+        import struct
+
+        checker = OpenWakeWordChecker(phrase="hey_mycroft", threshold=0.5)
+        checker._model = _FakeModel({"hey_mycroft": 0.9})
+        checker._warmup_chunks = 10
+
+        frame = struct.pack(f"<{1280}h", *([0] * 1280))
+        result = checker.check(frame, 0.08)
+        assert result is not None
+        assert result.phrase == "hey_mycroft"
+        assert checker._phrase_mismatch_warned is False

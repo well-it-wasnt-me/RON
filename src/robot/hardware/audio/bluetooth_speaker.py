@@ -203,21 +203,38 @@ class BluetoothSpeaker:
         wav_bytes = buffer.to_wav()
 
         self._playing = True
-        try:
-            cmd = [
-                "paplay",
-                "--device",
-                self._sink_name,
-            ]
-            proc = subprocess.Popen(
-                cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-            )
-            _, stderr_bytes = proc.communicate(input=wav_bytes, timeout=30)
+
+        def _play_blocking() -> None:
+            """Run paplay synchronously; meant for a worker thread.
+
+            ``paplay`` reads the WAV header from stdin and blocks until
+            playback finishes. Running this on the event loop would freeze
+            the whole robot (mic queue, WS, API, perception) for the
+            duration of every utterance, so it must run off-loop.
+            """
+            cmd = ["paplay", "--device", self._sink_name]
+            try:
+                proc = subprocess.Popen(
+                    cmd,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                )
+            except FileNotFoundError:
+                _log.error("audio.playback.failed", reason="paplay_not_found")
+                return
+            try:
+                _, stderr_bytes = proc.communicate(input=wav_bytes, timeout=30)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                with contextlib.suppress(Exception):
+                    proc.wait(timeout=5)
+                _log.warning("audio.playback.failed", reason="timeout")
+                return
             if proc.returncode and proc.returncode != 0:
-                stderr = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
+                stderr = (
+                    stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
+                )
                 _log.warning(
                     "audio.playback.failed",
                     returncode=proc.returncode,
@@ -226,15 +243,16 @@ class BluetoothSpeaker:
                 raise RuntimeError(
                     f"Bluetooth speaker playback failed with return code {proc.returncode}"
                 )
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            with contextlib.suppress(Exception):
-                proc.wait(timeout=5)
-            _log.warning("audio.playback.failed", reason="timeout")
-            return
-        except FileNotFoundError:
-            _log.error("audio.playback.failed", reason="paplay_not_found")
-            return
+
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+            if loop is not None:
+                await loop.run_in_executor(None, _play_blocking)
+            else:
+                _play_blocking()
         finally:
             self._playing = False
         _log.info(

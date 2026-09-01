@@ -551,10 +551,19 @@ class UsbMicrophone(Microphone):
         queue.put_nowait(None)
 
     def _log_runtime_diagnostics(self, *, force: bool) -> None:
+        """Rate-limited INFO summary so chunk drops surface in the dashboard.
+
+        The dashboard ring buffer captures INFO/WARNING but not DEBUG, and
+        the conversation ``audio_loop.tick`` is DEBUG -- so without this
+        summary a rising ``chunks_dropped`` counter is invisible until the
+        mic is closed. ``force=True`` logs immediately (used at start);
+        otherwise at most once per ``_DIAGNOSTIC_INTERVAL_S``.
+        """
         now = time.monotonic()
         if not force and now - self._last_diag_at < _DIAGNOSTIC_INTERVAL_S:
             return
         self._last_diag_at = now
+        _log.info("microphone.runtime", **self.runtime_stats())
 
     def _analyse_pcm(self, pcm: bytes) -> dict[str, float | int]:
         if len(pcm) < 2:

@@ -31,11 +31,35 @@ from robot.logging import get_logger
 
 _log = get_logger("hardware.sensors.microphone.rtsp")
 
+
+def _rms(pcm: bytes) -> float:
+    """Root-mean-square energy of an s16le PCM buffer (0..1 normalised).
+
+    Mirrors :func:`robot.hardware.sensors.usb_microphone.rms` but kept local
+    so the RTSP mic has no cross-driver import dependency.
+    """
+    import math
+    import struct
+
+    count = len(pcm) // 2
+    if count == 0:
+        return 0.0
+    total = 0
+    for offset in range(0, count, 1024):
+        n = min(1024, count - offset)
+        samples = struct.unpack(f"<{n}h", pcm[offset * 2 : (offset + n) * 2])
+        for sample in samples:
+            total += sample * sample
+    # math.sqrt (typed -> float) keeps the return type clean even though
+    # struct.unpack yields Any-typed samples.
+    return math.sqrt(total / count) / 32768.0
+
 _DEFAULT_QUEUE_SIZE = 64
 _DEFAULT_RTSP_TIMEOUT_US = 5_000_000
 _DEFAULT_RECONNECT_INITIAL_DELAY_S = 1.0
 _DEFAULT_RECONNECT_MAX_DELAY_S = 5.0
 _THREAD_JOIN_TIMEOUT_S = 2.0
+_DIAGNOSTIC_INTERVAL_S = 2.0
 
 
 @dataclass(slots=True)
@@ -85,10 +109,25 @@ class RtspMicrophone(Microphone):
     _input_channels: int = field(default=0, init=False)
     _input_codec: str = field(default="", init=False)
 
-    _chunks_decoded: int = field(default=0, init=False)
+    #: Number of *input* PyAV frames decoded (codec frame rate, e.g. aac
+    #: 44100 Hz). This is NOT the number of output chunks: resampling changes
+    #: the frame count, so ``input_frames_decoded`` != ``chunks_produced``.
+    #: Kept distinct so the close log cannot be misread as lost audio.
+    _input_frames_decoded: int = field(default=0, init=False)
+    #: Number of fixed-size output chunks actually built from the PCM buffer
+    #: and handed to ``_enqueue_threadsafe``. ``chunks_produced`` should be
+    #: roughly ``chunks_emitted + chunks_dropped`` (plus whatever is still in
+    #: the queue at shutdown) -- that is the honest "did we lose audio?"
+    #: relationship.
+    _chunks_produced: int = field(default=0, init=False)
     _chunks_emitted: int = field(default=0, init=False)
     _chunks_dropped: int = field(default=0, init=False)
     _reconnect_attempts: int = field(default=0)
+    #: Most recent chunk RMS (0..1), updated on the decode thread. Read by
+    #: the /settings/mic/level endpoint so the dashboard meter works for the
+    #: RTSP mic, not just UsbMicrophone.
+    _last_rms_value: float = field(default=0.0, init=False)
+    _last_diag_at: float = field(default=0.0, init=False)
 
     _timeline_s: float = field(default=0.0, init=False)
     _playback_start_monotonic: float | None = field(
@@ -191,7 +230,8 @@ class RtspMicrophone(Microphone):
         _log.info(
             "rtsp_microphone.closed",
             url=self._safe_url(),
-            chunks_decoded=self._chunks_decoded,
+            input_frames_decoded=self._input_frames_decoded,
+            chunks_produced=self._chunks_produced,
             chunks_emitted=self._chunks_emitted,
             chunks_dropped=self._chunks_dropped,
             reconnect_attempts=self._reconnect_attempts,
@@ -217,13 +257,63 @@ class RtspMicrophone(Microphone):
             "thread_alive": (self._thread is not None and self._thread.is_alive()),
             "queue_size": None if queue is None else queue.qsize(),
             "queue_maxsize": self.queue_maxsize,
-            "chunks_decoded": self._chunks_decoded,
+            "input_frames_decoded": self._input_frames_decoded,
+            "chunks_produced": self._chunks_produced,
             "chunks_emitted": self._chunks_emitted,
             "chunks_dropped": self._chunks_dropped,
             "reconnect_attempts": self._reconnect_attempts,
             "reader_error": self._reader_error,
             "timeline_s": round(self._timeline_s, 3),
+            "last_rms": round(self._last_rms_value, 5),
         }
+
+    def runtime_stats(self) -> dict[str, Any]:
+        """Return the runtime counters used by diagnostics and logging.
+
+        Mirrors :meth:`UsbMicrophone.runtime_stats` so the conversation
+        audio-loop tick and the ``/settings/mic/diagnostics`` endpoint can
+        treat every microphone backend uniformly (``getattr(mic,
+        "runtime_stats")`` works for USB and RTSP alike).
+        """
+        queue = self._queue
+        return {
+            "type": "RtspMicrophone",
+            "input_frames_decoded": self._input_frames_decoded,
+            "chunks_produced": self._chunks_produced,
+            "chunks_emitted": self._chunks_emitted,
+            "chunks_dropped": self._chunks_dropped,
+            "queue_size": None if queue is None else queue.qsize(),
+            "queue_maxsize": self.queue_maxsize,
+            "reconnect_attempts": self._reconnect_attempts,
+            "reader_error": self._reader_error,
+            "last_rms": round(self._last_rms_value, 5),
+        }
+
+    def _log_runtime_diagnostics(self) -> None:
+        """Rate-limited INFO summary so chunk drops surface in the dashboard.
+
+        The dashboard ring buffer captures INFO/WARNING but not DEBUG, and
+        the conversation ``audio_loop.tick`` is DEBUG -- so without this
+        summary a rising ``chunks_dropped`` counter is invisible until the
+        mic is closed. Logged from the decode thread at most once per
+        ``_DIAGNOSTIC_INTERVAL_S``.
+        """
+        now = time.monotonic()
+        if now - self._last_diag_at < _DIAGNOSTIC_INTERVAL_S:
+            return
+        self._last_diag_at = now
+        queue = self._queue
+        _log.info(
+            "rtsp_microphone.runtime",
+            input_frames_decoded=self._input_frames_decoded,
+            chunks_produced=self._chunks_produced,
+            chunks_emitted=self._chunks_emitted,
+            chunks_dropped=self._chunks_dropped,
+            queue_size=None if queue is None else queue.qsize(),
+            queue_maxsize=self.queue_maxsize,
+            reconnect_attempts=self._reconnect_attempts,
+            last_rms=round(self._last_rms_value, 5),
+        )
 
     async def _ensure_started(self) -> None:
         """Start the decoder thread once an asyncio loop exists."""
@@ -411,7 +501,7 @@ class RtspMicrophone(Microphone):
             if self._stop.is_set() or self._closed:
                 return
 
-            self._chunks_decoded += 1
+            self._input_frames_decoded += 1
 
             resampled_frames = resampler.resample(frame)
 
@@ -520,7 +610,11 @@ class RtspMicrophone(Microphone):
                 timestamp=chunk_start_s,
             )
 
+            self._chunks_produced += 1
+            self._last_rms_value = _rms(pcm)
             self._enqueue_threadsafe(chunk)
+
+        self._log_runtime_diagnostics()
 
     def _enqueue_threadsafe(self, chunk: AudioChunk) -> None:
         """Schedule an audio chunk on the asyncio loop."""

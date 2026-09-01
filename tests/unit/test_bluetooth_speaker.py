@@ -730,6 +730,53 @@ class TestBluetoothSpeakerPlay:
             await speaker.play(buf)
             mock_proc.kill.assert_called()
 
+    @pytest.mark.anyio
+    async def test_play_runs_paplay_off_event_loop(self) -> None:
+        """paplay must run in a worker thread, not on the event loop.
+
+        Running ``paplay`` (a blocking ``communicate``) on the loop would
+        freeze the whole robot — mic queue, WebSocket, API, perception —
+        for the duration of every utterance. The fix routes it through
+        ``loop.run_in_executor``; this test pins that by recording the
+        thread id inside the blocking call and asserting it is not the
+        event-loop thread.
+        """
+        import threading
+
+        from robot.hardware.audio.bluetooth_speaker import BluetoothSpeaker
+        from robot.interfaces.audio import AudioBuffer
+
+        speaker = BluetoothSpeaker(
+            device_mac="AA:BB:CC:DD:EE:FF",
+            auto_connect=True,
+        )
+        speaker._connected = True
+        speaker._sink_name = "bluez_output.AA_BB_CC_DD_EE_FF.a2dp-sink"
+
+        main_tid = threading.get_ident()
+        seen_tids: list[int] = []
+
+        def _communicate(*_args: object, **_kwargs: object) -> tuple[bytes, bytes]:
+            seen_tids.append(threading.get_ident())
+            return (b"", b"")
+
+        mock_proc = MagicMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = MagicMock(side_effect=_communicate)
+
+        with patch(
+            "robot.hardware.audio.bluetooth_speaker.subprocess.Popen",
+            return_value=mock_proc,
+        ):
+            buf = AudioBuffer(pcm=b"\x00\x00" * 100, sample_rate=22050, channels=1)
+            await speaker.play(buf)
+
+        assert seen_tids, "paplay communicate() was never called"
+        assert seen_tids[0] != main_tid, (
+            "paplay ran on the event-loop thread; it must run in a worker "
+            "thread so playback does not block the whole robot"
+        )
+
 
 # ---------------------------------------------------------------------------
 # BluetoothSpeaker lifecycle

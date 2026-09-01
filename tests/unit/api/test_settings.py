@@ -119,6 +119,62 @@ async def test_mic_level(wired_client: AsyncClient) -> None:
     assert 0.0 <= d["level"] <= 1.0
 
 
+async def test_mic_diagnostics_fallback(wired_client: AsyncClient) -> None:
+    """A mic without runtime_stats/diagnostics (MockMicrophone) falls back
+    to its type name only -- the endpoint still 200s."""
+    r = await wired_client.get("/api/v1/settings/mic/diagnostics")
+    assert r.status_code == 200
+    d = r.json()
+    assert d["type"] == "MockMicrophone"
+
+
+async def test_mic_diagnostics_exposes_drop_counters(settings: AppSettings) -> None:
+    """A mic with runtime_stats exposes its chunk counters -- this is the
+    'how many chunks are dropped?' endpoint."""
+
+    class _StatsMic:
+        sample_rate = 16000
+        channels = 1
+
+        def runtime_stats(self) -> dict[str, object]:
+            return {
+                "type": "FakeMic",
+                "chunks_produced": 100,
+                "chunks_emitted": 95,
+                "chunks_dropped": 5,
+            }
+
+        async def close(self) -> None:  # pragma: no cover - unused
+            return None
+
+    app = create_app(settings=settings)
+    bus = InMemoryEventBus()
+    sm = StateMachine(bus=bus)
+    bridge = StateBridge(
+        bus=bus,
+        state_machine=sm,
+        camera=MockCamera(320, 240),
+        microphone=_StatsMic(),  # type: ignore[arg-type]
+        audio=MockAudioOutput(sample_rate=48000, channels=1),
+    )
+    app.state.bridge = bridge
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test", timeout=5) as ac:
+        r = await ac.get("/api/v1/settings/mic/diagnostics")
+    assert r.status_code == 200
+    d = r.json()
+    assert d["type"] == "FakeMic"
+    assert d["chunks_produced"] == 100
+    assert d["chunks_emitted"] == 95
+    assert d["chunks_dropped"] == 5
+
+
+async def test_mic_diagnostics_no_hardware(client: AsyncClient) -> None:
+    r = await client.get("/api/v1/settings/mic/diagnostics")
+    assert r.status_code == 503
+
+
 async def test_mic_test(wired_client: AsyncClient) -> None:
     """POST /settings/mic/test records and returns WAV audio."""
     r = await wired_client.post(

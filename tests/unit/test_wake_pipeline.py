@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import struct
+import threading
 from collections.abc import Callable
 
 from tests.fakes.llm import FakeLLM
@@ -357,6 +358,53 @@ async def test_audio_loop_not_blocked_by_tts() -> None:
 
     tts.release()
     await _wait_for(lambda: sm.state is RobotState.IDLE)
+    svc.stop_audio_loop()
+    svc.detach()
+
+
+class _ThreadRecordingChecker:
+    """Wake checker that records which thread it ran on."""
+
+    def __init__(self) -> None:
+        self.tids: list[int] = []
+
+    def check(self, pcm: bytes, timestamp: float) -> WakeWordDetected | None:
+        self.tids.append(threading.get_ident())
+        return None
+
+
+async def test_wake_check_runs_synchronously_on_event_loop() -> None:
+    """The wake check runs synchronously on the event loop thread.
+
+    Regression guard: an earlier fix ran ``check()`` via
+    ``loop.run_in_executor`` on every chunk, which forced the audio loop to
+    yield and re-schedule per chunk. Under event-loop congestion that
+    throttled the mic queue drain to ~16 chunks/s while the producer
+    delivers 33/s, dropping ~50% of audio. Synchronous check (an
+    openWakeWord predict is ~7 ms on a Pi 5) drains at full realtime speed
+    with zero drops. This test pins that decision: ``check`` must run on
+    the event loop thread, not an executor worker.
+    """
+    bus = InMemoryEventBus()
+    sm = StateMachine(bus=bus)
+    sm._state = RobotState.IDLE
+    mic = QueueMicrophone()
+    tts = BlockingTTS()
+    checker = _ThreadRecordingChecker()
+    svc = _build_service(bus=bus, sm=sm, mic=mic, tts=tts, wake_checker=checker)
+    svc.start_audio_loop()
+
+    main_tid = threading.get_ident()
+
+    await mic.put(_chunk_bytes(), 0.0)
+    await _wait_for(lambda: len(checker.tids) >= 1)
+
+    assert checker.tids, "wake check never ran"
+    assert all(tid == main_tid for tid in checker.tids), (
+        "wake check ran off the event loop thread (executor?) -- this "
+        "regresses the per-chunk yield that dropped ~50% of mic audio"
+    )
+
     svc.stop_audio_loop()
     svc.detach()
 

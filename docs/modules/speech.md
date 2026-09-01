@@ -62,9 +62,23 @@ any loud sound.
     audio gating only, not for wake-word recognition. Selecting `"energy"` is a
     configuration validation error.
 
+!!! warning "The openWakeWord phrase must match a loaded model"
+
+    For `provider=openwakeword`, `DESKBOT_WAKEWORD__PHRASE` must name a model
+    that openWakeWord actually loads, or point
+    `DESKBOT_WAKEWORD__MODEL_PATH` at a custom `.onnx` model whose prediction
+    key matches the phrase. The built-in models report scores for
+    `hey_mycroft`, `hey_jarvis`, `hey_marvin`, `alexa`, `weather`, and the
+    `*_timer` models. A phrase with no matching model (e.g. an arbitrary
+    `"hey ron"` with no custom model) scores `0.0` on every frame, so the
+    wake word **never triggers** -- silently. The checker logs a one-shot
+    `openwakeword.phrase_not_found` WARNING naming the available models when
+    this happens. Until a custom model is trained, set `PHRASE` to one of
+    the built-in model names.
+
 ```env
 DESKBOT_WAKEWORD__PROVIDER=openwakeword
-DESKBOT_WAKEWORD__PHRASE=hey deskbot
+DESKBOT_WAKEWORD__PHRASE=hey_mycroft
 DESKBOT_WAKEWORD__THRESHOLD=0.5
 # Optional custom openWakeWord ONNX model:
 DESKBOT_WAKEWORD__MODEL_PATH=

@@ -995,7 +995,9 @@ paths:
 
         ``_last_rms_value`` from the background capture thread (zero
 
-        conflict with the conversation audio loop). For other microphones
+        conflict with the conversation audio loop). For :class:`RtspMicrophone`
+
+        it reads the decode-thread ``_last_rms_value``. For other microphones
 
         a best-effort value is returned.'
       operationId: mic_level_api_v1_settings_mic_level_get
@@ -1006,6 +1008,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MicLevelResponse'
+  /api/v1/settings/mic/diagnostics:
+    get:
+      tags:
+      - settings
+      summary: Microphone runtime diagnostics
+      description: 'Return the active microphone''s runtime counters -- the "how
+        many chunks are being dropped?" endpoint. Exposes `runtime_stats()`
+        (UsbMicrophone) or `diagnostics()` (RtspMicrophone); every backend
+        reports `chunks_emitted` and `chunks_dropped`. For RtspMicrophone,
+        `input_frames_decoded` counts PyAV input frames (NOT output chunks;
+        resampling changes the count, so it is not a drop signal) and
+        `chunks_produced` counts output chunks built (≈ chunks_emitted +
+        chunks_dropped). A backend with neither method falls back to its
+        type name only.'
+      operationId: mic_diagnostics_api_v1_settings_mic_diagnostics_get
+      responses:
+        '200':
+          description: Microphone runtime counters (shape varies per backend)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Backend-specific runtime counters. Always includes
+                  chunks_emitted and chunks_dropped when the backend tracks
+                  them.
+        '503':
+          description: No microphone available
   /api/v1/settings/mic/test:
     post:
       tags:
