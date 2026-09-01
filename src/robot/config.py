@@ -385,6 +385,16 @@ class PerceptionConfig(BaseSettings):
         description="Scan interval when robot is CURIOUS (faster for tracking).",
     )
     max_faces: int = Field(default=3, ge=0)
+    known_face_scans: int = Field(
+        default=3,
+        ge=1,
+        description=(
+            "Consecutive scans a face must persist in roughly the same place "
+            "before it is flagged 'known' on FaceDetected events. Tracked-face "
+            "heuristic: RON has no face-recognition model, so a steadily "
+            "tracked face is treated as remembered."
+        ),
+    )
     score_threshold: float = Field(
         default=0.5,
         gt=0.0,

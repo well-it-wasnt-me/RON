@@ -136,9 +136,11 @@ class PersonalityChanged:
 # ---------------------------------------------------------------------------
 @dataclass(slots=True, frozen=True)
 class FaceDetected:
-    x: float  # normalized 0..1
+    x: float  # normalized 0..1, face centre
     y: float
     confidence: float = 1.0
+    size: float = 0.0  # normalized 0..1, approx face size as a fraction of frame height
+    known: bool = False  # True when the face is recognised/remembered (see FaceRecognized)
 
 
 @dataclass(slots=True, frozen=True)
