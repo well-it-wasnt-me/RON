@@ -109,6 +109,13 @@ The settings router backs the hardware test page at `/settings/`.
 - `GET /api/v1/settings/mic/info` - Microphone info
 - `GET /api/v1/settings/mic/level` - Current microphone input level
 - `POST /api/v1/settings/mic/test` - Record and play back a mic test
+- `WS /api/v1/settings/mic/stream` - Live microphone audio stream (see
+  [WebSocket](#websocket)). Backs the Live View "RON's Ears" card: the first
+  frame is a text header `{"sample_rate","channels","frame_ms","type","is_mock"}`
+  (or `{"error":"no_microphone"}`), then continuous binary frames of raw
+  signed-16-bit little-endian PCM. A **temporary** microphone is created per
+  connection so the conversation audio loop is undisturbed. Send `"stop"` to
+  end.
 
 ### Audio output
 
@@ -199,6 +206,27 @@ Example frame:
 ```
 
 Sending the literal `ping` receives `pong`.
+
+### Live microphone stream
+
+A second WebSocket streams RON's microphone audio to the browser, backing the
+Live View panel's "RON's Ears" card:
+
+```text
+ws://HOST:8000/api/v1/settings/mic/stream
+```
+
+The first frame is a **text** message with the audio format:
+
+```json
+{"sample_rate": 16000, "channels": 1, "frame_ms": 30, "type": "UsbMicrophone", "is_mock": false}
+```
+
+or `{"error": "no_microphone"}` (then the socket closes). Every following frame
+is **binary**: raw signed-16-bit little-endian PCM, `frame_ms` long. The client
+plays them with the Web Audio API. Send the text message `"stop"` to end the
+stream; closing the socket also tears it down. A temporary microphone is
+created per connection so the conversation audio loop is never disturbed.
 
 ## OpenAPI
 

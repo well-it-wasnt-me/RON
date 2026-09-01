@@ -80,6 +80,21 @@ body{display:flex;overflow:hidden}
 .log-count-badge{font-size:.72rem;color:var(--accent);background:rgba(108,99,255,.12);border-radius:.3rem;padding:.05rem .4rem;margin-left:.3rem}
 .state-display{font-size:1.5rem;font-weight:700;color:var(--accent)}
 .state-display .emotion{font-size:1rem;color:var(--muted);font-weight:400}
+/* Live View */
+#live-cam-wrap{position:relative;background:#000;border-radius:.5rem;overflow:hidden;min-height:220px;display:flex;align-items:center;justify-content:center}
+#live-cam-stage{position:relative;display:inline-block;line-height:0}
+#live-cam{display:block;max-width:100%;max-height:65vh;width:auto;height:auto}
+#live-cam-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#live-overlay{position:absolute;top:.6rem;left:.6rem;display:flex;gap:.4rem;flex-wrap:wrap;pointer-events:none;max-width:calc(100% - 1.2rem);z-index:2}
+#live-overlay .ov-badge{background:rgba(0,0,0,.55);border:1px solid var(--border);border-radius:.4rem;padding:.2rem .5rem;font-size:.72rem;color:#fff}
+#live-overlay .ov-state{color:var(--accent);font-weight:700}
+#live-overlay .ov-face{color:var(--green);transition:opacity .3s}
+#live-cam-wrap .cam-msg{color:var(--muted);font-size:.85rem}
+#live-meter{height:10px;background:var(--bg);border:1px solid var(--border);border-radius:9999px;overflow:hidden}
+#live-meter-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--green),var(--yellow),var(--red));transition:width .06s linear}
+.live-row{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.5rem}
+.live-row button{padding:.35rem .7rem;font-size:.82rem}
+.live-row .hint{margin:0}
 </style>
 </head>
 <body>
@@ -94,6 +109,7 @@ body{display:flex;overflow:hidden}
     <a href="#/config"><span class="nav-icon">&#9881;</span> Config Viewer</a>
     <a href="#/system"><span class="nav-icon">&#128187;</span> System</a>
     <div class="nav-sep"></div>
+    <a href="#/live"><span class="nav-icon">&#128065;</span> Live View</a>
     <a href="#/controls"><span class="nav-icon">&#127919;</span> Controls</a>
     <a href="/learning"><span class="nav-icon">&#129504;</span> Local Brain</a>
     <a href="/teaching"><span class="nav-icon">&#128218;</span> Teaching</a>
@@ -131,11 +147,13 @@ const PAGES = {
   '/config': { title: 'Configuration', render: renderConfig },
   '/system': { title: 'System', render: renderSystem },
   '/controls': { title: 'Robot Controls', render: renderControls },
+  '/live': { title: 'Live View', render: renderLive },
 };
 
 // ---- Routing ----
 function route() {
   const hash = location.hash.slice(1) || '/';
+  if (typeof cleanupLive === 'function') cleanupLive();
   const page = PAGES[hash];
   if (page) {
     $pageTitle.textContent = page.title;
@@ -622,6 +640,246 @@ async function renderControls() {
   document.getElementById('emo-btn').addEventListener('click', () => apiPost(API + '/emotion', {emotion: document.getElementById('emo-select').value, intensity: 1.0}, {safe:true}));
   document.getElementById('speak-btn').addEventListener('click', () => { const t = document.getElementById('speak-text').value.trim(); if(t) apiPost(API + '/speak', {text: t}, {safe:true}); });
   document.getElementById('speak-direct-btn').addEventListener('click', () => { const t = document.getElementById('speak-text').value.trim(); if(t) apiPost(API + '/speak-direct', {text: t}, {safe:true}); });
+}
+
+// ---- Live View (see & hear the world as RON) ----
+let liveMicWS = null, liveMicCtx = null, liveMicNextTime = 0, liveMicHeader = null, liveCamPoll = null;
+let _liveFaces = [], _liveFaceBurst = null, _liveFaceBurstT = null;
+let _liveResize = null;
+
+function cleanupLive() {
+  // Stop the microphone stream + Web Audio graph.
+  if (liveMicWS) { try { liveMicWS.close(); } catch (e) {} liveMicWS = null; }
+  if (liveMicCtx) { try { liveMicCtx.close(); } catch (e) {} liveMicCtx = null; }
+  liveMicHeader = null; liveMicNextTime = 0;
+  // Stop the camera fallback poller (the MJPEG <img> dies with the DOM).
+  if (liveCamPoll) { clearInterval(liveCamPoll); liveCamPoll = null; }
+  const $btn = document.getElementById('live-listen');
+  if ($btn) { $btn.textContent = 'Start listening'; $btn.classList.remove('active', 'danger'); }
+  // Drop face-box state + the resize listener.
+  _liveFaces = []; _liveFaceBurst = null; clearTimeout(_liveFaceBurstT);
+  if (_liveResize) { window.removeEventListener('resize', _liveResize); _liveResize = null; }
+}
+
+async function renderLive() {
+  const [camInfo, micInfo, state] = await Promise.all([
+    apiGet(API + '/settings/camera/info', {safe:true}),
+    apiGet(API + '/settings/mic/info', {safe:true}),
+    apiGet(API + '/state', {safe:true}),
+  ]);
+  const camType = camInfo ? esc(camInfo.type) + (camInfo.is_mock ? ' (mock)' : '') : 'none';
+  const camRes = camInfo && camInfo.width ? camInfo.width + '×' + camInfo.height : '';
+  const micType = micInfo ? esc(micInfo.type) + (micInfo.is_mock ? ' (mock)' : '') : 'none';
+  const micSr = micInfo && micInfo.sample_rate ? micInfo.sample_rate + ' Hz' : '';
+
+  let html = '<div class="grid">';
+  // RON's eyes — live camera feed with a state/emotion/face overlay.
+  html += card("RON's Eyes &#128065;", `
+    <div id="live-cam-wrap">
+      <div class="cam-msg" id="live-cam-msg">Connecting to camera…</div>
+      <div id="live-cam-stage" style="display:none">
+        <img id="live-cam" alt="Live camera feed">
+        <canvas id="live-cam-canvas"></canvas>
+        <div id="live-overlay">
+          <span class="ov-badge ov-state" id="live-state">${esc((state && state.state || '-').toUpperCase())}</span>
+          <span class="ov-badge" id="live-emotion">emotion -</span>
+          <span class="ov-badge ov-face" id="live-face" style="opacity:.3">no face</span>
+        </div>
+      </div>
+    </div>
+    <div class="live-row" style="margin-top:.5rem">
+      <button id="live-snap">Snapshot</button>
+      <button class="secondary" id="live-cam-restart">Restart stream</button>
+      <span class="hint">${camType}${camRes ? ' · ' + camRes : ''}</span>
+    </div>
+  `);
+  // RON's ears — live microphone audio played in the browser.
+  html += card("RON's Ears &#127908;", `
+    <div class="live-row">
+      <button id="live-listen">Start listening</button>
+      <span class="hint">${micType}${micSr ? ' · ' + micSr : ''}</span>
+    </div>
+    <div id="live-meter"><div id="live-meter-fill"></div></div>
+    <div class="hint" id="live-listen-hint" style="margin-top:.5rem">Press start to hear what RON's microphone picks up, in real time.</div>
+  `);
+  html += '</div>';
+  $content.innerHTML = html;
+
+  startLiveCam();
+  document.getElementById('live-snap').addEventListener('click', snapLiveCam);
+  document.getElementById('live-cam-restart').addEventListener('click', startLiveCam);
+  document.getElementById('live-listen').addEventListener('click', toggleLiveListen);
+  _liveFaces = []; _liveFaceBurst = null; clearTimeout(_liveFaceBurstT);
+  _liveResize = () => { resizeLiveCanvas(); drawLiveFaces(); };
+  window.addEventListener('resize', _liveResize);
+}
+
+function startLiveCam() {
+  if (liveCamPoll) { clearInterval(liveCamPoll); liveCamPoll = null; }
+  const $img = document.getElementById('live-cam');
+  const $stage = document.getElementById('live-cam-stage');
+  const $msg = document.getElementById('live-cam-msg');
+  if (!$img) return;
+  $msg.style.display = 'block';
+  $msg.textContent = 'Connecting to camera…';
+  if ($stage) $stage.style.display = 'none';
+  const reveal = () => {
+    $msg.style.display = 'none';
+    if ($stage) $stage.style.display = 'inline-block';
+    resizeLiveCanvas();
+    drawLiveFaces();
+  };
+  $img.onerror = () => {
+    // MJPEG not supported / dropped — fall back to frame polling.
+    if (liveCamPoll) return;
+    $msg.textContent = 'MJPEG unavailable — polling frames…';
+    liveCamPoll = setInterval(async () => {
+      try {
+        const r = await fetch(API + '/settings/camera/frame', { cache: 'no-store' });
+        if (!r.ok) return;
+        const blob = await r.blob();
+        $img.src = URL.createObjectURL(blob);
+      } catch (e) { /* keep retrying */ }
+    }, 250);
+  };
+  $img.onload = reveal;
+  // Cache-bust so a reconnect fetches a fresh stream.
+  $img.src = API + '/settings/camera/stream?' + Date.now();
+}
+
+// Match the overlay canvas backing store to the rendered image so the
+// normalized face coords map 1:1 to pixels. x,y are face CENTRE in 0..1,
+// size is the face height as a fraction of frame height; derive a square
+// box from size (fall back to a default when the detector didn't report one).
+function resizeLiveCanvas() {
+  const $c = document.getElementById('live-cam-canvas');
+  const $img = document.getElementById('live-cam');
+  if (!$c || !$img) return;
+  const w = $img.clientWidth || $img.naturalWidth || 0;
+  const h = $img.clientHeight || $img.naturalHeight || 0;
+  if (!w || !h) return;
+  $c.width = w;
+  $c.height = h;
+}
+
+function drawLiveFaces() {
+  const $c = document.getElementById('live-cam-canvas');
+  if (!$c || !$c.width) return;
+  const ctx = $c.getContext('2d');
+  if (!ctx) return;
+  ctx.clearRect(0, 0, $c.width, $c.height);
+  const W = $c.width, H = $c.height;
+  for (const f of _liveFaces) {
+    const size = f.size > 0 ? f.size : 0.18; // ~18% of frame height if unknown
+    const boxH = size * H;
+    const boxW = boxH * 0.75; // faces are taller than wide; rough aspect
+    const cx = f.x * W, cy = f.y * H;
+    const x = cx - boxW / 2, y = cy - boxH / 2;
+    ctx.lineWidth = Math.max(2, Math.round(H / 240));
+    ctx.strokeStyle = f.known ? '#ff3b30' : '#ffffff';
+    ctx.strokeRect(x, y, boxW, boxH);
+  }
+}
+
+async function snapLiveCam() {
+  try {
+    const r = await fetch(API + '/settings/camera/frame', { cache: 'no-store' });
+    if (!r.ok) { toast('Snapshot failed', false); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'deskbot-frame-' + Date.now() + '.jpg';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    toast('Snapshot saved');
+  } catch (e) { toast('Snapshot failed', false); }
+}
+
+function toggleLiveListen() {
+  if (liveMicWS) stopLiveListen();
+  else startLiveListen();
+}
+
+function startLiveListen() {
+  const $btn = document.getElementById('live-listen');
+  const $hint = document.getElementById('live-listen-hint');
+  // AudioContext must be created from a user gesture (the click).
+  try {
+    liveMicCtx = new (window.AudioContext || window.webkitAudioContext)();
+  } catch (e) { toast('Web Audio not supported', false); return; }
+  liveMicNextTime = 0;
+  liveMicHeader = null;
+  const wsUrl = (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host + API + '/settings/mic/stream';
+  liveMicWS = new WebSocket(wsUrl);
+  liveMicWS.binaryType = 'arraybuffer';
+  liveMicWS.onopen = () => {
+    if ($btn) { $btn.textContent = 'Stop listening'; $btn.classList.add('danger'); }
+    if ($hint) $hint.textContent = 'Live audio streaming — this is what RON hears.';
+  };
+  liveMicWS.onmessage = (ev) => {
+    if (typeof ev.data === 'string') {
+      try {
+        const h = JSON.parse(ev.data);
+        if (h.error) { toast('Microphone unavailable', false); stopLiveListen(); return; }
+        liveMicHeader = h;
+      } catch (e) {}
+    } else {
+      playLivePcm(ev.data);
+    }
+  };
+  liveMicWS.onclose = () => {
+    if (liveMicWS === null) return; // already cleaned up
+    if ($btn) { $btn.textContent = 'Start listening'; $btn.classList.remove('danger'); }
+    if ($hint) $hint.textContent = 'Stream stopped.';
+    liveMicWS = null;
+  };
+  liveMicWS.onerror = () => { toast('Mic stream error', false); stopLiveListen(); };
+}
+
+function stopLiveListen() {
+  const ws = liveMicWS;
+  liveMicWS = null; // guard onclose against re-entry
+  if (ws) { try { ws.close(); } catch (e) {} }
+  if (liveMicCtx) { try { liveMicCtx.close(); } catch (e) {} liveMicCtx = null; }
+  liveMicHeader = null; liveMicNextTime = 0;
+  const $btn = document.getElementById('live-listen');
+  const $fill = document.getElementById('live-meter-fill');
+  if ($btn) { $btn.textContent = 'Start listening'; $btn.classList.remove('danger'); }
+  if ($fill) $fill.style.width = '0%';
+}
+
+function playLivePcm(buf) {
+  if (!liveMicCtx || !liveMicHeader) return;
+  const sr = liveMicHeader.sample_rate || 16000;
+  const ch = liveMicHeader.channels || 1;
+  const view = new DataView(buf);
+  const frames = (buf.byteLength / 2) / ch;
+  if (!frames) return;
+  // s16le -> Float32 deinterleaved, plus an RMS level for the meter.
+  const chans = [];
+  let sumSq = 0;
+  for (let c = 0; c < ch; c++) chans.push(new Float32Array(frames));
+  for (let i = 0; i < frames; i++) {
+    for (let c = 0; c < ch; c++) {
+      const s = view.getInt16((i * ch + c) * 2, true) / 32768;
+      chans[c][i] = s;
+      sumSq += s * s;
+    }
+  }
+  const rms = Math.sqrt(sumSq / (frames * ch));
+  const $fill = document.getElementById('live-meter-fill');
+  if ($fill) $fill.style.width = Math.min(100, rms * 100 * 2.5) + '%';
+  // Schedule gapless playback: buffer (resampled to ctx rate by the source).
+  const ab = liveMicCtx.createBuffer(ch, frames, sr);
+  for (let c = 0; c < ch; c++) ab.getChannelData(c).set(chans[c]);
+  const src = liveMicCtx.createBufferSource();
+  src.buffer = ab;
+  src.connect(liveMicCtx.destination);
+  const now = liveMicCtx.currentTime;
+  if (liveMicNextTime < now) liveMicNextTime = now;
+  src.start(liveMicNextTime);
+  liveMicNextTime += frames / sr;
 }
 
 // ---- Mobile sidebar ----

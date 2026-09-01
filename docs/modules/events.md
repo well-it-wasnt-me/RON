@@ -25,7 +25,7 @@ running.
 | `ServoMoved` | Servo target changed |
 | `IdleTimeout` | Idle period elapsed |
 | `PersonalityChanged` | Personality trait changed |
-| `FaceDetected` | Camera detected a face |
+| `FaceDetected` | Camera detected a face (carries normalised `x`/`y` centre, `confidence`, `size`, and `known` — see the [known-face heuristic](perception.md#known-face-heuristic)) |
 | `SpeechRecognized` | STT produced text |
 | `WakeWordDetected` | Wake word detected |
 | `SoundEffectPlayed` | Sound effect played |

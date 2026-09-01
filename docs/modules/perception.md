@@ -42,7 +42,25 @@ DESKBOT_PERCEPTION__IDLE_SCAN_INTERVAL_S=2.0
 DESKBOT_PERCEPTION__CURIOUS_SCAN_INTERVAL_S=0.3
 DESKBOT_PERCEPTION__MAX_FACES=3
 DESKBOT_PERCEPTION__SCORE_THRESHOLD=0.5
+DESKBOT_PERCEPTION__KNOWN_FACE_SCANS=3
 ```
+
+## Known-face heuristic
+
+RON has **no face-recognition model** — it detects faces but does not
+identify them. The `known` flag on `FaceDetected` is therefore a
+*persistence* heuristic, not recognition: the service tracks each detected
+face across scans (matching by normalised centre distance) and flags a face
+`known=True` once it has appeared in roughly the same place for
+`known_face_scans` consecutive scans. A face the robot has steadily been
+tracking (and likely turned CURIOUS toward) is treated as "remembered".
+
+A face that vanishes decays — its `seen_count` drops each missed scan and
+the track is dropped after 2 missed scans, so a face that disappears and
+returns must build up persistence again before it is re-flagged known.
+
+The Live View panel draws a **white** box over a detected face and a **red**
+box over a `known` one.
 
 ## Camera
 

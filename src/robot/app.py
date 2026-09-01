@@ -497,6 +497,7 @@ class DeskBotApp:
                     idle_scan_interval_s=settings.perception.idle_scan_interval_s,
                     curious_scan_interval_s=settings.perception.curious_scan_interval_s,
                     max_faces=settings.perception.max_faces,
+                    known_face_scans=settings.perception.known_face_scans,
                 )
                 perception_behavior = PerceptionBehavior(
                     bus=bus,

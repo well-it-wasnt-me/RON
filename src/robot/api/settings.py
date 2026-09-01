@@ -20,13 +20,14 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import math
 import struct
 import wave
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, cast
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response, StreamingResponse
 
 from robot.api.schemas import (
@@ -541,6 +542,101 @@ def _create_temp_mic(
         )
     except Exception:
         return None
+
+
+@router.websocket("/mic/stream")
+async def mic_stream_ws(websocket: WebSocket) -> None:
+    """Stream live microphone audio to the browser as WebSocket binary frames.
+
+    This backs the "hear the world as RON" Live View panel. A **temporary**
+    microphone mirroring the active one's settings is created per connection
+    (just like :func:`mic_test`) so the conversation audio loop keeps its own
+    stream undisturbed.
+
+    Protocol:
+
+    * The first frame is a **text** message carrying the audio format::
+
+        {"sample_rate": 16000, "channels": 1, "frame_ms": 30,
+         "type": "UsbMicrophone", "is_mock": false}
+
+      or ``{"error": "no_microphone"}`` if no mic is available (the socket
+      then closes).
+    * Every subsequent frame is **binary**: raw signed-16-bit little-endian
+      PCM bytes (``chunk.pcm``), ``frame_ms`` long. The client plays them
+      with the Web Audio API.
+    * Send the text message ``"stop"`` to end the stream; closing the
+      socket also tears it down. The temp microphone is always closed.
+    """
+    import asyncio
+
+    await websocket.accept()
+    app_state = websocket.app.state
+    bridge = getattr(app_state, "bridge", None)
+    mic = getattr(bridge, "microphone", None) if bridge else None
+    if mic is None:
+        await websocket.send_text(json.dumps({"error": "no_microphone"}))
+        with contextlib.suppress(Exception):
+            await websocket.close()
+        return
+
+    settings = getattr(app_state, "settings", None)
+    sample_rate = getattr(mic, "sample_rate", 16000)
+    channels = getattr(mic, "channels", 1) if settings is None else settings.microphone.channels
+    frame_ms = getattr(mic, "frame_ms", 30) if settings is not None else 30
+    temp_mic = _create_temp_mic(mic, settings, sample_rate, channels, frame_ms)
+    if temp_mic is None:
+        await websocket.send_text(json.dumps({"error": "no_microphone"}))
+        with contextlib.suppress(Exception):
+            await websocket.close()
+        return
+
+    await websocket.send_text(
+        json.dumps(
+            {
+                "sample_rate": sample_rate,
+                "channels": channels,
+                "frame_ms": frame_ms,
+                "type": type(mic).__name__,
+                "is_mock": type(mic).__name__ == "MockMicrophone",
+            }
+        )
+    )
+
+    async def pump() -> None:
+        async for chunk in temp_mic.stream():
+            await websocket.send_bytes(chunk.pcm)
+
+    async def reader() -> None:
+        # Detect client disconnect / an explicit "stop" message so we tear
+        # the temp microphone down promptly rather than waiting for a send
+        # to fail.
+        while True:
+            data = await websocket.receive_text()
+            if data.strip() == "stop":
+                break
+
+    pump_task = asyncio.create_task(pump())
+    reader_task = asyncio.create_task(reader())
+    try:
+        await asyncio.wait(
+            cast("set[asyncio.Future[Any]]", {pump_task, reader_task}),
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+    except WebSocketDisconnect:
+        pass
+    finally:
+        for task in (pump_task, reader_task):
+            task.cancel()
+            # CancelledError is a BaseException (not Exception) on 3.8+, so
+            # list it explicitly; retrieve each task's result/exception so
+            # asyncio doesn't log "task exception was never retrieved".
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await task
+        with contextlib.suppress(Exception):
+            await temp_mic.close()
+        with contextlib.suppress(Exception):
+            await websocket.close()
 
 
 # ---------------------------------------------------------------------------

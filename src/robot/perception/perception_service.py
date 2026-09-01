@@ -49,6 +49,26 @@ class PerceptionScan:
 
 
 @dataclass(slots=True)
+class _TrackedFace:
+    """A face tracked across consecutive scans for the known-face heuristic.
+
+    RON has no face-recognition model, so "known" is approximated by
+    *persistence*: a face that stays in roughly the same place for several
+    scans in a row is assumed to be one the robot is currently engaged with
+    (it entered CURIOUS to track it). ``seen_count`` grows with each
+    matching scan and decays when the face is missed, so a face that
+    disappears and reappears must prove itself again.
+    """
+
+    id: int
+    x: float
+    y: float
+    size: float
+    seen_count: int = 0
+    missed: int = 0
+
+
+@dataclass(slots=True)
 class PerceptionService:
     """Periodically capture frames and run face detection.
 
@@ -74,6 +94,13 @@ class PerceptionService:
         Lower values give smoother tracking. Default 0.3 s.
     max_faces:
         Maximum faces to report per scan. 0 means unlimited.
+    known_face_scans:
+        Number of consecutive scans a face must persist in roughly the same
+        place before it is flagged ``known`` on the published
+        :class:`FaceDetected` event. This is the tracked-face heuristic:
+        RON has no face-recognition model, so a face it has been steadily
+        tracking (and likely turned CURIOUS toward) is treated as
+        "remembered". Default 3.
     enabled:
         Whether to start scanning immediately.
     """
@@ -86,6 +113,7 @@ class PerceptionService:
     idle_scan_interval_s: float = 2.0
     curious_scan_interval_s: float = 0.3
     max_faces: int = 0
+    known_face_scans: int = 3
     enabled: bool = True
     _task: asyncio.Task[None] | None = field(default=None, init=False, repr=False)
     _stopped: bool = field(default=True, init=False)
@@ -93,6 +121,8 @@ class PerceptionService:
     _face_count: int = field(default=0, init=False)
     _last_faces: list[FaceDetectorResult] = field(default_factory=list, init=False)
     _current_interval: float = field(default=2.0, init=False)
+    _tracked: list[_TrackedFace] = field(default_factory=list, init=False, repr=False)
+    _next_id: int = field(default=0, init=False, repr=False)
 
     def __post_init__(self) -> None:
         if self.face_detector is None:
@@ -131,6 +161,7 @@ class PerceptionService:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._task
             self._task = None
+        self._tracked.clear()
         _log.info("perception.stopped", scans=self._scan_count, faces=self._face_count)
 
     # ------------------------------------------------------------------ adaptive
@@ -179,17 +210,21 @@ class PerceptionService:
             self._face_count += len(faces)
             self._last_faces = faces
             if faces:
-                for face in faces:
+                for face, known in self._label_faces(faces):
                     await self.bus.publish(
                         FaceDetected(
                             x=face.x,
                             y=face.y,
                             confidence=face.confidence,
+                            size=face.size,
+                            known=known,
                         )
                     )
             else:
-                # Publish a scan event so the behavior engine knows
-                # we looked but found no one.
+                # No faces this scan — let the tracker decay every face, then
+                # publish a scan event so the behavior engine knows we looked
+                # but found no one.
+                self._label_faces([])
                 await self.bus.publish(
                     PerceptionScan(
                         face_count=0,
@@ -197,6 +232,62 @@ class PerceptionService:
                     )
                 )
             await asyncio.sleep(self._current_interval)
+
+    # ------------------------------------------------------------------ tracking
+    _TRACK_DIST: float = 0.2  # normalised centre distance for a match
+    _KEEP_MISSED: int = 2  # drop a track after this many missed scans
+
+    def _label_faces(self, faces: list[FaceDetectorResult]) -> list[tuple[FaceDetectorResult, bool]]:
+        """Match detected faces to existing tracks and flag persisted ones.
+
+        Returns each detected face paired with a ``known`` flag that is True
+        once the track it matched has been seen for ``known_face_scans``
+        consecutive scans. Tracks that no detected face matches decay
+        (``seen_count`` drops, ``missed`` climbs) and are dropped once they
+        have been missed for ``_KEEP_MISSED`` scans, so a face that
+        vanishes and returns must build up persistence again.
+        """
+        matched_ids: set[int] = set()
+        labelled: list[tuple[FaceDetectorResult, bool]] = []
+        for face in faces:
+            best: _TrackedFace | None = None
+            best_d = self._TRACK_DIST
+            for t in self._tracked:
+                if t.id in matched_ids:
+                    continue
+                d = ((t.x - face.x) ** 2 + (t.y - face.y) ** 2) ** 0.5
+                if d < best_d:
+                    best_d = d
+                    best = t
+            if best is not None:
+                best.x = face.x
+                best.y = face.y
+                best.size = face.size
+                best.seen_count += 1
+                best.missed = 0
+                matched_ids.add(best.id)
+                labelled.append((face, best.seen_count >= self.known_face_scans))
+            else:
+                track = _TrackedFace(
+                    id=self._next_id,
+                    x=face.x,
+                    y=face.y,
+                    size=face.size,
+                    seen_count=1,
+                    missed=0,
+                )
+                self._next_id += 1
+                self._tracked.append(track)
+                matched_ids.add(track.id)  # observed this scan; don't decay it
+                labelled.append((face, False))
+        # Decay unmatched tracks.
+        for t in self._tracked:
+            if t.id not in matched_ids:
+                t.missed += 1
+                if t.seen_count > 0:
+                    t.seen_count -= 1
+        self._tracked = [t for t in self._tracked if t.missed <= self._KEEP_MISSED]
+        return labelled
 
     # ------------------------------------------------------------------ properties
     @property
