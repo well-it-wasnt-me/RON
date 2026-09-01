@@ -44,15 +44,16 @@ body{display:flex;overflow:hidden}
 #log-controls select,#log-controls input{background:var(--bg);border:1px solid var(--border);border-radius:.4rem;padding:.4rem .6rem;color:var(--text);font-size:.82rem}
 #log-controls input{flex:1;min-width:150px}
 #log-list{max-height:calc(100vh - 250px);overflow-y:auto;font-family:ui-monospace,'SF Mono',Consolas,monospace;font-size:.78rem;line-height:1.6}
-.log-entry{display:grid;grid-template-columns:90px 60px 120px 1fr;gap:.5rem;padding:.15rem .5rem;border-bottom:1px solid rgba(42,45,58,.3);white-space:nowrap}
+.log-entry{display:grid;grid-template-columns:90px 60px 140px 1fr;gap:.5rem;padding:.15rem .5rem;border-bottom:1px solid rgba(42,45,58,.3);white-space:nowrap}
+.log-entry>*{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .log-entry .l-time{color:var(--muted2)}
 .log-entry .l-level{font-weight:600}
 .log-entry .l-level.DEBUG{color:var(--muted)}
 .log-entry .l-level.INFO{color:var(--blue)}
 .log-entry .l-level.WARNING{color:var(--yellow)}
 .log-entry .l-level.ERROR{color:var(--red)}
-.log-entry .l-logger{color:var(--muted);overflow:hidden;text-overflow:ellipsis}
-.log-entry .l-event{color:var(--text);overflow:hidden;text-overflow:ellipsis}
+.log-entry .l-logger{color:var(--muted)}
+.log-entry .l-event{color:var(--text)}
 .log-entry .l-event .l-data{color:var(--muted)}
 .log-entry.raw{white-space:pre-wrap;word-break:break-all}
 /* Config viewer */
@@ -69,6 +70,14 @@ body{display:flex;overflow:hidden}
 .ev-entry .ev-time{color:var(--muted2);min-width:65px}
 .ev-entry .ev-type{color:var(--accent);font-weight:600;min-width:100px}
 .ev-entry .ev-data{color:var(--muted)}
+.ev-entry .ev-count{color:var(--yellow);font-weight:600;min-width:34px;text-align:right}
+.feed-controls{display:flex;gap:.5rem;align-items:center;margin-bottom:.5rem;flex-wrap:wrap}
+.feed-controls .mini-btn{background:var(--bg);border:1px solid var(--border);border-radius:.4rem;padding:.25rem .55rem;color:var(--text);font-size:.78rem;cursor:pointer}
+.feed-controls .mini-btn:hover{border-color:var(--accent)}
+.feed-controls .mini-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.feed-controls label{display:flex;align-items:center;gap:.3rem;font-size:.78rem;color:var(--muted);cursor:pointer}
+.feed-count{font-size:.75rem;color:var(--muted2);margin-left:auto}
+.log-count-badge{font-size:.72rem;color:var(--accent);background:rgba(108,99,255,.12);border-radius:.3rem;padding:.05rem .4rem;margin-left:.3rem}
 .state-display{font-size:1.5rem;font-weight:700;color:var(--accent)}
 .state-display .emotion{font-size:1rem;color:var(--muted);font-weight:400}
 /* Live View */
@@ -161,62 +170,101 @@ function route() {
 window.addEventListener('hashchange', route);
 
 // ---- WebSocket ----
+// High-frequency events hidden by default in the dashboard feed. Mirrors the
+// LoggingConfig.noisy_events default on the server (DESKBOT_LOGGING__NOISY_EVENTS).
+const NOISY_EVENTS = ['DisplayUpdated','LookRequested','BlinkRequested','ServoMoved','IdleTimeout','LookAroundAction','FaceDetected'];
+// Server-configured hide list, fetched from /system/logs/filters at startup.
+// Falls back to NOISY_EVENTS above until (or if) the fetch resolves.
+let _serverNoisy = null;
+function noisyList() { return (_serverNoisy && _serverNoisy.length) ? _serverNoisy : NOISY_EVENTS; }
+async function loadNoisyEvents() {
+  const f = await apiGet(API + '/system/logs/filters', {safe:true});
+  if (f && Array.isArray(f.noisy_events) && f.noisy_events.length) {
+    _serverNoisy = f.noisy_events;
+    // Reconnect the WS so the live feed honours the server list (e.g. a
+    // newly added FaceDetected) without a page reload.
+    if (_hideNoisy) reconnectWS();
+  }
+}
+let _hideNoisy = true;   // dashboard "hide noisy events" toggle (default ON)
+let _feedPaused = false; // dashboard feed freeze
+
+// Truncate a JSON-serialised event payload at a clean boundary, with an
+// ellipsis — so the feed never cuts mid-word ("confidence&qu...").
+function truncateData(obj, max) {
+  max = max || 80;
+  const s = JSON.stringify(obj);
+  if (s.length <= max) return esc(s);
+  let cut = s.slice(0, max);
+  const boundary = Math.max(cut.lastIndexOf(' '), cut.lastIndexOf(','), cut.lastIndexOf(':'));
+  if (boundary > max * 0.5) cut = cut.slice(0, boundary);
+  return esc(cut) + '…';
+}
+
+function wsUrl() {
+  const base = (location.protocol==='https:'?'wss:':'ws:') + '//' + location.host + API + '/ws/events';
+  if (_hideNoisy && noisyList().length) {
+    return base + '?exclude=' + encodeURIComponent(noisyList().join(','));
+  }
+  return base;
+}
 function connectWS() {
-  if (ws && ws.readyState === WebSocket.OPEN) return;
-  const url = (location.protocol==='https:'?'wss:':'ws:') + '//' + location.host + API + '/ws/events';
-  ws = new WebSocket(url);
+  if (ws) { ws.onclose = null; try { ws.close(); } catch(e){} ws = null; }
+  if (wsReconnect) { clearTimeout(wsReconnect); wsReconnect = null; }
+  ws = new WebSocket(wsUrl());
   ws.onopen = () => { $conn.className = 'online'; $connText.textContent = 'Connected'; if (wsReconnect) { clearTimeout(wsReconnect); wsReconnect = null; } };
   ws.onclose = () => { $conn.className = 'offline'; $connText.textContent = 'Disconnected'; wsReconnect = setTimeout(connectWS, 3000); };
   ws.onerror = () => { ws.close(); };
   ws.onmessage = (ev) => { try { handleEvent(JSON.parse(ev.data)); } catch(e){} };
 }
+function reconnectWS() {
+  // Reconnect with the current _hideNoisy setting (toggles the exclude filter).
+  connectWS();
+}
 let _eventFeed = [];
 function handleEvent(msg) {
-  _eventFeed.unshift({type: msg.type, data: msg.data, time: new Date().toLocaleTimeString()});
-  if (_eventFeed.length > 50) _eventFeed.pop();
   const $state = document.getElementById('robot-state');
   const $emotion = document.getElementById('robot-emotion');
   if ($state && msg.type === 'StateChanged') $state.textContent = (msg.data.current||'-').toUpperCase();
   if ($emotion && msg.type === 'EmotionChanged') $emotion.textContent = msg.data.current || '-';
-  // Live View overlay (state / emotion / face-detection pulse).
-  const $lstate = document.getElementById('live-state');
-  if ($lstate && msg.type === 'StateChanged') $lstate.textContent = (msg.data.current||'-').toUpperCase();
-  const $lemo = document.getElementById('live-emotion');
-  if ($lemo && msg.type === 'EmotionChanged') $lemo.textContent = msg.data.current || '-';
-  const $face = document.getElementById('live-face');
-  if ($face && msg.type === 'FaceDetected') {
-    const d = msg.data || {};
-    const conf = d.confidence != null ? ' ' + Math.round(d.confidence * 100) + '%' : '';
-    $face.textContent = (d.known ? 'known face' : 'face detected') + conf;
-    $face.style.opacity = '1';
-    clearTimeout($face._t);
-    $face._t = setTimeout(() => { $face.style.opacity = '0.3'; }, 900);
-    // Accumulate for the overlay box. Faces arrive one event per face per
-    // scan; batch them into a burst and draw once the burst settles.
-    if (!_liveFaceBurst) {
-      _liveFaceBurst = [];
-      clearTimeout(_liveFaceBurstT);
-      _liveFaceBurstT = setTimeout(() => {
-        _liveFaces = _liveFaceBurst;
-        _liveFaceBurst = null;
-        drawLiveFaces();
-      }, 120);
-    }
-    _liveFaceBurst.push({x: d.x, y: d.y, size: d.size || 0, known: !!d.known});
+  // Always keep StateChanged/EmotionChanged in the feed even if noisy-listed.
+  const isNoisy = noisyList().includes(msg.type);
+  if (_feedPaused) { updateFeedCount(); return; }
+  const dataKey = JSON.stringify(msg.data);
+  const top = _eventFeed[0];
+  if (top && top.type === msg.type && top.dataKey === dataKey) {
+    top.count += 1;            // dedupe consecutive identical events
+  } else {
+    _eventFeed.unshift({type: msg.type, data: msg.data, dataKey, time: new Date().toLocaleTimeString(), count: 1, noisy: isNoisy});
+    if (_eventFeed.length > 50) _eventFeed.pop();
   }
-  if (msg.type === 'PerceptionScan' && msg.data && msg.data.face_count === 0) {
-    // Camera looked but found nobody — clear the boxes.
-    _liveFaces = [];
-    _liveFaceBurst = null;
-    clearTimeout(_liveFaceBurstT);
-    drawLiveFaces();
-  }
+  renderFeed();
+}
+function renderFeed() {
   const $feed = document.getElementById('event-feed');
-  if ($feed) {
-    $feed.innerHTML = _eventFeed.slice(0, 20).map(e =>
-      `<div class="ev-entry"><span class="ev-time">${e.time}</span><span class="ev-type">${e.type}</span><span class="ev-data">${esc(JSON.stringify(e.data)).slice(0,80)}</span></div>`
-    ).join('') || '<div class="loading">No events yet</div>';
-  }
+  if (!$feed) return;
+  const rows = _eventFeed.slice(0, 20).map(e => {
+    const count = e.count > 1 ? `<span class="ev-count">×${e.count}</span>` : '';
+    return `<div class="ev-entry"><span class="ev-time">${e.time}</span><span class="ev-type">${e.type}</span><span class="ev-data">${truncateData(e.data)}</span>${count}</div>`;
+  }).join('');
+  $feed.innerHTML = rows || '<div class="loading">No events yet</div>';
+  updateFeedCount();
+}
+function updateFeedCount() {
+  const $c = document.getElementById('feed-count');
+  if ($c) $c.textContent = _feedPaused ? 'paused' : `${_eventFeed.length} buffered`;
+}
+function toggleFeedPaused() {
+  _feedPaused = !_feedPaused;
+  const $btn = document.getElementById('feed-pause');
+  if ($btn) { $btn.textContent = _feedPaused ? 'Resume' : 'Pause'; $btn.classList.toggle('active', _feedPaused); }
+  updateFeedCount();
+}
+function toggleHideNoisy() {
+  _hideNoisy = !_hideNoisy;
+  const $btn = document.getElementById('feed-noisy');
+  if ($btn) { $btn.textContent = _hideNoisy ? 'Noisy: hidden' : 'Noisy: shown'; $btn.classList.toggle('active', _hideNoisy); }
+  reconnectWS();
 }
 
 // ---- Pages ----
@@ -271,8 +319,21 @@ async function renderDashboard() {
     html += card('Component Health', compHtml || '<div class="loading">No details</div>');
   }
   html += '</div>';
-  html += card('Recent Events', '<div id="event-feed">' + (_eventFeed.length ? _eventFeed.slice(0,20).map(e => `<div class="ev-entry"><span class="ev-time">${e.time}</span><span class="ev-type">${e.type}</span><span class="ev-data">${esc(JSON.stringify(e.data)).slice(0,80)}</span></div>`).join('') : '<div class="loading">No events yet</div>') + '</div>');
+  const feedControls = `<div class="feed-controls">
+    <button class="mini-btn" id="feed-pause">${_feedPaused ? 'Resume' : 'Pause'}</button>
+    <button class="mini-btn${_hideNoisy?' active':''}" id="feed-noisy">${_hideNoisy ? 'Noisy: hidden' : 'Noisy: shown'}</button>
+    <span class="feed-count" id="feed-count"></span>
+  </div>`;
+  html += card('Recent Events', feedControls + '<div id="event-feed">' + (_eventFeed.length ? _eventFeed.slice(0,20).map(e => {
+    const count = e.count > 1 ? `<span class="ev-count">×${e.count}</span>` : '';
+    return `<div class="ev-entry"><span class="ev-time">${e.time}</span><span class="ev-type">${e.type}</span><span class="ev-data">${truncateData(e.data)}</span>${count}</div>`;
+  }).join('') : '<div class="loading">No events yet</div>') + '</div>');
   $content.innerHTML = html;
+  const $pause = document.getElementById('feed-pause');
+  if ($pause) { $pause.classList.toggle('active', _feedPaused); $pause.addEventListener('click', toggleFeedPaused); }
+  const $noisy = document.getElementById('feed-noisy');
+  if ($noisy) $noisy.addEventListener('click', toggleHideNoisy);
+  updateFeedCount();
 }
 
 async function renderLogs() {
@@ -280,43 +341,108 @@ async function renderLogs() {
     <div class="card">
       <div id="log-controls">
         <select id="log-level"><option value="">All Levels</option><option value="DEBUG">DEBUG</option><option value="INFO">INFO</option><option value="WARNING">WARNING</option><option value="ERROR">ERROR</option></select>
+        <select id="log-logger"><option value="">All Loggers</option></select>
+        <input type="text" id="log-event" placeholder="Event name...">
         <input type="text" id="log-search" placeholder="Search logs...">
+        <button class="mini-btn" id="log-noisy">Noisy: hidden</button>
         <button id="log-refresh">Refresh</button>
         <button id="log-clear">Clear</button>
         <label style="display:flex;align-items:center;gap:.3rem;font-size:.8rem;color:var(--muted)"><input type="checkbox" id="log-raw"> Raw JSON</label>
+        <label style="display:flex;align-items:center;gap:.3rem;font-size:.8rem;color:var(--muted)"><input type="checkbox" id="log-live" checked> Live</label>
+        <span id="log-count" class="log-count-badge"></span>
       </div>
       <div id="log-list"><div class="loading">Loading logs...</div></div>
     </div>`;
-  async function loadLogs() {
+  let _logNoisy = true;
+  let _liveTimer = null;
+  let _lastEpoch = 0;       // for incremental live tail
+  let _liveAccum = [];      // entries accumulated during live mode
+
+  async function loadFilters() {
+    const f = await apiGet(API + '/system/logs/filters', {safe:true});
+    const $sel = document.getElementById('log-logger');
+    if ($sel && f && f.loggers) {
+      const cur = $sel.value;
+      $sel.innerHTML = '<option value="">All Loggers</option>' + f.loggers.map(l => `<option value="${esc(l)}">${esc(l)}</option>`).join('');
+      $sel.value = cur;
+    }
+  }
+
+  async function loadLogs(opts) {
+    opts = opts || {};
     const level = document.getElementById('log-level').value;
     const search = document.getElementById('log-search').value;
+    const logger = document.getElementById('log-logger').value;
+    const event = document.getElementById('log-event').value;
     const raw = document.getElementById('log-raw').checked;
+    const live = document.getElementById('log-live').checked;
     const params = new URLSearchParams();
     if (level) params.set('level', level);
     if (search) params.set('search', search);
+    if (logger) params.set('logger', logger);
+    if (event) params.set('event', event);
+    if (_logNoisy && noisyList().length) params.set('exclude', noisyList().join(','));
+    if (live && _lastEpoch && opts.tail) params.set('since', _lastEpoch);
     params.set('limit', '200');
     const data = await apiGet(API + '/system/logs?' + params.toString(), {safe:true});
     const $list = document.getElementById('log-list');
+    const $count = document.getElementById('log-count');
     if (!data || !data.entries) { $list.innerHTML = '<div class="loading">No logs available</div>'; return; }
-    if (data.entries.length === 0) { $list.innerHTML = '<div class="loading">No matching entries</div>'; return; }
-    if (raw) {
-      $list.innerHTML = data.entries.map(e => `<div class="log-entry raw">${esc(JSON.stringify(e))}</div>`).join('');
-    } else {
-      $list.innerHTML = data.entries.map(e => {
-        const dataStr = e.data && Object.keys(e.data).length ? ' <span class="l-data">' + esc(JSON.stringify(e.data)) + '</span>' : '';
-        return `<div class="log-entry"><span class="l-time">${esc(e.timestamp)}</span><span class="l-level ${e.level}">${e.level}</span><span class="l-logger">${esc(e.logger)}</span><span class="l-event">${esc(e.event)}${dataStr}</span></div>`;
-      }).join('');
+    let entries = data.entries;
+    if (live && opts.tail && _liveAccum.length) {
+      // Prepend previously accumulated tail entries (newest first).
+      entries = _liveAccum.concat(entries);
+      _liveAccum = [];
     }
+    if (entries.length) _lastEpoch = Math.max(_lastEpoch, entries[0].created_epoch || 0);
+    if ($count) $count.textContent = `${data.count} shown`;
+    if (entries.length === 0 && !opts.tail) { $list.innerHTML = '<div class="loading">No matching entries</div>'; return; }
+    const rows = entries.map(e => {
+      if (raw) return `<div class="log-entry raw">${esc(JSON.stringify(e))}</div>`;
+      const dataStr = e.data && Object.keys(e.data).length ? ' <span class="l-data">' + esc(JSON.stringify(e.data)) + '</span>' : '';
+      // Show just the time (HH:MM:SS) to fit the narrow column; full
+      // ISO timestamp is available on hover via the title attribute.
+      const t = e.timestamp || '';
+      const tShort = (t.length >= 19 && t.includes('T')) ? t.slice(11, 19) : t;
+      return `<div class="log-entry"><span class="l-time" title="${esc(t)}">${esc(tShort)}</span><span class="l-level ${e.level}">${e.level}</span><span class="l-logger">${esc(e.logger)}</span><span class="l-event">${esc(e.event)}${dataStr}</span></div>`;
+    }).join('');
+    $list.innerHTML = rows || '<div class="loading">No matching entries</div>';
   }
-  document.getElementById('log-refresh').addEventListener('click', loadLogs);
-  document.getElementById('log-level').addEventListener('change', loadLogs);
-  document.getElementById('log-search').addEventListener('input', loadLogs);
-  document.getElementById('log-raw').addEventListener('change', loadLogs);
+
+  function startLive() {
+    stopLive();
+    _lastEpoch = 0; _liveAccum = [];
+    loadLogs({});
+    _liveTimer = setInterval(() => loadLogs({tail:true}), 2000);
+  }
+  function stopLive() {
+    if (_liveTimer) { clearInterval(_liveTimer); _liveTimer = null; }
+  }
+
+  document.getElementById('log-refresh').addEventListener('click', () => { _lastEpoch = 0; _liveAccum = []; loadLogs({}); });
+  document.getElementById('log-level').addEventListener('change', () => { _lastEpoch = 0; _liveAccum = []; loadLogs({}); });
+  document.getElementById('log-logger').addEventListener('change', () => { _lastEpoch = 0; _liveAccum = []; loadLogs({}); });
+  document.getElementById('log-event').addEventListener('input', () => { _lastEpoch = 0; _liveAccum = []; loadLogs({}); });
+  document.getElementById('log-search').addEventListener('input', () => { _lastEpoch = 0; _liveAccum = []; loadLogs({}); });
+  document.getElementById('log-raw').addEventListener('change', () => loadLogs({}));
+  document.getElementById('log-live').addEventListener('change', (e) => { if (e.target.checked) startLive(); else stopLive(); });
+  const $noisyBtn = document.getElementById('log-noisy');
+  $noisyBtn.classList.toggle('active', _logNoisy);
+  $noisyBtn.addEventListener('click', () => {
+    _logNoisy = !_logNoisy;
+    $noisyBtn.textContent = _logNoisy ? 'Noisy: hidden' : 'Noisy: shown';
+    $noisyBtn.classList.toggle('active', _logNoisy);
+    _lastEpoch = 0; _liveAccum = [];
+    loadLogs({});
+  });
   document.getElementById('log-clear').addEventListener('click', async () => {
     await apiDelete(API + '/system/logs');
-    loadLogs();
+    _lastEpoch = 0; _liveAccum = [];
+    loadFilters();
+    loadLogs({});
   });
-  loadLogs();
+  loadFilters();
+  startLive();
 }
 
 async function renderAudio() {
@@ -769,6 +895,7 @@ document.getElementById('menu-overlay').addEventListener('click', () => {
 // ---- Init ----
 route();
 connectWS();
+loadNoisyEvents();
 setInterval(() => { if (location.hash === '' || location.hash === '#/') renderDashboard(); }, 5000);
 </script>
 </body>

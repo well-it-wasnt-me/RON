@@ -870,6 +870,7 @@ class LogEntry(BaseModel):
     model_config = _ex(
         {
             "timestamp": "2026-08-12T10:30:00Z",
+            "created_epoch": 1723461000.0,
             "level": "INFO",
             "logger": "api.commands",
             "event": "speak",
@@ -878,6 +879,7 @@ class LogEntry(BaseModel):
     )
 
     timestamp: str
+    created_epoch: float = 0.0
     level: str
     logger: str
     event: str
@@ -893,6 +895,7 @@ class LogsResponse(BaseModel):
             "entries": [
                 {
                     "timestamp": "2026-08-12T10:30:00Z",
+                    "created_epoch": 1723461000.0,
                     "level": "INFO",
                     "logger": "api.commands",
                     "event": "speak",
@@ -904,6 +907,35 @@ class LogsResponse(BaseModel):
 
     count: int
     entries: list[LogEntry] = []
+
+
+class LogsFiltersResponse(BaseModel):
+    """Distinct log levels, logger names, and event names currently buffered.
+
+    Used by the dashboard ``/#/logs`` page to populate filter dropdowns.
+    """
+
+    model_config = _ex(
+        {
+            "levels": ["DEBUG", "INFO", "WARNING", "ERROR"],
+            "loggers": ["api.commands", "robot.behavior", "robot.eye_engine"],
+            "events": ["speak", "state_changed", "face_detected"],
+            "noisy_events": [
+                "DisplayUpdated",
+                "LookRequested",
+                "BlinkRequested",
+                "ServoMoved",
+                "IdleTimeout",
+                "LookAroundAction",
+                "FaceDetected",
+            ],
+        }
+    )
+
+    levels: list[str] = []
+    loggers: list[str] = []
+    events: list[str] = []
+    noisy_events: list[str] = []
 
 
 class BluetoothResponse(BaseModel):
@@ -1271,6 +1303,7 @@ __all__ = [
     "LearningScheduleSchema",
     "LearningStatusResponse",
     "LogEntry",
+    "LogsFiltersResponse",
     "LogsResponse",
     "MicLevelResponse",
     "MicTestRequest",

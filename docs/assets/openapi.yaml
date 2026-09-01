@@ -644,13 +644,33 @@ paths:
       tags:
       - teaching
       summary: Recent teaching transitions
-      description: Recent real transitions with a conversation-free state summary.
+      description: Recent real transitions with a conversation-free state summary. Filters apply against a 256-entry working-memory pool before `limit`, so narrowing does not empty the result window. `total` is the count after filtering, before `limit`.
       operationId: teaching_transitions_api_v1_teaching_transitions_get
       parameters:
       - name: limit
         in: query
         required: false
         schema: {type: integer, minimum: 1, maximum: 256, default: 20}
+      - name: action
+        in: query
+        required: false
+        description: Case-insensitive substring filter on action name.
+        schema: {type: string}
+      - name: success
+        in: query
+        required: false
+        description: Filter on execution_success.
+        schema: {type: boolean}
+      - name: feedback
+        in: query
+        required: false
+        description: "true = only transitions with attributed feedback; false = none."
+        schema: {type: boolean}
+      - name: interaction_id
+        in: query
+        required: false
+        description: Exact interaction_id filter.
+        schema: {type: string}
       responses:
         '200':
           description: Recent transitions
@@ -1299,7 +1319,7 @@ paths:
       - system
       - system
       summary: Recent log entries
-      description: Return recent log entries from the in-memory ring buffer.
+      description: Return recent log entries from the in-memory ring buffer, filtered server-side.
       operationId: system_logs_api_v1_system_logs_get
       parameters:
       - name: level
@@ -1309,9 +1329,9 @@ paths:
           anyOf:
           - type: string
           - type: 'null'
-          description: Filter by level (DEBUG, INFO, WARNING, ERROR)
+          description: 'Filter by level (DEBUG, INFO, WARNING, ERROR); "ALL" = no filter'
           title: Level
-        description: Filter by level (DEBUG, INFO, WARNING, ERROR)
+        description: 'Filter by level (DEBUG, INFO, WARNING, ERROR); "ALL" = no filter'
       - name: search
         in: query
         required: false
@@ -1319,9 +1339,50 @@ paths:
           anyOf:
           - type: string
           - type: 'null'
-          description: Text search
+          description: Case-insensitive text search across event/logger/data
           title: Search
-        description: Text search
+        description: Case-insensitive text search across event/logger/data
+      - name: logger
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Case-insensitive substring filter on logger name
+          title: Logger
+        description: Case-insensitive substring filter on logger name
+      - name: event
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Case-insensitive substring filter on event name
+          title: Event
+        description: Case-insensitive substring filter on event name
+      - name: exclude
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Comma-separated event names to omit (e.g. 'DisplayUpdated,LookRequested')
+          title: Exclude
+        description: Comma-separated event names to omit (e.g. 'DisplayUpdated,LookRequested')
+      - name: since
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: number
+          - type: 'null'
+          minimum: 0
+          description: Only entries with created_epoch >= this POSIX timestamp (live tailing)
+          title: Since
+        description: Only entries with created_epoch >= this POSIX timestamp (live tailing)
       - name: limit
         in: query
         required: false
@@ -1358,6 +1419,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OkResponse'
+  /api/v1/system/logs/filters:
+    get:
+      tags:
+      - system
+      summary: Distinct log filter values
+      description: Return the distinct levels, logger names, and event names currently in the ring buffer (for dashboard dropdowns), plus the server-configured noisy_events hide list.
+      operationId: system_logs_filters_api_v1_system_logs_filters_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogsFiltersResponse'
   /api/v1/system/bluetooth:
     get:
       tags:
@@ -2514,6 +2589,10 @@ components:
         timestamp:
           type: string
           title: Timestamp
+        created_epoch:
+          type: number
+          title: Created Epoch
+          default: 0.0
         level:
           type: string
           title: Level
@@ -2544,6 +2623,7 @@ components:
         level: INFO
         logger: api.commands
         timestamp: '2026-08-12T10:30:00Z'
+        created_epoch: 1723461000.0
     LogsResponse:
       properties:
         count:
@@ -2570,6 +2650,60 @@ components:
           level: INFO
           logger: api.commands
           timestamp: '2026-08-12T10:30:00Z'
+          created_epoch: 1723461000.0
+    LogsFiltersResponse:
+      properties:
+        levels:
+          items:
+            type: string
+          type: array
+          title: Levels
+          default: []
+        loggers:
+          items:
+            type: string
+          type: array
+          title: Loggers
+          default: []
+        events:
+          items:
+            type: string
+          type: array
+          title: Events
+          default: []
+        noisy_events:
+          items:
+            type: string
+          type: array
+          title: Noisy Events
+          default: []
+          description: Server-configured event types hidden by default in the
+            dashboard feed (LoggingConfig.noisy_events).
+      additionalProperties: true
+      type: object
+      title: LogsFiltersResponse
+      description: Distinct log levels, logger names, and event names in the
+        buffer, plus the server-configured noisy-events hide list.
+      examples:
+      - levels:
+        - DEBUG
+        - INFO
+        - WARNING
+        - ERROR
+        loggers:
+        - api.commands
+        - robot.behavior
+        events:
+        - speak
+        - state_changed
+        noisy_events:
+        - DisplayUpdated
+        - LookRequested
+        - BlinkRequested
+        - ServoMoved
+        - IdleTimeout
+        - LookAroundAction
+        - FaceDetected
     MessageItem:
       properties:
         role:

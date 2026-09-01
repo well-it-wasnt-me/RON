@@ -45,6 +45,29 @@ flowchart LR
     LLM["LLM streaming"] --> LLMTokenReceived --> FaceOrchestrator
 ```
 
+## WebSocket streaming & filtering
+
+The `EventStreamer` (`robot.api.ws`) subscribes to **all** bus events and
+forwards each as a JSON envelope `{"type": ..., "data": ...}` to every
+connected WebSocket client. The bus itself is never filtered — every
+subscriber still receives every event — but **per-connection delivery** is
+filtered so a single browser can opt out of high-frequency events
+(`DisplayUpdated`, `LookRequested`, ...) without affecting other clients.
+
+Each connection carries an `EventFilter` (`include` / `exclude` sets of event
+type names). When `include` is set, only those types are delivered; otherwise
+everything except the `exclude` set is delivered. The filter is set in two
+ways:
+
+1. **Query params on connect** — `?include=StateChanged,EmotionChanged` or
+   `?exclude=DisplayUpdated,LookRequested`.
+2. **Runtime update** — send `{"filter": {"include": [...], "exclude": [...]}}`
+   after connect (either field may be omitted to clear it).
+
+See [REST API &middot; WebSocket](../reference/api.md#websocket) for the
+wire details, and [Logging](logging.md) for the dashboard feed's
+"hide noisy events" default.
+
 When adding an event:
 
 1. Add an immutable dataclass to `robot.events.events`.

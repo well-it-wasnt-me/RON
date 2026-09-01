@@ -1077,6 +1077,38 @@ class TelegramConfig(BaseSettings):
     )
 
 
+class LoggingConfig(BaseSettings):
+    """Logging & observability configuration.
+
+    These knobs tune the in-memory log ring buffer that feeds the web
+    dashboard's ``/#/logs`` view and the live event feed. The
+    ``DESKBOT_LOG_LEVEL`` env var stays on :class:`AppSettings` for
+    backward compatibility; this section holds the dashboard-side knobs.
+
+    * ``ring_buffer_capacity`` - how many recent log entries the dashboard
+      keeps in memory. Older entries roll off (FIFO).
+    * ``noisy_events`` - event type names hidden by default in the
+      dashboard "Recent Events" feed (high-frequency events like
+      ``DisplayUpdated`` that fire every frame and drown out meaningful
+      state changes). The user can toggle them back on in the UI.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="DESKBOT_LOGGING__", extra="ignore")
+
+    ring_buffer_capacity: int = Field(default=500, ge=10, le=10_000)
+    noisy_events: list[str] = Field(
+        default_factory=lambda: [
+            "DisplayUpdated",
+            "LookRequested",
+            "BlinkRequested",
+            "ServoMoved",
+            "IdleTimeout",
+            "LookAroundAction",
+            "FaceDetected",
+        ]
+    )
+
+
 class AppSettings(BaseSettings):
     """Root configuration for the DeskBot application."""
 
@@ -1149,6 +1181,7 @@ class AppSettings(BaseSettings):
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     api: ApiConfig = Field(default_factory=ApiConfig)
     performance: PerformanceConfig = Field(default_factory=PerformanceConfig)
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
     @field_validator("timezone")
     @classmethod
@@ -1183,6 +1216,7 @@ __all__ = [
     "GPIOServoMapping",
     "LLMConfig",
     "LearningConfig",
+    "LoggingConfig",
     "MemoryConfig",
     "MicrophoneConfig",
     "PCA9685ServoConfig",

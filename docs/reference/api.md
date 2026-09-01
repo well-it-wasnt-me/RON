@@ -64,7 +64,7 @@ The teaching loop (human demonstration + feedback) is exposed under
 [Teaching Mode](../modules/teaching_mode.md).
 
 - `GET /api/v1/teaching/status` - Teaching-loop status (enabled, in_teaching_mode, session_id, mode, trigger_gesture, desired_action, total_experiences, min_experiences_for_practice)
-- `GET /api/v1/teaching/transitions?limit=` - Recent transitions (1-256, default 20) with a conversation-free state summary (teaching_context / interaction_active / person_present / gesture), reward, feedback_source, interaction_id, teaching_session_id
+- `GET /api/v1/teaching/transitions` - Recent transitions with a conversation-free state summary (teaching_context / interaction_active / person_present / gesture), reward, feedback_source, interaction_id, teaching_session_id. Query params: `limit` (1-256, default 20), `action` (case-insensitive substring on action name), `success` (`true`/`false`), `feedback` (`true` = only transitions with attributed feedback, `false` = none), `interaction_id` (exact match). Filters apply against a 256-entry working-memory pool before `limit`, so narrowing does not empty the result window. `total` is the count after filtering, before `limit`.
 - `POST /api/v1/teaching/feedback` - Submit explicit human feedback `{polarity, magnitude, source, text}`; attributes to the most-recent eligible real transition. Returns `{attributed, transition_id?, delta?}` - `attributed=false` when no eligible transition (feedback dropped, never invented). **API key required.**
 - `POST /api/v1/teaching/demonstration` - Arm a session from a constrained `instruction` and/or inject a `gesture`; `mode` = `demonstrate` | `practice`. Returns `{session_id?, trigger_gesture?, desired_action?, executed_action?, executed_action_index?}`. **API key required.**
 - `GET /api/v1/teaching/qvalues` - Current policy Q-values for the encoder state, as a `{action_name: float}` map
@@ -140,9 +140,13 @@ The settings router backs the hardware test page at `/settings/`.
 ## System
 
 - `GET /api/v1/system/info` - System information
-- `GET /api/v1/system/logs` - Recent log entries
-- `DELETE /api/v1/system/logs` - Clear log buffer
+- `GET /api/v1/system/logs` - Recent log entries from the in-memory ring buffer. Query params: `level` (`DEBUG`/`INFO`/`WARNING`/`ERROR`, or `ALL` for no filter), `search` (case-insensitive text across event/logger/data), `logger` (substring on logger name), `event` (substring on event name), `exclude` (comma-separated event names to omit, e.g. `DisplayUpdated,LookRequested`), `since` (POSIX epoch; only entries with `created_epoch` >= this, for live tailing), `limit` (1-500, default 200). Entries carry `timestamp`, `created_epoch`, `level`, `logger`, `event`, `data`.
+- `GET /api/v1/system/logs/filters` - Distinct `levels`, `loggers`, and `events` currently in the buffer (for populating the dashboard filter dropdowns), plus the server-configured `noisy_events` hide list (`LoggingConfig.noisy_events`) so the dashboard can mirror the default "hide noisy events" set without hardcoding it in JS.
+- `DELETE /api/v1/system/logs` - Clear log buffer. **API key required.**
 - `GET /api/v1/system/bluetooth` - Bluetooth status
+
+See [Logging](../modules/logging.md) for how structured events are captured
+into the ring buffer.
 
 ## Performance
 
@@ -162,9 +166,34 @@ ws://HOST:8000/api/v1/ws/events
 ```
 
 The server streams event envelopes containing an event type and serialized
-event data.
+event data. The event bus itself stays unfiltered — every subscriber still
+receives every event — but **each connection** can opt out of event types it
+does not care about, so a browser can avoid the high-frequency firehose
+(`DisplayUpdated`, `LookRequested`, ...) without affecting other clients.
 
-Example:
+### Connect-time filtering (query params)
+
+```text
+ws://HOST:8000/api/v1/ws/events?exclude=DisplayUpdated,LookRequested
+ws://HOST:8000/api/v1/ws/events?include=StateChanged,EmotionChanged
+```
+
+`include` wins over `exclude` when both are given: only the listed event
+types are delivered. Both accept a comma-separated list of event type names.
+
+### Runtime filter update
+
+After connect, send a JSON message to change the filter (alongside `ping`):
+
+```json
+{"filter": {"include": ["StateChanged"], "exclude": ["DisplayUpdated"]}}
+```
+
+Either field may be omitted or `null` to clear it.
+
+### Envelope and ping
+
+Example frame:
 
 ```json
 {

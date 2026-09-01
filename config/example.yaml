@@ -19,6 +19,22 @@ assets_dir: assets
 # Fall back to mock backends when a real driver is unavailable:
 use_mocks: true
 
+# -- Logging & observability (dashboard log ring buffer + event feed) ------
+logging:
+  # How many recent log entries the /#/logs dashboard keeps in memory (FIFO):
+  ring_buffer_capacity: 500
+  # Event type names hidden by default in the dashboard "Recent Events" feed
+  # (high-frequency events that fire every frame and drown out meaningful
+  # state changes). Toggle them back on in the UI:
+  noisy_events:
+    - DisplayUpdated
+    - LookRequested
+    - BlinkRequested
+    - ServoMoved
+    - IdleTimeout
+    - LookAroundAction
+    - FaceDetected
+
 # -- Personality traits (0.0 - 1.0) ----------------------------------------
 personality:
   curiosity: 0.7

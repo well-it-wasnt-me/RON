@@ -58,6 +58,7 @@ DESKBOT_API__PORT=8000
 - `homeassistant`
 - `api`
 - `performance`
+- `logging`
 
 The generated API configuration endpoint masks sensitive values before
 returning them.
@@ -116,3 +117,17 @@ and the [production learning architecture](../architecture/production-learning.m
 
 For the authoritative field definitions, defaults, validators, and descriptions,
 see `robot.config`.
+
+## Logging
+
+The `logging` block (`DESKBOT_LOGGING__` prefix) controls the dashboard log
+ring buffer and the default "noisy events" hide list. See
+[Logging](../modules/logging.md) for how these are used.
+
+```env
+# How many recent log entries the /#/logs dashboard keeps in memory (FIFO; 10-10000):
+DESKBOT_LOGGING__RING_BUFFER_CAPACITY=500
+# Event type names hidden by default in the dashboard "Recent Events" feed
+# (comma-separated; high-frequency events that fire every frame). Toggleable in the UI:
+DESKBOT_LOGGING__NOISY_EVENTS=DisplayUpdated,LookRequested,BlinkRequested,ServoMoved,IdleTimeout,LookAroundAction,FaceDetected
+```
